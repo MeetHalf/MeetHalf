@@ -1,0 +1,224 @@
+import { Router, Request, Response } from 'express';
+import { gmapsClient, GMAPS_KEY } from '../lib/gmaps';
+import { createCache, makeCacheKey } from '../lib/cache';
+import {
+  geocodeQuerySchema,
+  reverseQuerySchema,
+  nearbyQuerySchema,
+  directionsBodySchema,
+} from '../schemas/maps';
+import { z } from 'zod';
+
+const router = Router();
+
+// Create caches with 5-minute TTL
+const geocodeCache = createCache<any>(5 * 60 * 1000);
+const reverseCache = createCache<any>(5 * 60 * 1000);
+const nearbyCache = createCache<any>(5 * 60 * 1000);
+const directionsCache = createCache<any>(5 * 60 * 1000);
+
+/**
+ * GET /maps/geocode
+ * Convert address to coordinates
+ */
+router.get('/geocode', async (req: Request, res: Response) => {
+  try {
+    const { address } = geocodeQuerySchema.parse(req.query);
+    const cacheKey = makeCacheKey('geocode', { address });
+
+    // Check cache
+    const cached = geocodeCache.get(cacheKey);
+    if (cached) {
+      return res.json({ ...cached, cached: true });
+    }
+
+    // Call Google API
+    const response = await gmapsClient.geocode({
+      params: { address, key: GMAPS_KEY },
+    });
+
+    const results = response.data.results.map((r: any) => ({
+      formatted_address: r.formatted_address,
+      geometry: {
+        location: r.geometry.location,
+      },
+      place_id: r.place_id,
+    }));
+
+    const result = { results };
+    geocodeCache.set(cacheKey, result);
+
+    res.json({ ...result, cached: false });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(422).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid query parameters',
+        details: error.errors,
+      });
+    }
+    console.error('Geocode error:', error);
+    res.status(500).json({
+      code: 'GEOCODE_ERROR',
+      message: 'Failed to geocode address',
+    });
+  }
+});
+
+/**
+ * GET /maps/reverse
+ * Convert coordinates to address
+ */
+router.get('/reverse', async (req: Request, res: Response) => {
+  try {
+    const { lat, lng } = reverseQuerySchema.parse(req.query);
+    const cacheKey = makeCacheKey('reverse', { lat, lng });
+
+    const cached = reverseCache.get(cacheKey);
+    if (cached) {
+      return res.json({ ...cached, cached: true });
+    }
+
+    const response = await gmapsClient.reverseGeocode({
+      params: { latlng: `${lat},${lng}`, key: GMAPS_KEY },
+    });
+
+    const results = response.data.results.map((r: any) => ({
+      formatted_address: r.formatted_address,
+      place_id: r.place_id,
+    }));
+
+    // 提取第一個結果作為主要地址
+    const address = results.length > 0 ? results[0].formatted_address : null;
+
+    const result = { address, results };
+    reverseCache.set(cacheKey, result);
+
+    res.json({ ...result, cached: false });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(422).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid query parameters',
+        details: error.errors,
+      });
+    }
+    console.error('Reverse geocode error:', error);
+    res.status(500).json({
+      code: 'REVERSE_GEOCODE_ERROR',
+      message: 'Failed to reverse geocode coordinates',
+    });
+  }
+});
+
+/**
+ * GET /maps/nearby
+ * Search for nearby places
+ */
+router.get('/nearby', async (req: Request, res: Response) => {
+  try {
+    const { lat, lng, radius, type, keyword } = nearbyQuerySchema.parse(req.query);
+    const cacheKey = makeCacheKey('nearby', { lat, lng, radius, type, keyword });
+
+    const cached = nearbyCache.get(cacheKey);
+    if (cached) {
+      return res.json({ ...cached, cached: true });
+    }
+
+    const response = await gmapsClient.placesNearby({
+      params: {
+        location: `${lat},${lng}`,
+        radius,
+        type,
+        keyword,
+        key: GMAPS_KEY,
+      },
+    });
+
+    const results = response.data.results.map((r: any) => ({
+      place_id: r.place_id,
+      name: r.name,
+      vicinity: r.vicinity,
+      location: r.geometry.location,
+      rating: r.rating,
+      user_ratings_total: r.user_ratings_total,
+      types: r.types,
+    }));
+
+    const result = { results };
+    nearbyCache.set(cacheKey, result);
+
+    res.json({ ...result, cached: false });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(422).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid query parameters',
+        details: error.errors,
+      });
+    }
+    console.error('Nearby search error:', error);
+    res.status(500).json({
+      code: 'NEARBY_SEARCH_ERROR',
+      message: 'Failed to search nearby places',
+    });
+  }
+});
+
+/**
+ * POST /maps/directions
+ * Get directions between two points
+ */
+router.post('/directions', async (req: Request, res: Response) => {
+  try {
+    const { origin, destination, mode, departureTime } = directionsBodySchema.parse(req.body);
+    const cacheKey = makeCacheKey('directions', { origin, destination, mode, departureTime });
+
+    const cached = directionsCache.get(cacheKey);
+    if (cached) {
+      return res.json({ ...cached, cached: true });
+    }
+
+    const departure = departureTime === 'now' ? Date.now() / 1000 : new Date(departureTime).getTime() / 1000;
+
+    const response = await gmapsClient.directions({
+      params: {
+        origin: `${origin.lat},${origin.lng}`,
+        destination: `${destination.lat},${destination.lng}`,
+        mode: mode as any,
+        departure_time: Math.floor(departure),
+        key: GMAPS_KEY,
+      },
+    });
+
+    const route = response.data.routes[0];
+    const leg = route.legs[0];
+
+    const result = {
+      duration: leg.duration,
+      distance: leg.distance,
+      overview_polyline: route.overview_polyline,
+    };
+
+    directionsCache.set(cacheKey, result);
+
+    res.json({ ...result, cached: false });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(422).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid request body',
+        details: error.errors,
+      });
+    }
+    console.error('Directions error:', error);
+    res.status(500).json({
+      code: 'DIRECTIONS_ERROR',
+      message: 'Failed to get directions',
+    });
+  }
+});
+
+export default router;
+
+

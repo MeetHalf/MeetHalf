@@ -1,0 +1,51 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  members      Member[]
+  ownedGroups  Group[]
+}
+
+model Group {
+  id        Int      @id @default(autoincrement())
+  name      String
+  ownerId   Int
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  members   Member[]
+}
+
+model Member {
+  id         Int      @id @default(autoincrement())
+  userId     Int?     // ✅ Make nullable for offline members
+  groupId    Int
+  lat        Float?
+  lng        Float?
+  address    String?
+  travelMode String?  @default("driving") // driving, transit, walking, bicycling
+  
+  // ✅ NEW: For offline members
+  nickname   String?  // Display name for non-registered members
+  isOffline  Boolean  @default(false)  // Flag to distinguish offline members
+  
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // ✅ Remove unique constraint since offline members have no userId
+  @@index([groupId])
+  @@index([userId])
+}
+
+
