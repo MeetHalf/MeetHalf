@@ -18,6 +18,56 @@ const nearbyCache = createCache<any>(5 * 60 * 1000);
 const directionsCache = createCache<any>(5 * 60 * 1000);
 
 /**
+ * @swagger
+ * /maps/geocode:
+ *   get:
+ *     summary: Convert address to coordinates
+ *     tags: [Maps]
+ *     parameters:
+ *       - in: query
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Address to geocode
+ *         example: "台北101"
+ *     responses:
+ *       200:
+ *         description: Geocoding results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       formatted_address:
+ *                         type: string
+ *                       geometry:
+ *                         type: object
+ *                         properties:
+ *                           location:
+ *                             type: object
+ *                             properties:
+ *                               lat:
+ *                                 type: number
+ *                               lng:
+ *                                 type: number
+ *                       place_id:
+ *                         type: string
+ *                 cached:
+ *                   type: boolean
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * GET /maps/geocode
  * Convert address to coordinates
  */
@@ -65,6 +115,52 @@ router.get('/geocode', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /maps/reverse:
+ *   get:
+ *     summary: Convert coordinates to address
+ *     tags: [Maps]
+ *     parameters:
+ *       - in: query
+ *         name: lat
+ *         required: true
+ *         schema:
+ *           type: number
+ *           format: float
+ *         description: Latitude
+ *         example: 25.0339639
+ *       - in: query
+ *         name: lng
+ *         required: true
+ *         schema:
+ *           type: number
+ *           format: float
+ *         description: Longitude
+ *         example: 121.5644722
+ *     responses:
+ *       200:
+ *         description: Reverse geocoding results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 address:
+ *                   type: string
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 cached:
+ *                   type: boolean
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 /**
  * GET /maps/reverse
  * Convert coordinates to address
