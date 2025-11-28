@@ -25,6 +25,33 @@ const timeMidpointCache = createCache<any>(10 * 60 * 1000);
 // Cache for routes (5 minutes TTL)
 const routesCache = createCache<any>(5 * 60 * 1000);
 
+/**
+ * @swagger
+ * /groups:
+ *   get:
+ *     summary: List all groups for current user
+ *     tags: [Groups]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: List of groups
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 groups:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Group'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /groups - List all groups for current user
 router.get('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -68,6 +95,49 @@ router.get('/', authMiddleware, async (req: Request, res: Response): Promise<voi
   }
 });
 
+/**
+ * @swagger
+ * /groups:
+ *   post:
+ *     summary: Create a new group
+ *     tags: [Groups]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: "Weekend Meetup"
+ *     responses:
+ *       201:
+ *         description: Group created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 group:
+ *                   $ref: '#/components/schemas/Group'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // POST /groups - Create new group
 router.post('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -121,6 +191,44 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
   }
 });
 
+/**
+ * @swagger
+ * /groups/{id}:
+ *   get:
+ *     summary: Get group details with members
+ *     tags: [Groups]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID
+ *     responses:
+ *       200:
+ *         description: Group details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 group:
+ *                   $ref: '#/components/schemas/Group'
+ *       400:
+ *         description: Invalid group ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Group not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /groups/:id - Get group details with members
 router.get('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -298,6 +406,61 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
   }
 });
 
+/**
+ * @swagger
+ * /groups/{id}/midpoint:
+ *   get:
+ *     summary: Calculate geometric midpoint and nearby places
+ *     tags: [Groups]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID
+ *     responses:
+ *       200:
+ *         description: Midpoint calculation result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 midpoint:
+ *                   type: object
+ *                   properties:
+ *                     lat:
+ *                       type: number
+ *                     lng:
+ *                       type: number
+ *                 address:
+ *                   type: string
+ *                 suggested_places:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 member_travel_times:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 cached:
+ *                   type: boolean
+ *       400:
+ *         description: Insufficient locations or validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Group not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /groups/:id/midpoint - Calculate midpoint and nearby places
 router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {

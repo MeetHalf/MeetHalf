@@ -3,6 +3,8 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger';
 import authRouter from './routes/auth';
 import groupsRouter from './routes/groups';
 import membersRouter from './routes/members';
@@ -17,9 +19,19 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Security middlewares
 app.use(helmet());
+// CORS configuration - allow frontend origins
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  // Add container frontend origin if needed
+  process.env.FRONTEND_ORIGIN,
+].filter(Boolean) as string[];
+
 app.use(
   cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'],
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true, // Fallback to allow all in dev
     credentials: true,
   })
 );
@@ -30,6 +42,12 @@ app.use(express.json());
 app.get('/healthz', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'MeetHalf API Documentation',
+}));
 
 // Routes
 app.use('/auth', authRouter);
@@ -70,9 +88,12 @@ if (process.env.NODE_ENV === 'test') {
   // Test mode, skip server startup
 } else {
   // Start server only in non-test environments
-  app.listen(PORT, '127.0.0.1', () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/healthz`);
+  // Use 0.0.0.0 to allow external connections (e.g., from containers)
+  // Use 127.0.0.1 for local development security
+  const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
+  app.listen(PORT, HOST, () => {
+    console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+    console.log(`📊 Health check: http://${HOST}:${PORT}/healthz`);
   });
 }
 
