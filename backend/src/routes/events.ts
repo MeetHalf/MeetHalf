@@ -1686,7 +1686,6 @@ router.post('/:id/location', optionalAuthMiddleware, async (req: Request, res: R
       return;
     }
 
-    const { memberService } = await import('../services/MemberService');
     const updatedMember = await memberService.updateLocation(memberId, bodyValidation.data);
 
     res.json({ member: updatedMember });
@@ -1789,7 +1788,6 @@ router.post('/:id/arrival', optionalAuthMiddleware, async (req: Request, res: Re
       return;
     }
 
-    const { memberService } = await import('../services/MemberService');
     const result = await memberService.markArrival(memberId);
 
     res.json(result);
@@ -1860,7 +1858,6 @@ router.post('/:id/poke', optionalAuthMiddleware, async (req: Request, res: Respo
       return;
     }
 
-    const { pokeMemberSchema } = await import('../schemas/eventActions');
     const bodyValidation = pokeMemberSchema.safeParse(req.body);
     if (!bodyValidation.success) {
       res.status(400).json({
@@ -1898,7 +1895,6 @@ router.post('/:id/poke', optionalAuthMiddleware, async (req: Request, res: Respo
       return;
     }
 
-    const { pokeService } = await import('../services/PokeService');
     const result = await pokeService.pokeMember(id, fromMemberId, targetMemberId);
 
     res.json(result);
@@ -1977,7 +1973,6 @@ router.get('/:id/pokes', optionalAuthMiddleware, async (req: Request, res: Respo
     }
 
     const { id } = paramsValidation.data as EventParams;
-    const { pokeService } = await import('../services/PokeService');
     const stats = await pokeService.getPokeStats(id);
 
     res.json(stats);
@@ -2072,7 +2067,6 @@ router.get('/:id/result', optionalAuthMiddleware, async (req: Request, res: Resp
     }
 
     const { id } = paramsValidation.data as EventParams;
-    const { eventService } = await import('../services/EventService');
     const result = await eventService.getEventResult(id);
 
     res.json({ result });
@@ -2151,7 +2145,6 @@ router.get('/my-events', optionalAuthMiddleware, async (req: Request, res: Respo
       return;
     }
 
-    const { myEventsQuerySchema } = await import('../schemas/eventActions');
     const queryValidation = myEventsQuerySchema.safeParse(req.query);
     if (!queryValidation.success) {
       res.status(400).json({
@@ -2174,7 +2167,6 @@ router.get('/my-events', optionalAuthMiddleware, async (req: Request, res: Respo
     }
 
     const { status, limit, offset } = queryValidation.data;
-    const { eventRepository } = await import('../repositories/EventRepository');
 
     const events = await eventRepository.findByUserId(userUserId, { status, limit, offset });
     const total = await eventRepository.countByUserId(userUserId, status);
