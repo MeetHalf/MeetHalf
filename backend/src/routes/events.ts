@@ -243,9 +243,8 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       validGroupId = groupId;
     }
     
-    // Determine ownerId and memberUserId based on authentication status
+    // Determine ownerId based on authentication status
     let ownerId: string;
-    let memberUserId: string | null = null;
     
     if (req.user && 'userId' in req.user) {
       // Authenticated user: automatically use their userId as ownerId
@@ -261,7 +260,6 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       }
       
       ownerId = userUserId; // Use authenticated user's userId as ownerId
-      memberUserId = userUserId;
       
       // If ownerId was provided but doesn't match, log a warning but use authenticated user's userId
       // This allows frontend to always send ownerId without checking authentication status
@@ -287,7 +285,6 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       }
       
       ownerId = providedOwnerId;
-      memberUserId = providedOwnerId;
     }
 
     const event = await prisma.event.create({
@@ -303,11 +300,7 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
         meetingPointName,
         meetingPointAddress,
         groupId: validGroupId,
-        members: memberUserId ? {
-          create: {
-            userId: memberUserId
-          }
-        } : undefined
+        // Don't create member automatically - user must join explicitly
       },
       include: {
         members: {
@@ -1697,7 +1690,7 @@ router.get('/:id/routes_to_midpoint', optionalAuthMiddleware, async (req: Reques
  *       404:
  *         description: Event not found
  */
-// POST /events/:id/join - Join event as guest
+// POST /events/:id/join - Join event (supports both authenticated and anonymous users)
 router.post('/:id/join', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const paramsValidation = eventParamsSchema.safeParse(req.params);
@@ -1722,10 +1715,58 @@ router.post('/:id/join', optionalAuthMiddleware, async (req: Request, res: Respo
 
     const { id } = paramsValidation.data as EventParams;
 
-    const member = await memberService.joinEventAsGuest(id, bodyValidation.data);
+    // Determine userId based on authentication status
+    let userId: string | null = null;
+    
+    if (req.user && 'userId' in req.user) {
+      // Authenticated user: use their userId
+      const jwtPayload = req.user as { userId: number };
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      
+      if (!userUserId) {
+        res.status(401).json({
+          code: 'UNAUTHORIZED',
+          message: 'User not found'
+        });
+        return;
+      }
+      
+      userId = userUserId;
+    } else {
+      // Anonymous user: generate guest ID
+      userId = `guest_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    }
 
-    // Generate guest token
-    const guestToken = generateGuestToken(member.id, id);
+    // Check if member already exists
+    const { memberRepository } = await import('../repositories/MemberRepository');
+    const existingMember = userId ? await memberRepository.findByEventIdAndUserId(id, userId) : null;
+    
+    if (existingMember) {
+      // Member already exists, return existing member
+      const guestToken = req.user && 'userId' in req.user 
+        ? null 
+        : generateGuestToken(existingMember.id, id);
+      
+      res.status(200).json({
+        member: existingMember,
+        guestToken,
+      });
+      return;
+    }
+
+    // Create new member
+    const member = await memberRepository.create({
+      eventId: id,
+      userId: userId,
+      nickname: bodyValidation.data.nickname,
+      shareLocation: bodyValidation.data.shareLocation,
+      travelMode: bodyValidation.data.travelMode || 'driving',
+    });
+
+    // Generate guest token only for anonymous users
+    const guestToken = req.user && 'userId' in req.user 
+      ? null 
+      : generateGuestToken(member.id, id);
 
     res.status(201).json({
       member,
