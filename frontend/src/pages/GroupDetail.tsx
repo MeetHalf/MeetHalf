@@ -289,6 +289,67 @@ export default function GroupDetail() {
     );
   };
 
+  // ✅ NEW: Quick set location from member list
+  const handleQuickSetLocation = async (memberId: number) => {
+    if (!navigator.geolocation) {
+      setSnackbar({ open: true, message: '您的瀏覽器不支援定位功能', severity: 'error' });
+      return;
+    }
+
+    const member = group?.members.find(m => m.id === memberId);
+    if (!member) {
+      setSnackbar({ open: true, message: '找不到成員資訊', severity: 'error' });
+      return;
+    }
+
+    setActionLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          
+          // 進行反向地理編碼獲取地址
+          let address = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          try {
+            const reverseGeoResponse = await api.get('/maps/reverse', {
+              params: { lat: latitude, lng: longitude }
+            });
+            if (reverseGeoResponse.data?.address) {
+              address = reverseGeoResponse.data.address;
+            }
+          } catch (reverseErr) {
+            console.warn('反向地理編碼失敗，使用座標作為地址:', reverseErr);
+          }
+          
+          // Use member's current travel mode or default to 'driving'
+          const memberTravelMode = member.travelMode || 'driving';
+          
+          await membersApi.updateMemberLocation(memberId, {
+            lat: latitude,
+            lng: longitude,
+            address: address,
+            travelMode: memberTravelMode,
+          });
+          
+          setSnackbar({ open: true, message: '位置更新成功！', severity: 'success' });
+          fetchGroupData(); // Refresh data
+        } catch (err) {
+          setSnackbar({ 
+            open: true, 
+            message: err instanceof Error ? err.message : '位置更新失敗', 
+            severity: 'error' 
+          });
+        } finally {
+          setActionLoading(false);
+        }
+      },
+      () => {
+        setActionLoading(false);
+        setSnackbar({ open: true, message: '無法取得您的位置', severity: 'error' });
+      }
+    );
+  };
+
   const handleSearchLocation = async () => {
     if (!searchAddress.trim()) {
       setSnackbar({ open: true, message: '請輸入地址或地點名稱', severity: 'error' });
@@ -963,6 +1024,31 @@ export default function GroupDetail() {
                             >
                               {member.address || (member.lat && member.lng ? '已定位' : '尚未設定位置')}
                             </Typography>
+                            {/* ✅ NEW: Quick set location button for current user */}
+                            {!member.isOffline && member.userId === user?.id && !member.lat && !member.lng && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<GpsIcon />}
+                                onClick={() => handleQuickSetLocation(member.id)}
+                                disabled={actionLoading}
+                                sx={{
+                                  ml: 1,
+                                  minWidth: 'auto',
+                                  px: 1.5,
+                                  py: 0.5,
+                                  fontSize: '0.75rem',
+                                  borderColor: '#3B82F6',
+                                  color: '#3B82F6',
+                                  '&:hover': {
+                                    borderColor: '#2563EB',
+                                    bgcolor: '#EBF5FF'
+                                  }
+                                }}
+                              >
+                                {actionLoading ? '定位中...' : '取得當前位置'}
+                              </Button>
+                            )}
                           </Box>
                           {/* ✅ NEW: Individual travel mode selector for each member */}
                           <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
