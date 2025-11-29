@@ -244,15 +244,16 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     
     res.cookie('token', token, cookieOptions);
     
-    // Log response headers to verify Set-Cookie is sent
+    // Log actual Set-Cookie header value for debugging
     const setCookieHeader = res.getHeader('Set-Cookie');
-    console.log('[Login] Set-Cookie header:', setCookieHeader ? 'sent' : 'missing');
-
-    // Ensure CORS headers are set for cookie to work
-    if (req.headers.origin) {
-      res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    if (setCookieHeader) {
+      console.log('[Login] Set-Cookie header sent:', Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader);
+    } else {
+      console.warn('[Login] ⚠️ Set-Cookie header is missing!');
     }
+
+    // Note: CORS headers are already set by the CORS middleware in index.ts
+    // We don't need to set them again here as it may cause conflicts
 
     res.json({
       message: 'Login successful',

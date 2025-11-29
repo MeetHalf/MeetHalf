@@ -19,14 +19,18 @@ export async function authMiddleware(
     const token = req.cookies.token;
 
     if (!token) {
-      // Log for debugging in production (helps identify cookie issues)
-      if (process.env.NODE_ENV === 'production') {
-        console.warn('[Auth] No token in cookies', {
-          cookies: Object.keys(req.cookies),
-          headers: {
-            cookie: req.headers.cookie ? 'present' : 'missing',
-            origin: req.headers.origin,
-          },
+      // Log detailed cookie information when token is missing (for debugging)
+      if (process.env.VERCEL_URL || req.protocol === 'https') {
+        console.warn('[Auth] No token in cookies:', {
+          hasCookies: Object.keys(req.cookies).length > 0,
+          cookieKeys: Object.keys(req.cookies),
+          cookieHeader: req.headers.cookie ? 'present' : 'missing',
+          cookieHeaderValue: req.headers.cookie?.substring(0, 100) || 'missing', // Log first 100 chars
+          origin: req.headers.origin,
+          host: req.headers.host,
+          protocol: req.protocol,
+          secure: req.secure,
+          userAgent: req.headers['user-agent']?.substring(0, 50), // Browser type hint
         });
       }
       res.status(401).json({
