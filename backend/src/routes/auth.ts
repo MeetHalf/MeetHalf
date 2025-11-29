@@ -98,7 +98,16 @@ router.get(
  *       302:
  *         description: Redirect to GitHub OAuth
  */
-router.get('/github', passport.authenticate('github', { scope: ['user:email'] }));
+router.get('/github', (req: Request, res: Response, next: any) => {
+  console.log('[AUTH] GitHub login initiated', {
+    query: req.query,
+    headers: {
+      origin: req.headers.origin,
+      host: req.headers.host,
+    },
+  });
+  passport.authenticate('github', { scope: ['user:email'] })(req, res, next);
+});
 
 /**
  * @swagger
@@ -112,11 +121,34 @@ router.get('/github', passport.authenticate('github', { scope: ['user:email'] })
  */
 router.get(
   '/github/callback',
-  passport.authenticate('github', { failureRedirect: '/', session: false }),
+  (req: Request, res: Response, next: any) => {
+    console.log('[AUTH] GitHub callback received', {
+      query: req.query,
+      path: req.path,
+      url: req.url,
+    });
+    passport.authenticate('github', { session: false }, (err: any, user: any, info: any) => {
+      if (err) {
+        console.error('[AUTH] GitHub OAuth error:', err);
+        const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+        return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+      }
+      if (!user) {
+        console.error('[AUTH] GitHub OAuth: No user returned', info);
+        const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+        return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+      }
+      console.log('[AUTH] GitHub OAuth success, user:', { id: user.id, email: user.email });
+      // Attach user to request
+      (req as any).user = user;
+      next();
+    })(req, res, next);
+  },
   (req: Request, res: Response) => {
     // @ts-ignore - passport adds user to request
     const user = (req as any).user;
     if (!user) {
+      console.error('[AUTH] GitHub callback: No user in request');
       const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
       return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
     }
@@ -208,9 +240,15 @@ router.get('/me', optionalAuthMiddleware, async (req: Request, res: Response): P
  */
 // POST /auth/logout
 router.post('/logout', (req: Request, res: Response): void => {
+  console.log('[AUTH] Logout requested', {
+    hasCookies: Object.keys(req.cookies).length > 0,
+    cookieKeys: Object.keys(req.cookies),
+  });
+  
   // Use the same cookie options function to ensure consistency
   // This ensures we only clear cookies from the same domain/path where they were set
   const cookieOptions = getCookieOptions(req);
+  console.log('[AUTH] Cookie options for logout:', cookieOptions);
   
   // Clear cookie with the exact same options used when setting it
   // This is safe because:
@@ -227,6 +265,7 @@ router.post('/logout', (req: Request, res: Response): void => {
     expires: new Date(0),
   });
   
+  console.log('[AUTH] Logout successful');
   res.json({ message: 'Logout successful' });
 });
 

@@ -100,12 +100,18 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
         callbackURL: (() => {
           // Priority: BACKEND_URL > VERCEL_URL > localhost
           if (process.env.BACKEND_URL) {
-            return `${process.env.BACKEND_URL}/auth/github/callback`;
+            const url = `${process.env.BACKEND_URL}/auth/github/callback`;
+            console.log('[PASSPORT] GitHub callback URL (BACKEND_URL):', url);
+            return url;
           }
           if (process.env.VERCEL_URL) {
-            return `https://${process.env.VERCEL_URL}/auth/github/callback`;
+            const url = `https://${process.env.VERCEL_URL}/auth/github/callback`;
+            console.log('[PASSPORT] GitHub callback URL (VERCEL_URL):', url);
+            return url;
           }
-          return 'http://localhost:3000/auth/github/callback';
+          const url = 'http://localhost:3000/auth/github/callback';
+          console.log('[PASSPORT] GitHub callback URL (localhost):', url);
+          return url;
         })(),
       },
       async (accessToken: any, refreshToken: any, profile: any, done: any) => {
