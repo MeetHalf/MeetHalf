@@ -12,7 +12,17 @@ export interface Event {
   id: number;
   name: string;
   ownerName: string;
+  meetingPointLat?: number | null;
+  meetingPointLng?: number | null;
+  meetingPointName?: string | null;
+  meetingPointAddress?: string | null;
+  startTime: string; // ISO 8601
+  endTime: string; // ISO 8601
+  status: 'upcoming' | 'ongoing' | 'ended';
+  useMeetHalf: boolean;
+  groupId?: number | null;
   createdAt: string;
+  updatedAt: string;
   members: Member[];
   _count?: {
     members: number;
@@ -23,14 +33,15 @@ export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
 
 export interface Member {
   id: number;
-  username: string | null;
+  userId: string | null;
   eventId: number;
   lat: number | null;
   lng: number | null;
   address: string | null;
   travelMode: TravelMode | null;
   nickname: string | null;
-  isOffline: boolean;
+  shareLocation: boolean;
+  arrivalTime: string | null; // ISO 8601
   createdAt: string;
   updatedAt: string;
 }
@@ -167,6 +178,12 @@ export const eventsApi = {
     const response = await api.get(`/events/${id}/routes_to_midpoint`, { params });
     return response.data;
   },
+
+  // Poke a member
+  async pokeMember(eventId: number, targetMemberId: number): Promise<{ success: boolean; pokeCount: number; totalPokes: number }> {
+    const response = await api.post(`/events/${eventId}/poke`, { targetMemberId });
+    return response.data;
+  },
 };
 
 // Members API
@@ -198,9 +215,9 @@ export const eventUtils = {
   },
 
   // Get current user's membership in event
-  getCurrentUserMember: (event: Event, userName: string | null): Member | undefined => {
-    if (!userName) return undefined;
-    return event.members.find(member => member.username === userName);
+  getCurrentUserMember: (event: Event, userUserId: string | null): Member | undefined => {
+    if (!userUserId) return undefined;
+    return event.members.find(member => member.userId === userUserId);
   },
 
   // Count members with locations set

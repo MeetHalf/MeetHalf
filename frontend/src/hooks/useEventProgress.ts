@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import type { Event } from '../types/events';
+import type { Event } from '../api/events';
 
 interface EventProgress {
   mode: 'upcoming' | 'ongoing' | 'ended';

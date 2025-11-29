@@ -215,6 +215,7 @@ router.get('/me', optionalAuthMiddleware, async (req: Request, res: Response): P
       where: { id: userId },
       select: {
         id: true,
+        userId: true, // Add userId to response
         email: true,
         name: true,
         avatar: true,
