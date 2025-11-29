@@ -4,6 +4,11 @@ export const createEventSchema = z.object({
   name: z.string().min(1, 'Event name is required').max(100, 'Event name must be less than 100 characters'),
   startTime: z.coerce.date(),
   endTime: z.coerce.date(),
+  useMeetHalf: z.boolean().optional().default(false),
+  meetingPointLat: z.number().optional().nullable(),
+  meetingPointLng: z.number().optional().nullable(),
+  meetingPointName: z.string().optional().nullable(),
+  meetingPointAddress: z.string().optional().nullable(),
 });
 
 export const updateEventSchema = z.object({

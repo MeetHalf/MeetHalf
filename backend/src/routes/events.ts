@@ -170,7 +170,16 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       return;
     }
 
-    const { name, startTime, endTime } = validation.data as CreateEventRequest;
+    const { 
+      name, 
+      startTime, 
+      endTime,
+      useMeetHalf = false,
+      meetingPointLat,
+      meetingPointLng,
+      meetingPointName,
+      meetingPointAddress,
+    } = validation.data as CreateEventRequest;
     
     // Determine owner name - use authenticated user's name or anonymous identifier
     let ownerName: string;
@@ -192,6 +201,11 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
         ownerName,
         startTime,
         endTime,
+        useMeetHalf,
+        meetingPointLat: meetingPointLat ?? undefined,
+        meetingPointLng: meetingPointLng ?? undefined,
+        meetingPointName: meetingPointName ?? undefined,
+        meetingPointAddress: meetingPointAddress ?? undefined,
         members: {
           create: {
             userId: memberUserId
