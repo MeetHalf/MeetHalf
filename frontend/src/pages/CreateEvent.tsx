@@ -152,10 +152,16 @@ export default function CreateEvent() {
     try {
       // 調用真實 API
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      
+      // Generate anonymous ownerId (guest user)
+      // Backend expects ownerId, for anonymous users we use a guest_ prefix
+      const anonymousOwnerId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       const response = await axios.post(`${backendUrl}/events`, {
         name: formData.name.trim(),
         startTime: formData.startTime.toISOString(),
         endTime: formData.endTime.toISOString(),
+        ownerId: anonymousOwnerId,  // Required by backend
         useMeetHalf: formData.useMeetHalf,
         meetingPointName: formData.useMeetHalf ? null : formData.meetingPointName,
         meetingPointAddress: formData.useMeetHalf ? null : formData.meetingPointAddress,
