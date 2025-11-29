@@ -78,17 +78,31 @@ router.get('/google', passport.authenticate('google', { scope: ['profile', 'emai
 router.get(
   '/google/callback',
   (req: Request, res: Response, next: any) => {
+    console.log('[AUTH] ✓ Google callback received');
+    console.log('[AUTH] Query params:', req.query);
+    
     passport.authenticate('google', { session: false }, (err: any, user: any, info: any) => {
       if (err) {
-        console.error('Google OAuth error:', err);
+        console.error('[AUTH] ❌ Google OAuth error:');
+        console.error('[AUTH] Message:', err.message);
+        console.error('[AUTH] Stack:', err.stack);
+        console.error('[AUTH] Full error:', JSON.stringify(err, null, 2));
         const frontendOrigin = getFrontendOrigin();
         return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
       }
       if (!user) {
-        console.error('Google OAuth: No user returned', info);
+        console.error('[AUTH] ❌ Google OAuth: No user returned');
+        console.error('[AUTH] Info:', info);
         const frontendOrigin = getFrontendOrigin();
         return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
       }
+      
+      console.log('[AUTH] ✓ Google OAuth success, user:', {
+        id: user.id,
+        userId: user.userId,
+        email: user.email,
+        name: user.name,
+      });
       // Attach user to request
       (req as any).user = user;
       next();
