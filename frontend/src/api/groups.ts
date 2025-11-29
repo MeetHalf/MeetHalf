@@ -28,7 +28,6 @@ export interface Member {
   address: string | null;
   travelMode: TravelMode | null;
   nickname: string | null;  // ✅ NEW: For offline members
-  isOffline: boolean;       // ✅ NEW: Flag to distinguish offline members
   createdAt: string;
   updatedAt: string;
   user: User | null;  // ✅ Nullable for offline members

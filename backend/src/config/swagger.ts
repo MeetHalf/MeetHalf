@@ -143,9 +143,6 @@ const options: swaggerJsdoc.Options = {
               type: 'string',
               nullable: true,
             },
-            isOffline: {
-              type: 'boolean',
-            },
             createdAt: {
               type: 'string',
               format: 'date-time',
