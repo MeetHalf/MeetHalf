@@ -9,22 +9,30 @@ import { generateUserId } from './userUtils';
 // serializeUser and deserializeUser are not needed
 
 // Google OAuth Strategy
+console.log('[PASSPORT] Initializing Google OAuth Strategy...');
+console.log('[PASSPORT] GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✓ Set' : '✗ Missing');
+console.log('[PASSPORT] GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✓ Set' : '✗ Missing');
+
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  const googleCallbackURL = (() => {
+    // Priority: BACKEND_URL > VERCEL_URL > localhost
+    if (process.env.BACKEND_URL) {
+      return `${process.env.BACKEND_URL}/auth/google/callback`;
+    }
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}/auth/google/callback`;
+    }
+    return 'http://meet-half-backend.vercel.app/auth/google/callback';
+  })();
+  
+  console.log('[PASSPORT] Google callback URL:', googleCallbackURL);
+  
   passport.use(
     new GoogleStrategy(
       {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: (() => {
-          // Priority: BACKEND_URL > VERCEL_URL > localhost
-          if (process.env.BACKEND_URL) {
-            return `${process.env.BACKEND_URL}/auth/google/callback`;
-          }
-          if (process.env.VERCEL_URL) {
-            return `https://${process.env.VERCEL_URL}/auth/google/callback`;
-          }
-          return 'http://meet-half-backend.vercel.app/auth/google/callback';;
-        })(),
+        callbackURL: googleCallbackURL,
       },
       async (accessToken: any, refreshToken: any, profile: any, done: any) => {
         try {
@@ -88,6 +96,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       }
     )
   );
+  console.log('[PASSPORT] ✓ Google OAuth Strategy initialized successfully');
+} else {
+  console.warn('[PASSPORT] ✗ Google OAuth Strategy NOT initialized - missing credentials');
 }
 
 // GitHub OAuth Strategy
