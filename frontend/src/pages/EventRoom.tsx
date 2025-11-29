@@ -8,6 +8,7 @@ import {
   Container,
   Chip,
   Paper,
+  LinearProgress,
 } from '@mui/material';
 import {
   AccessTime as TimeIcon,
@@ -15,6 +16,7 @@ import {
   People as PeopleIcon,
 } from '@mui/icons-material';
 import { getMockEventById, getMockMembersByEventId } from '../mocks/eventData';
+import { useEventProgress } from '../hooks/useEventProgress';
 import type { Event, EventMember } from '../types/events';
 
 export default function EventRoom() {
@@ -25,7 +27,9 @@ export default function EventRoom() {
   const [members, setMembers] = useState<EventMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<string>('');
+
+  // 使用進度條 hook
+  const progress = event ? useEventProgress(event) : null;
 
   // 載入 Mock Data
   useEffect(() => {
@@ -47,52 +51,20 @@ export default function EventRoom() {
       }
 
       setEvent(mockEvent);
-      setMembers(mockMembers);
+      // 排序成員：已到達 → 分享位置中 → 前往中
+      const sortedMembers = [...mockMembers].sort((a, b) => {
+        if (a.arrivalTime && !b.arrivalTime) return -1;
+        if (!a.arrivalTime && b.arrivalTime) return 1;
+        if (!a.arrivalTime && !b.arrivalTime) {
+          if (a.shareLocation && !b.shareLocation) return -1;
+          if (!a.shareLocation && b.shareLocation) return 1;
+        }
+        return 0;
+      });
+      setMembers(sortedMembers);
       setLoading(false);
     }, 500);
   }, [id]);
-
-  // 倒數計時邏輯
-  useEffect(() => {
-    if (!event) return;
-
-    const updateCountdown = () => {
-      const now = new Date();
-      const eventTime = new Date(event.datetime);
-      const diff = eventTime.getTime() - now.getTime();
-
-      if (diff <= 0) {
-        // 聚會已開始或結束
-        const afterMinutes = Math.abs(diff) / 1000 / 60;
-        if (afterMinutes > event.timeWindow.after) {
-          setTimeRemaining('聚會已結束');
-        } else {
-          setTimeRemaining(`聚會進行中（已開始 ${Math.floor(afterMinutes)} 分鐘）`);
-        }
-      } else {
-        // 聚會尚未開始
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-        if (days > 0) {
-          setTimeRemaining(`${days} 天 ${hours} 小時`);
-        } else if (hours > 0) {
-          setTimeRemaining(`${hours} 小時 ${minutes} 分鐘`);
-        } else if (minutes > 0) {
-          setTimeRemaining(`${minutes} 分 ${seconds} 秒`);
-        } else {
-          setTimeRemaining(`${seconds} 秒`);
-        }
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
-  }, [event]);
 
   // 取得狀態顏色
   const getStatusColor = (status: string) => {
@@ -185,94 +157,110 @@ export default function EventRoom() {
             />
           </Box>
 
-          {/* 聚會標題 - 大標題 */}
+          {/* 聚會標題 */}
           <Typography
             variant="h3"
             component="h1"
             sx={{
               fontWeight: 600,
-              mb: 4,
-              fontSize: { xs: '2rem', sm: '2.5rem' },
+              mb: 3,
+              fontSize: { xs: '1.75rem', sm: '2.25rem' },
               color: '#1a1a1a',
               letterSpacing: '-0.02em',
             }}
           >
-            {event.title}
+            {event.name}
           </Typography>
 
-          {/* 倒數計時 - 簡約卡片 */}
-          <Box
-            sx={{
-              bgcolor: '#f8f9fa',
-              borderRadius: 2,
-              p: 3,
-              mb: 4,
-              textAlign: 'center',
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-          >
-            <Typography
-              variant="body2"
-              sx={{
-                color: 'text.secondary',
-                mb: 1,
-                textTransform: 'uppercase',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                letterSpacing: '0.05em',
-              }}
-            >
-              倒數計時
-            </Typography>
-            <Typography
-              variant="h4"
-              sx={{
-                fontWeight: 700,
-                color: '#1a1a1a',
-                fontSize: { xs: '1.5rem', sm: '2rem' },
-              }}
-            >
-              {timeRemaining || '載入中...'}
-            </Typography>
-          </Box>
+          {/* 進度條區域 */}
+          {progress && (
+            <Box sx={{ mb: 4 }}>
+              {/* 標籤 */}
+              <Typography
+                variant="caption"
+                sx={{
+                  display: 'block',
+                  color: 'text.secondary',
+                  mb: 1,
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
+                {progress.label}
+              </Typography>
 
-          {/* 聚會詳情 - 極簡列表 */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            {/* 聚會時間 */}
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-              <TimeIcon sx={{ color: 'text.secondary', fontSize: 20, mt: 0.3 }} />
-              <Box>
-                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5, fontSize: '0.75rem' }}>
-                  時間
-                </Typography>
-                <Typography variant="body1" sx={{ color: '#1a1a1a', fontWeight: 500 }}>
-                  {new Date(event.datetime).toLocaleString('zh-TW', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    weekday: 'short',
-                  })}
-                </Typography>
+              {/* 進度條 */}
+              <Box
+                sx={{
+                  position: 'relative',
+                  height: 10,
+                  bgcolor: '#e0e0e0',
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  mb: 0.75,
+                }}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    height: '100%',
+                    width: `${progress.progress * 100}%`,
+                    bgcolor: progress.color,
+                    borderRadius: 10,
+                    transition: 'width 0.5s ease-out',
+                  }}
+                />
               </Box>
+
+              {/* 時間描述 */}
+              {progress.description && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    color: 'text.secondary',
+                    fontSize: '0.75rem',
+                    textAlign: 'right',
+                  }}
+                >
+                  {progress.description}
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {/* 聚會詳情 - 緊湊列表 */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* 聚會時間 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <TimeIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+              <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
+                {new Date(event.startTime).toLocaleString('zh-TW', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  weekday: 'short',
+                })}
+              </Typography>
             </Box>
 
             {/* 集合地點 */}
-            {event.meetingPoint && (
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                <LocationIcon sx={{ color: 'text.secondary', fontSize: 20, mt: 0.3 }} />
+            {(event.meetingPointName || event.meetingPointAddress) && (
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                <LocationIcon sx={{ color: 'text.secondary', fontSize: 18, mt: 0.25 }} />
                 <Box>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5, fontSize: '0.75rem' }}>
-                    地點
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: '#1a1a1a', fontWeight: 500 }}>
-                    {event.meetingPoint.name}
-                  </Typography>
-                  {event.meetingPoint.address && (
-                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-                      {event.meetingPoint.address}
+                  {event.meetingPointName && (
+                    <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
+                      {event.meetingPointName}
+                    </Typography>
+                  )}
+                  {event.meetingPointAddress && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+                      {event.meetingPointAddress}
                     </Typography>
                   )}
                 </Box>
@@ -280,16 +268,11 @@ export default function EventRoom() {
             )}
 
             {/* 成員數量 */}
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-              <PeopleIcon sx={{ color: 'text.secondary', fontSize: 20, mt: 0.3 }} />
-              <Box>
-                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5, fontSize: '0.75rem' }}>
-                  參加人數
-                </Typography>
-                <Typography variant="body1" sx={{ color: '#1a1a1a', fontWeight: 500 }}>
-                  {members.length} 位成員
-                </Typography>
-              </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <PeopleIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+              <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
+                {members.length} 位成員
+              </Typography>
             </Box>
           </Box>
         </Paper>
@@ -308,13 +291,26 @@ export default function EventRoom() {
           <Typography
             variant="h5"
             sx={{
-              mb: 3,
+              mb: 0.5,
               fontWeight: 600,
               color: '#1a1a1a',
               letterSpacing: '-0.01em',
             }}
           >
             參加成員
+          </Typography>
+
+          {/* 排序說明 */}
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              color: 'text.secondary',
+              mb: 3,
+              fontSize: '0.75rem',
+            }}
+          >
+            依到達狀態排序：已到達 → 分享位置中 → 前往中
           </Typography>
           
           {members.length === 0 ? (
@@ -323,91 +319,116 @@ export default function EventRoom() {
             </Typography>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {members.map((member, index) => (
-                <Box
-                  key={member.id}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    py: 2.5,
-                    borderTop: index === 0 ? 'none' : '1px solid',
-                    borderColor: 'divider',
-                  }}
-                >
-                  {/* Avatar */}
+              {members.map((member, index) => {
+                // 定義狀態
+                const getMemberStatus = () => {
+                  if (member.arrivalTime) {
+                    return { text: '已到達', color: '#4caf50' };
+                  }
+                  if (member.shareLocation) {
+                    return { text: '分享位置中', color: '#2196f3' };
+                  }
+                  return { text: '前往中', color: '#bdbdbd' };
+                };
+                const status = getMemberStatus();
+
+                return (
                   <Box
+                    key={member.id}
                     sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: '50%',
-                      bgcolor: '#f5f5f5',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#666',
-                      fontWeight: 600,
-                      fontSize: '1.1rem',
-                      border: '2px solid white',
-                      flexShrink: 0,
+                      gap: 2,
+                      py: 2.5,
+                      borderTop: index === 0 ? 'none' : '1px solid',
+                      borderColor: 'divider',
                     }}
                   >
-                    {member.nickname?.charAt(0) || '?'}
-                  </Box>
-                  
-                  {/* 成員資訊 */}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography
-                      variant="body1"
+                    {/* Avatar */}
+                    <Box
                       sx={{
-                        fontWeight: 500,
-                        color: '#1a1a1a',
-                        mb: 0.3,
+                        width: 48,
+                        height: 48,
+                        borderRadius: '50%',
+                        bgcolor: '#f5f5f5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#666',
+                        fontWeight: 600,
+                        fontSize: '1.1rem',
+                        border: '2px solid white',
+                        flexShrink: 0,
                       }}
                     >
-                      {member.nickname}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: 'text.secondary',
-                        fontSize: '0.875rem',
-                      }}
-                    >
-                      {member.arrivalTime
-                        ? '已到達'
-                        : member.shareLocation
-                        ? '分享位置中'
-                        : '前往中'}
-                    </Typography>
-                  </Box>
+                      {member.nickname?.charAt(0) || '?'}
+                    </Box>
+                    
+                    {/* 成員資訊 */}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          fontWeight: 500,
+                          color: '#1a1a1a',
+                          mb: 0.3,
+                        }}
+                      >
+                        {member.nickname}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                          fontSize: '0.8125rem',
+                        }}
+                      >
+                        {status.text}
+                      </Typography>
+                    </Box>
 
-                  {/* 狀態指示器 */}
-                  <Box
-                    sx={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      bgcolor: member.arrivalTime
-                        ? '#4caf50'
-                        : member.shareLocation
-                        ? '#2196f3'
-                        : '#bdbdbd',
-                      flexShrink: 0,
-                    }}
-                  />
-                </Box>
-              ))}
+                    {/* 狀態指示器 */}
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        bgcolor: status.color,
+                        flexShrink: 0,
+                      }}
+                    />
+                  </Box>
+                );
+              })}
             </Box>
           )}
         </Paper>
 
-        {/* 底部提示 */}
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
-          <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-            Phase 1 基本版本 • 地圖與即時功能開發中
+        {/* 底部提示 - 卡片樣式 */}
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 3,
+            py: 2,
+            px: 3,
+            borderRadius: 2,
+            bgcolor: '#f5f5f5',
+            border: '1px solid',
+            borderColor: '#e0e0e0',
+            textAlign: 'center',
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+            }}
+          >
+            📍 Phase 1 基本版本 • 地圖與即時功能開發中
           </Typography>
-        </Box>
+        </Paper>
       </Container>
     </Box>
   );
