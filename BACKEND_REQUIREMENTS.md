@@ -86,20 +86,33 @@ model Member {
 model Group {
   id          Int      @id @default(autoincrement())
   name        String                          // 群組名稱，例如「大學同學」
-  ownerName   String                          // 建立者
-  members     String[]                        // 群組成員名單（JSON array）
+  ownerId     String                          // 建立者 ID（User.id 或 username）
+  members     User[]                          // 群組成員（多對多關聯）
   events      Event[]                         // 關聯的所有聚會
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
-  @@index([ownerName])
+  @@index([ownerId])
 }
 ```
 
 **說明**：
 - Group 用於統計群組的聚會歷史
-- `members` 使用 PostgreSQL 的 array 類型（`String[]`）
+- `members` 使用 Prisma 的 many-to-many 關聯（自動建立中間表 `_GroupToUser`）
+- `ownerId` 使用 String 類型（對應 User.id 轉為字串，或使用 username）
 - Event 可以選擇性關聯到 Group（`groupId` 可選）
+
+**注意**：
+- `ownerId` 為 String 類型，需要與後端確認：
+  - 是否為 `User.id.toString()`？
+  - 或使用 `User.name` / `username` 作為識別？
+- `members User[]` 需要 User model 也有對應的關聯：
+  ```prisma
+  model User {
+    // ... existing fields
+    groups Group[]  // 新增這行
+  }
+  ```
 
 ### 4. 新增 PokeRecord 表
 
@@ -143,16 +156,24 @@ ALTER TABLE "Member" ADD COLUMN IF NOT EXISTS "arrivalTime" TIMESTAMP(3);
 CREATE TABLE IF NOT EXISTS "Group" (
   "id" SERIAL PRIMARY KEY,
   "name" TEXT NOT NULL,
-  "ownerName" TEXT NOT NULL,
-  "members" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  "ownerId" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. 新增索引
+-- 4. 建立 Group 和 User 的中間表（many-to-many）
+CREATE TABLE IF NOT EXISTS "_GroupToUser" (
+  "A" INTEGER NOT NULL REFERENCES "Group"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "B" INTEGER NOT NULL REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  PRIMARY KEY ("A", "B")
+);
+
+CREATE INDEX IF NOT EXISTS "_GroupToUser_B_index" ON "_GroupToUser"("B");
+
+-- 5. 新增索引
 CREATE INDEX IF NOT EXISTS "Event_status_idx" ON "Event"("status");
 CREATE INDEX IF NOT EXISTS "Event_groupId_idx" ON "Event"("groupId");
-CREATE INDEX IF NOT EXISTS "Group_ownerName_idx" ON "Group"("ownerName");
+CREATE INDEX IF NOT EXISTS "Group_ownerId_idx" ON "Group"("ownerId");
 
 -- 5. 建立 PokeRecord 表
 CREATE TABLE IF NOT EXISTS "PokeRecord" (
