@@ -9,6 +9,7 @@ generator client {
 
 model User {
   id           Int      @id @default(autoincrement())
+  userId       String   @unique // email前綴 + "_" + 三個字母數字亂碼
   email        String   @unique
   name         String   // User display name (from OAuth or email)
   passwordHash String?  // Optional: keep for existing users, new users via OAuth
@@ -18,37 +19,78 @@ model User {
   avatar       String?  // Avatar URL from OAuth
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  
+  groups       Group[]  // Many-to-many relation with Group
 }
 
 model Event {
-  id        Int      @id @default(autoincrement())
-  name      String
-  ownerName String   // Owner's name (not foreign key - allows anonymous users)
-  createdAt DateTime @default(now())
-  members   Member[]
+  id                  Int      @id @default(autoincrement())
+  name                String
+  ownerName           String   // Owner's name (not foreign key - allows anonymous users)
+  meetingPointLat     Float?   // 集合點緯度（可選）
+  meetingPointLng     Float?   // 集合點經度（可選）
+  meetingPointName    String?  // 地點名稱（可選）
+  meetingPointAddress String?  // 地址（可選）
+  startTime           DateTime
+  endTime             DateTime
+  status              String   @default("upcoming") // upcoming, ongoing, ended
+  useMeetHalf         Boolean  @default(false) // 是否使用 MeetHalf
+  groupId             Int?     // 關聯到朋友群組（可選）
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  members             Member[]
+  pokeRecords         PokeRecord[]
+  group               Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
   
   @@index([ownerName])
+  @@index([groupId])
+  @@index([status])
 }
 
 model Member {
-  id         Int      @id @default(autoincrement())
-  username   String?  // User's name or anonymous identifier (nullable for offline members)
-  eventId    Int
-  lat        Float?
-  lng        Float?
-  address    String?
-  travelMode String?  @default("driving") // driving, transit, walking, bicycling
+  id            Int       @id @default(autoincrement())
+  userId        String?   // User's userId or anonymous identifier (nullable for offline members)
+  eventId       Int
+  lat           Float?
+  lng           Float?
+  address       String?
+  travelMode    String?   @default("driving") // driving, transit, walking, bicycling
+  nickname      String?   // Display name for non-registered members
+  shareLocation Boolean   @default(false) // 是否分享位置
+  arrivalTime   DateTime? // 到達時間（可選）
   
-  // For offline/anonymous members
-  nickname   String?  // Display name for non-registered members
-  isOffline  Boolean  @default(false)  // Flag to distinguish offline members
-  
-  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   
   @@index([eventId])
-  @@index([username])
+  @@index([userId])
 }
 
+model Group {
+  id        Int      @id @default(autoincrement())
+  name      String   // 群組名稱，例如「大學同學」
+  ownerId   String   // 建立者 userId（對應 User.userId）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  members   User[]   // 群組成員（多對多關聯）
+  events    Event[]  // 關聯的所有聚會
+  
+  @@index([ownerId])
+}
+
+model PokeRecord {
+  id           String   @id @default(cuid())
+  eventId      Int      // 關聯到 Event
+  fromMemberId Int      // 戳人者的 Member ID
+  toMemberId   Int      // 被戳者的 Member ID
+  createdAt    DateTime @default(now()) // 戳人時間
+  
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  @@index([eventId])
+  @@index([toMemberId])
+}
 

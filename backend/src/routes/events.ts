@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import prisma from '../lib/prisma';
-import { getUserName, getAnonymousUserId } from '../lib/userUtils';
+import { getUserName, getUserUserId, getAnonymousUserId } from '../lib/userUtils';
 import { 
   createEventSchema, 
   updateEventSchema, 
@@ -48,16 +48,21 @@ const routesCache = createCache<any>(5 * 60 * 1000);
 // GET /events - List all events for current user (supports anonymous)
 router.get('/', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    // If user is authenticated, filter by username
+    // If user is authenticated, filter by userId
     if (req.user && 'userId' in req.user) {
       const jwtPayload = req.user as { userId: number };
-      const userName = await getUserName(jwtPayload.userId);
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      
+      if (!userUserId) {
+        res.json({ events: [] });
+        return;
+      }
       
       const events = await prisma.event.findMany({
         where: {
           members: {
             some: {
-              username: userName
+              userId: userUserId
             }
           }
         },
@@ -138,31 +143,31 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       return;
     }
 
-    const { name } = validation.data as CreateEventRequest;
+    const { name, startTime, endTime } = validation.data as CreateEventRequest;
     
     // Determine owner name - use authenticated user's name or anonymous identifier
     let ownerName: string;
+    let memberUserId: string | null = null;
     if (req.user && 'userId' in req.user) {
       const jwtPayload = req.user as { userId: number };
       ownerName = await getUserName(jwtPayload.userId);
+      memberUserId = await getUserUserId(jwtPayload.userId);
     } else {
       // Anonymous user - generate a session-based identifier
       const sessionId = req.headers['x-session-id'] as string || req.cookies.sessionId || '';
       ownerName = getAnonymousUserId(sessionId);
+      memberUserId = ownerName; // For anonymous, use the same identifier
     }
-
-    // Determine username for the creator member
-    const username = req.user && 'userId' in req.user 
-      ? await getUserName((req.user as { userId: number }).userId)
-      : ownerName; // For anonymous, use the same identifier
 
     const event = await prisma.event.create({
       data: {
         name,
         ownerName,
+        startTime,
+        endTime,
         members: {
           create: {
-            username: username
+            userId: memberUserId
           }
         }
       },
@@ -360,10 +365,13 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
     const { id } = paramsValidation.data as EventParams;
     const { name } = bodyValidation.data as UpdateEventRequest;
     
-    // Get current user's name (or use anonymous identifier)
+    // Get current user's userId and name (or use anonymous identifier)
+    let userUserId: string | null = null;
     let userName: string | null = null;
     if (req.user && 'userId' in req.user) {
-      userName = await getUserName((req.user as { userId: number }).userId);
+      const jwtPayload = req.user as { userId: number };
+      userUserId = await getUserUserId(jwtPayload.userId);
+      userName = await getUserName(jwtPayload.userId);
     }
 
     // Check if event exists
@@ -382,8 +390,8 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
       return;
     }
 
-    // Check if user is the owner (by ownerName match) or a member
-    if (userName && (event.ownerName === userName || event.members.some(m => m.username === userName))) {
+    // Check if user is the owner (by ownerName match) or a member (by userId match)
+    if (userName && userUserId && (event.ownerName === userName || event.members.some(m => m.userId === userUserId))) {
       const updatedEvent = await prisma.event.update({
         where: { id },
         data: { name },
@@ -696,7 +704,7 @@ router.get('/:id/midpoint', optionalAuthMiddleware, async (req: Request, res: Re
             const route = directionsResult.data.routes[0];
             const leg = route.legs[0];
             return {
-              username: member.username || member.nickname || 'Unknown',
+              username: member.userId || member.nickname || 'Unknown',
               memberId: member.id,
               travelMode: member.travelMode || 'driving',
               duration: leg.duration.text,
@@ -710,7 +718,7 @@ router.get('/:id/midpoint', optionalAuthMiddleware, async (req: Request, res: Re
         }
         
         return {
-          username: member.username || member.nickname || 'Unknown',
+          username: member.userId || member.nickname || 'Unknown',
           memberId: member.id,
           travelMode: member.travelMode || 'driving',
           duration: '無法計算',
@@ -938,7 +946,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
     console.log(`[Time Midpoint] Starting iterative optimization from geometric center`);
     console.log(`[Time Midpoint] Event members:`, event.members.map((m: any) => ({
       id: m.id,
-      username: m.username || m.nickname,
+      username: m.userId || m.nickname,
       lat: m.lat,
       lng: m.lng,
       travelMode: m.travelMode
@@ -980,7 +988,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
           if (result.data.status === 'OK' && result.data.rows[0].elements[0].status === 'OK') {
             const time = result.data.rows[0].elements[0].duration.value;
             travelTimes.push(time);
-            console.log(`[Time Midpoint] Member ${member.username || member.nickname || member.id} (${memberMode}): ${Math.round(time / 60)} min`);
+            console.log(`[Time Midpoint] Member ${member.userId || member.nickname || member.id} (${memberMode}): ${Math.round(time / 60)} min`);
           } else if (memberMode === 'transit') {
             // Fallback to driving for transit
             const fallbackResult = await gmapsClient.distancematrix({
@@ -994,7 +1002,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
             if (fallbackResult.data.status === 'OK' && fallbackResult.data.rows[0].elements[0].status === 'OK') {
               const time = fallbackResult.data.rows[0].elements[0].duration.value;
               travelTimes.push(time);
-              console.log(`[Time Midpoint] Member ${member.username || member.nickname || member.id} (fallback driving): ${Math.round(time / 60)} min`);
+              console.log(`[Time Midpoint] Member ${member.userId || member.nickname || member.id} (fallback driving): ${Math.round(time / 60)} min`);
             } else {
               allSuccess = false;
               break;
@@ -1107,7 +1115,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
     for (const member of event.members) {
       try {
         let memberMode = member.travelMode || 'driving';
-        console.log(`[Time Midpoint] Calling Distance Matrix for member ${member.username || member.nickname || member.id} with mode: ${memberMode}`);
+        console.log(`[Time Midpoint] Calling Distance Matrix for member ${member.userId || member.nickname || member.id} with mode: ${memberMode}`);
         
         let result = await gmapsClient.distancematrix({
           params: {
@@ -1122,7 +1130,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
         if (result.data.status === 'OK') {
           const hasValidRoutes = result.data.rows[0].elements.some((e: any) => e.status === 'OK');
           if (!hasValidRoutes && memberMode === 'transit') {
-            console.log(`[Time Midpoint] Transit failed for member ${member.username || member.nickname || member.id}, falling back to driving`);
+            console.log(`[Time Midpoint] Transit failed for member ${member.userId || member.nickname || member.id}, falling back to driving`);
             result = await gmapsClient.distancematrix({
               params: {
                 origins: [`${member.lat},${member.lng}`],
@@ -1134,14 +1142,14 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
           }
           distanceMatrixResults.push(result.data.rows[0]);
         } else {
-          console.error(`Distance Matrix error for member ${member.username || member.nickname || member.id}:`, result.data.status);
+          console.error(`Distance Matrix error for member ${member.userId || member.nickname || member.id}:`, result.data.status);
           // Add empty row for this member
           distanceMatrixResults.push({
             elements: destinations.map(() => ({ status: 'ZERO_RESULTS' }))
           });
         }
       } catch (error) {
-        console.error(`Error calling Distance Matrix for member ${member.username || member.nickname || member.id}:`, error);
+        console.error(`Error calling Distance Matrix for member ${member.userId || member.nickname || member.id}:`, error);
         // Add empty row for this member
         distanceMatrixResults.push({
           elements: destinations.map(() => ({ status: 'ZERO_RESULTS' }))
@@ -1160,7 +1168,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
     // Step 6: Score candidates
     type MemberTime = {
       memberId: number;
-      username: string;
+      username: string; // Keep as username for response (can be userId or nickname)
       travelTime: number;
       distance: number;
     };
@@ -1196,7 +1204,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
 
         memberTimes.push({
           memberId: member.id,
-          username: member.username || member.nickname || 'Unknown',
+          username: member.userId || member.nickname || 'Unknown',
           travelTime,
           distance
         });
@@ -1433,7 +1441,7 @@ router.get('/:id/routes_to_midpoint', optionalAuthMiddleware, async (req: Reques
           
           routes.push({
             memberId: member.id,
-            username: member.username || member.nickname || 'Unknown',
+            username: member.userId || member.nickname || 'Unknown',
             polyline: route.overview_polyline.points,
             duration: leg.duration.value,
             distance: leg.distance.value

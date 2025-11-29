@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import prisma from '../lib/prisma';
-import { getUserName, getAnonymousUserId } from '../lib/userUtils';
+import { getUserName, getUserUserId, getAnonymousUserId } from '../lib/userUtils';
 import { 
   addMemberSchema, 
   updateMemberLocationSchema, 
@@ -117,10 +117,10 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
 
     const { username, eventId, lat, lng, address, travelMode } = validation.data as AddMemberRequest;
     
-    // Get current user's name (if authenticated)
-    let currentUserName: string | null = null;
+    // Get current user's userId (if authenticated)
+    let currentUserUserId: string | null = null;
     if (req.user && 'userId' in req.user) {
-      currentUserName = await getUserName((req.user as { userId: number }).userId);
+      currentUserUserId = await getUserUserId((req.user as { userId: number }).userId);
     }
 
     // Check if event exists
@@ -137,11 +137,11 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
     }
 
     // If user is adding themselves, allow it (joining the event)
-    // If user is adding someone else (by username), check if they're already a member
-    if (currentUserName && username !== currentUserName) {
+    // If user is adding someone else (by userId), check if they're already a member
+    if (currentUserUserId && username !== currentUserUserId) {
       const userMembership = await prisma.member.findFirst({
         where: {
-          username: currentUserName,
+          userId: currentUserUserId,
           eventId: eventId
         }
       });
@@ -155,10 +155,10 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       }
     }
 
-    // Check if user is already a member (by username)
+    // Check if user is already a member (by userId)
     const existingMember = await prisma.member.findFirst({
       where: {
-        username: username,
+        userId: username,
         eventId: eventId
       }
     });
@@ -174,13 +174,12 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
     // Add the member
     const member = await prisma.member.create({
       data: {
-        username: username,
+        userId: username,
         eventId: eventId,
         lat,
         lng,
         address,
-        travelMode: travelMode || 'driving',
-        isOffline: !currentUserName || username !== currentUserName // Mark as offline if not current user
+        travelMode: travelMode || 'driving'
       }
     });
 
@@ -310,8 +309,14 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
       return;
     }
 
+    // Get current user's userId for comparison
+    let currentUserUserId: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserUserId = await getUserUserId((req.user as { userId: number }).userId);
+    }
+    
     // Check if user can update this member (must be the member themselves)
-    if (currentUserName && member.username !== currentUserName) {
+    if (currentUserUserId && member.userId !== currentUserUserId) {
       res.status(403).json({
         code: 'FORBIDDEN',
         message: 'You can only update your own location'
@@ -428,10 +433,16 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
       return;
     }
 
+    // Get current user's userId for comparison
+    let currentUserUserId: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserUserId = await getUserUserId((req.user as { userId: number }).userId);
+    }
+    
     // Check if user can remove this member:
-    // 1. User is removing themselves (username matches), OR
+    // 1. User is removing themselves (userId matches), OR
     // 2. User is the event owner (ownerName matches)
-    const canRemove = (currentUserName && member.username === currentUserName) || 
+    const canRemove = (currentUserUserId && member.userId === currentUserUserId) || 
                       (currentUserName && member.event.ownerName === currentUserName);
 
     if (!canRemove) {
@@ -443,12 +454,12 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
     }
 
     // Check if this is the event owner trying to leave their own event
-    if (currentUserName && member.username === currentUserName && member.event.ownerName === currentUserName) {
+    if (currentUserUserId && member.userId === currentUserUserId && member.event.ownerName === currentUserName) {
       // Count other members
       const memberCount = await prisma.member.count({
         where: {
           eventId: member.eventId,
-          username: { not: currentUserName }
+          userId: { not: currentUserUserId }
         }
       });
 
@@ -589,12 +600,18 @@ router.post('/offline', optionalAuthMiddleware, async (req: Request, res: Respon
       return;
     }
 
+    // Get current user's userId for comparison
+    let currentUserUserId: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserUserId = await getUserUserId((req.user as { userId: number }).userId);
+    }
+    
     // Check if user is a member of this event (if authenticated)
-    if (currentUserName) {
+    if (currentUserUserId) {
       const membership = await prisma.member.findFirst({
         where: {
           eventId,
-          username: currentUserName
+          userId: currentUserUserId
         }
       });
 
@@ -607,17 +624,16 @@ router.post('/offline', optionalAuthMiddleware, async (req: Request, res: Respon
       }
     }
 
-    // Create offline member
+    // Create offline member (no userId, only nickname)
     const offlineMember = await prisma.member.create({
       data: {
         eventId,
         nickname,
-        username: null, // Offline members don't have username
+        userId: null, // Offline members don't have userId
         lat,
         lng,
         address,
-        travelMode,
-        isOffline: true
+        travelMode
       }
     });
 
