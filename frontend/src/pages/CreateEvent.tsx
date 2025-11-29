@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -30,6 +30,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { zhTW } from 'date-fns/locale';
 import axios from 'axios';
+import { loadGoogleMaps } from '../lib/googleMapsLoader';
 
 export default function CreateEvent() {
   const navigate = useNavigate();
@@ -51,6 +52,7 @@ export default function CreateEvent() {
   const [shareUrl, setShareUrl] = useState('');
   const [eventId, setEventId] = useState<number | null>(null);
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -58,6 +60,62 @@ export default function CreateEvent() {
     message: '',
     severity: 'success' as 'success' | 'error' | 'info',
   });
+
+  // Load Google Maps API on mount
+  useEffect(() => {
+    loadGoogleMaps().catch((err) => {
+      console.error('Failed to load Google Maps:', err);
+      setSnackbar({ open: true, message: 'Google Maps 載入失敗', severity: 'error' });
+    });
+  }, []);
+
+  // Initialize Google Places Autocomplete
+  useEffect(() => {
+    if (!formData.useMeetHalf && autocompleteInputRef.current && !autocompleteRef.current) {
+      // Check if Google Maps API is loaded
+      if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
+        console.error('Google Maps API not loaded');
+        return;
+      }
+
+      // Initialize Autocomplete
+      const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
+        types: ['establishment', 'geocode'],
+        componentRestrictions: { country: 'tw' }, // 限制台灣
+      });
+
+      // Listen for place selection
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+
+        if (!place.geometry || !place.geometry.location) {
+          setSnackbar({ open: true, message: '找不到該地點的位置資訊', severity: 'error' });
+          return;
+        }
+
+        // Update form data with selected place
+        setFormData({
+          ...formData,
+          meetingPointName: place.name || place.formatted_address || '',
+          meetingPointAddress: place.formatted_address || '',
+          meetingPointLat: place.geometry.location.lat(),
+          meetingPointLng: place.geometry.location.lng(),
+        });
+
+        setSnackbar({ open: true, message: '地點已選擇', severity: 'success' });
+      });
+
+      autocompleteRef.current = autocomplete;
+    }
+
+    // Cleanup
+    return () => {
+      if (autocompleteRef.current) {
+        google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        autocompleteRef.current = null;
+      }
+    };
+  }, [formData.useMeetHalf]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -278,7 +336,7 @@ export default function CreateEvent() {
               {!formData.useMeetHalf && (
                 <TextField
                   label="集合地點"
-                  placeholder="搜尋地點..."
+                  placeholder="搜尋地點或地址..."
                   value={formData.meetingPointName}
                   onChange={(e) =>
                     setFormData({ ...formData, meetingPointName: e.target.value })
@@ -293,7 +351,11 @@ export default function CreateEvent() {
                       </InputAdornment>
                     ),
                   }}
-                  helperText="輸入地點名稱或地址（未來將支援 Google Places 自動完成）"
+                  helperText={
+                    formData.meetingPointLat && formData.meetingPointLng
+                      ? `✓ 已選擇：${formData.meetingPointAddress || formData.meetingPointName}`
+                      : '開始輸入以搜尋地點（使用 Google Places）'
+                  }
                 />
               )}
 
@@ -395,7 +457,7 @@ export default function CreateEvent() {
                 >
                   複製連結
                 </Button>
-                {navigator.share && (
+                {typeof navigator.share === 'function' && (
                   <Button
                     variant="contained"
                     fullWidth
