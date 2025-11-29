@@ -10,42 +10,45 @@ generator client {
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique
-  passwordHash String
+  name         String   // User display name (from OAuth or email)
+  passwordHash String?  // Optional: keep for existing users, new users via OAuth
+  googleId     String?  @unique
+  githubId     String?  @unique
+  provider     String?  // EMAIL, GOOGLE, GITHUB
+  avatar       String?  // Avatar URL from OAuth
   createdAt    DateTime @default(now())
-  members      Member[]
-  ownedGroups  Group[]
+  updatedAt    DateTime @updatedAt
 }
 
-model Group {
+model Event {
   id        Int      @id @default(autoincrement())
   name      String
-  ownerId   Int
-  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerName String   // Owner's name (not foreign key - allows anonymous users)
   createdAt DateTime @default(now())
   members   Member[]
+  
+  @@index([ownerName])
 }
 
 model Member {
   id         Int      @id @default(autoincrement())
-  userId     Int?     // ✅ Make nullable for offline members
-  groupId    Int
+  username   String?  // User's name or anonymous identifier (nullable for offline members)
+  eventId    Int
   lat        Float?
   lng        Float?
   address    String?
   travelMode String?  @default("driving") // driving, transit, walking, bicycling
   
-  // ✅ NEW: For offline members
+  // For offline/anonymous members
   nickname   String?  // Display name for non-registered members
   isOffline  Boolean  @default(false)  // Flag to distinguish offline members
   
-  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   
-  // ✅ Remove unique constraint since offline members have no userId
-  @@index([groupId])
-  @@index([userId])
+  @@index([eventId])
+  @@index([username])
 }
 
 

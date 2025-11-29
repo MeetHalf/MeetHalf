@@ -2,10 +2,12 @@ import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import session from 'express-session';
 import dotenv from 'dotenv';
+import passport from './lib/passport';
 import { swaggerSpec } from './config/swagger';
 import authRouter from './routes/auth';
-import groupsRouter from './routes/groups';
+import eventsRouter from './routes/events';
 import membersRouter from './routes/members';
 import mapsRouter from './routes/maps';
 import { mapsRateLimiter } from './middleware/rateLimit';
@@ -108,6 +110,10 @@ app.use(
     credentials: true,
   })
 );
+
+// Initialize Passport (no session needed - we use JWT cookies)
+app.use(passport.initialize());
+
 app.use(cookieParser());
 app.use(express.json());
 
@@ -182,7 +188,7 @@ app.get('/api-docs', (req: Request, res: Response) => {
 
 // Routes
 app.use('/auth', authRouter);
-app.use('/groups', groupsRouter);
+app.use('/events', eventsRouter);
 app.use('/members', membersRouter);
 app.use('/maps', mapsRateLimiter, mapsRouter);
 

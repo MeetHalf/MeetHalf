@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { authMiddleware } from '../middleware/auth';
+import { optionalAuthMiddleware } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { getUserName, getAnonymousUserId } from '../lib/userUtils';
 import { 
   addMemberSchema, 
   updateMemberLocationSchema, 
@@ -101,8 +102,8 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// POST /members - Add member to group
-router.post('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// POST /members - Add member to event (join event or add another user)
+router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const validation = addMemberSchema.safeParse(req.body);
     if (!validation.success) {
@@ -114,53 +115,58 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const { userId: targetUserId, groupId, lat, lng, address, travelMode } = validation.data as AddMemberRequest;
-    const currentUserId = req.user!.userId;
+    const { username, eventId, lat, lng, address, travelMode } = validation.data as AddMemberRequest;
+    
+    // Get current user's name (if authenticated)
+    let currentUserName: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserName = await getUserName((req.user as { userId: number }).userId);
+    }
 
-    // If user is adding themselves, allow it (joining the group)
-    // If user is adding someone else, check if they're already a member
-    if (targetUserId !== currentUserId) {
+    // Check if event exists
+    const event = await prisma.event.findUnique({
+      where: { id: eventId }
+    });
+
+    if (!event) {
+      res.status(404).json({
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found'
+      });
+      return;
+    }
+
+    // If user is adding themselves, allow it (joining the event)
+    // If user is adding someone else (by username), check if they're already a member
+    if (currentUserName && username !== currentUserName) {
       const userMembership = await prisma.member.findFirst({
         where: {
-          userId: currentUserId,
-          groupId: groupId
+          username: currentUserName,
+          eventId: eventId
         }
       });
 
       if (!userMembership) {
         res.status(403).json({
           code: 'FORBIDDEN',
-          message: 'You are not a member of this group and cannot add others.'
+          message: 'You are not a member of this event and cannot add others.'
         });
         return;
       }
     }
 
-    // Check if target user exists
-    const targetUser = await prisma.user.findUnique({
-      where: { id: targetUserId }
-    });
-
-    if (!targetUser) {
-      res.status(404).json({
-        code: 'USER_NOT_FOUND',
-        message: 'Target user not found'
-      });
-      return;
-    }
-
-    // Check if user is already a member
+    // Check if user is already a member (by username)
     const existingMember = await prisma.member.findFirst({
       where: {
-        userId: targetUserId,
-        groupId: groupId
+        username: username,
+        eventId: eventId
       }
     });
 
     if (existingMember) {
       res.status(409).json({
         code: 'MEMBER_EXISTS',
-        message: 'User is already a member of this group'
+        message: 'User is already a member of this event'
       });
       return;
     }
@@ -168,20 +174,13 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
     // Add the member
     const member = await prisma.member.create({
       data: {
-        userId: targetUserId,
-        groupId: groupId,
+        username: username,
+        eventId: eventId,
         lat,
         lng,
         address,
-        travelMode: travelMode || 'driving'
-      },
-      include: {
-        user: {
-          select: { id: true, email: true }
-        },
-        group: {
-          select: { id: true, name: true }
-        }
+        travelMode: travelMode || 'driving',
+        isOffline: !currentUserName || username !== currentUserName // Mark as offline if not current user
       }
     });
 
@@ -266,8 +265,8 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// PATCH /members/:id - Update member location
-router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// PATCH /members/:id - Update member location (own location only)
+router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const paramsValidation = memberParamsSchema.safeParse(req.params);
     if (!paramsValidation.success) {
@@ -291,20 +290,31 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
 
     const { id } = paramsValidation.data as MemberParams;
     const { lat, lng, address, travelMode } = bodyValidation.data as UpdateMemberLocationRequest;
-    const userId = req.user!.userId;
+    
+    // Get current user's name (if authenticated)
+    let currentUserName: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserName = await getUserName((req.user as { userId: number }).userId);
+    }
 
-    // Check if the member exists and belongs to the current user
-    const member = await prisma.member.findFirst({
-      where: {
-        id,
-        userId: userId
-      }
+    // Check if the member exists
+    const member = await prisma.member.findUnique({
+      where: { id }
     });
 
     if (!member) {
       res.status(404).json({
         code: 'MEMBER_NOT_FOUND',
-        message: 'Member not found or you can only update your own location'
+        message: 'Member not found'
+      });
+      return;
+    }
+
+    // Check if user can update this member (must be the member themselves)
+    if (currentUserName && member.username !== currentUserName) {
+      res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'You can only update your own location'
       });
       return;
     }
@@ -318,14 +328,6 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
         address,
         travelMode,
         updatedAt: new Date()
-      },
-      include: {
-        user: {
-          select: { id: true, email: true }
-        },
-        group: {
-          select: { id: true, name: true }
-        }
       }
     });
 
@@ -389,8 +391,8 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// DELETE /members/:id - Remove member from group
-router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// DELETE /members/:id - Remove member from event (self or event owner)
+router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const validation = memberParamsSchema.safeParse(req.params);
     if (!validation.success) {
@@ -403,15 +405,18 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
     }
 
     const { id } = validation.data as MemberParams;
-    const userId = req.user!.userId;
+    
+    // Get current user's name (if authenticated)
+    let currentUserName: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserName = await getUserName((req.user as { userId: number }).userId);
+    }
 
-    // Find the member and check permissions
+    // Find the member and event
     const member = await prisma.member.findUnique({
       where: { id },
       include: {
-        group: {
-          select: { ownerId: true }
-        }
+        event: true
       }
     });
 
@@ -424,32 +429,33 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
     }
 
     // Check if user can remove this member:
-    // 1. User is removing themselves, OR
-    // 2. User is the group owner
-    const canRemove = member.userId === userId || member.group.ownerId === userId;
+    // 1. User is removing themselves (username matches), OR
+    // 2. User is the event owner (ownerName matches)
+    const canRemove = (currentUserName && member.username === currentUserName) || 
+                      (currentUserName && member.event.ownerName === currentUserName);
 
     if (!canRemove) {
       res.status(403).json({
         code: 'ACCESS_DENIED',
-        message: 'You can only remove yourself or you must be the group owner'
+        message: 'You can only remove yourself or you must be the event owner'
       });
       return;
     }
 
-    // Check if this is the group owner trying to leave their own group
-    if (member.userId === userId && member.group.ownerId === userId) {
+    // Check if this is the event owner trying to leave their own event
+    if (currentUserName && member.username === currentUserName && member.event.ownerName === currentUserName) {
       // Count other members
       const memberCount = await prisma.member.count({
         where: {
-          groupId: member.groupId,
-          userId: { not: userId }
+          eventId: member.eventId,
+          username: { not: currentUserName }
         }
       });
 
       if (memberCount > 0) {
         res.status(400).json({
           code: 'OWNER_CANNOT_LEAVE',
-          message: 'Group owner cannot leave while other members exist. Transfer ownership or delete the group.'
+          message: 'Event owner cannot leave while other members exist. Transfer ownership or delete the event.'
         });
         return;
       }
@@ -549,8 +555,8 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// ✅ NEW: POST /members/offline - Create offline member
-router.post('/offline', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// POST /members/offline - Create offline member
+router.post('/offline', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const validation = createOfflineMemberSchema.safeParse(req.body);
     if (!validation.success) {
@@ -562,36 +568,56 @@ router.post('/offline', authMiddleware, async (req: Request, res: Response): Pro
       return;
     }
 
-    const { groupId, nickname, lat, lng, address, travelMode } = validation.data;
-    const userId = req.user!.userId;
+    const { eventId, nickname, lat, lng, address, travelMode } = validation.data;
+    
+    // Get current user's name (if authenticated)
+    let currentUserName: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserName = await getUserName((req.user as { userId: number }).userId);
+    }
 
-    // Check if user is a member of this group
-    const membership = await prisma.member.findFirst({
-      where: {
-        groupId,
-        userId
-      }
+    // Check if event exists
+    const event = await prisma.event.findUnique({
+      where: { id: eventId }
     });
 
-    if (!membership) {
-      res.status(403).json({
-        code: 'FORBIDDEN',
-        message: 'You must be a member of this group to add offline members'
+    if (!event) {
+      res.status(404).json({
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found'
       });
       return;
+    }
+
+    // Check if user is a member of this event (if authenticated)
+    if (currentUserName) {
+      const membership = await prisma.member.findFirst({
+        where: {
+          eventId,
+          username: currentUserName
+        }
+      });
+
+      if (!membership) {
+        res.status(403).json({
+          code: 'FORBIDDEN',
+          message: 'You must be a member of this event to add offline members'
+        });
+        return;
+      }
     }
 
     // Create offline member
     const offlineMember = await prisma.member.create({
       data: {
-        groupId,
+        eventId,
         nickname,
+        username: null, // Offline members don't have username
         lat,
         lng,
         address,
         travelMode,
-        isOffline: true,
-        userId: null
+        isOffline: true
       }
     });
 
@@ -687,8 +713,8 @@ router.post('/offline', authMiddleware, async (req: Request, res: Response): Pro
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// ✅ NEW: PATCH /members/offline/:id - Update offline member
-router.patch('/offline/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// PATCH /members/offline/:id - Update offline member
+router.patch('/offline/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const memberIdValidation = memberParamsSchema.safeParse(req.params);
     if (!memberIdValidation.success) {
@@ -711,12 +737,17 @@ router.patch('/offline/:id', authMiddleware, async (req: Request, res: Response)
     }
 
     const { id } = memberIdValidation.data;
-    const userId = req.user!.userId;
+    
+    // Get current user's name (if authenticated)
+    let currentUserName: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserName = await getUserName((req.user as { userId: number }).userId);
+    }
 
-    // Check if this is an offline member and user has permission
+    // Check if this is an offline member
     const member = await prisma.member.findUnique({
       where: { id },
-      include: { group: true }
+      include: { event: true }
     });
 
     if (!member || !member.isOffline) {
@@ -727,20 +758,22 @@ router.patch('/offline/:id', authMiddleware, async (req: Request, res: Response)
       return;
     }
 
-    // Check if user is a member of the same group
-    const userMembership = await prisma.member.findFirst({
-      where: {
-        groupId: member.groupId,
-        userId
-      }
-    });
-
-    if (!userMembership) {
-      res.status(403).json({
-        code: 'FORBIDDEN',
-        message: 'You must be a member of this group to edit offline members'
+    // Check if user is a member of the same event (if authenticated)
+    if (currentUserName) {
+      const userMembership = await prisma.member.findFirst({
+        where: {
+          eventId: member.eventId,
+          username: currentUserName
+        }
       });
-      return;
+
+      if (!userMembership) {
+        res.status(403).json({
+          code: 'FORBIDDEN',
+          message: 'You must be a member of this event to edit offline members'
+        });
+        return;
+      }
     }
 
     // Update offline member
@@ -809,8 +842,8 @@ router.patch('/offline/:id', authMiddleware, async (req: Request, res: Response)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// ✅ NEW: DELETE /members/offline/:id - Delete offline member
-router.delete('/offline/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// DELETE /members/offline/:id - Delete offline member
+router.delete('/offline/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const validation = memberParamsSchema.safeParse(req.params);
     if (!validation.success) {
@@ -823,12 +856,17 @@ router.delete('/offline/:id', authMiddleware, async (req: Request, res: Response
     }
 
     const { id } = validation.data;
-    const userId = req.user!.userId;
+    
+    // Get current user's name (if authenticated)
+    let currentUserName: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      currentUserName = await getUserName((req.user as { userId: number }).userId);
+    }
 
-    // Check if this is an offline member and user has permission
+    // Check if this is an offline member
     const member = await prisma.member.findUnique({
       where: { id },
-      include: { group: true }
+      include: { event: true }
     });
 
     if (!member || !member.isOffline) {
@@ -839,20 +877,22 @@ router.delete('/offline/:id', authMiddleware, async (req: Request, res: Response
       return;
     }
 
-    // Check if user is a member of the same group
-    const userMembership = await prisma.member.findFirst({
-      where: {
-        groupId: member.groupId,
-        userId
-      }
-    });
-
-    if (!userMembership) {
-      res.status(403).json({
-        code: 'FORBIDDEN',
-        message: 'You must be a member of this group to delete offline members'
+    // Check if user is a member of the same event (if authenticated)
+    if (currentUserName) {
+      const userMembership = await prisma.member.findFirst({
+        where: {
+          eventId: member.eventId,
+          username: currentUserName
+        }
       });
-      return;
+
+      if (!userMembership) {
+        res.status(403).json({
+          code: 'FORBIDDEN',
+          message: 'You must be a member of this event to delete offline members'
+        });
+        return;
+      }
     }
 
     // Delete offline member

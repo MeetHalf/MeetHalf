@@ -1,327 +1,149 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcrypt';
-import { z } from 'zod';
+import passport from '../lib/passport';
 import prisma from '../lib/prisma';
 import { signToken } from '../utils/jwt';
-import { authMiddleware } from '../middleware/auth';
+import { optionalAuthMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-// Zod schemas
-const registerSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-});
+// Helper function to set JWT cookie and redirect
+function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
+  const token = signToken(user.id);
+  const isDeployed = !!process.env.VERCEL_URL || req.protocol === 'https';
+  const cookieOptions: any = {
+    httpOnly: true,
+    sameSite: isDeployed ? ('none' as const) : ('lax' as const),
+    secure: isDeployed,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/',
+  };
 
-const loginSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  password: z.string().min(1, 'Password is required'),
-});
-
-/**
- * @swagger
- * /auth/register:
- *   post:
- *     summary: Register a new user
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: user@example.com
- *               password:
- *                 type: string
- *                 minLength: 8
- *                 example: password123
- *     responses:
- *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *       400:
- *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       409:
- *         description: User already exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-// POST /auth/register
-router.post('/register', async (req: Request, res: Response): Promise<void> => {
-  try {
-    // Validate request body
-    const { email, password } = registerSchema.parse(req.body);
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      res.status(409).json({
-        code: 'USER_EXISTS',
-        message: 'User with this email already exists',
-      });
-      return;
-    }
-
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-      },
-      select: {
-        id: true,
-        email: true,
-        createdAt: true,
-      },
-    });
-
-    res.status(201).json({
-      message: 'User registered successfully',
-      user,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({
-        code: 'VALIDATION_ERROR',
-        message: 'Invalid input',
-        details: error.errors,
-      });
-      return;
-    }
-
-    console.error('Register error:', error);
-    res.status(500).json({
-      code: 'INTERNAL_ERROR',
-      message: 'An error occurred during registration',
-    });
+  if (process.env.COOKIE_DOMAIN) {
+    cookieOptions.domain = process.env.COOKIE_DOMAIN;
   }
-});
+
+  res.cookie('token', token, cookieOptions);
+
+  // Redirect to frontend
+  const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+  res.redirect(`${frontendOrigin}/events`);
+}
 
 /**
  * @swagger
- * /auth/login:
- *   post:
- *     summary: Login user
+ * /auth/google:
+ *   get:
+ *     summary: Start Google OAuth login
  *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: user@example.com
- *               password:
- *                 type: string
- *                 example: password123
  *     responses:
- *       200:
- *         description: Login successful
- *         headers:
- *           Set-Cookie:
- *             description: JWT token in HttpOnly cookie
- *             schema:
- *               type: string
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *       400:
- *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       401:
- *         description: Invalid credentials
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *       302:
+ *         description: Redirect to Google OAuth
  */
-// POST /auth/login
-router.post('/login', async (req: Request, res: Response): Promise<void> => {
-  try {
-    // Validate request body
-    const { email, password } = loginSchema.parse(req.body);
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
+/**
+ * @swagger
+ * /auth/google/callback:
+ *   get:
+ *     summary: Google OAuth callback
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Redirect to frontend with JWT cookie set
+ */
+router.get(
+  '/google/callback',
+  passport.authenticate('google', { failureRedirect: '/', session: false }),
+  (req: Request, res: Response) => {
+    // @ts-ignore - passport adds user to request
+    const user = (req as any).user;
     if (!user) {
-      res.status(401).json({
-        code: 'INVALID_CREDENTIALS',
-        message: 'Invalid email or password',
-      });
-      return;
+      const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+      return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
     }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-
-    if (!isPasswordValid) {
-      res.status(401).json({
-        code: 'INVALID_CREDENTIALS',
-        message: 'Invalid email or password',
-      });
-      return;
-    }
-
-    // Generate JWT
-    const token = signToken(user.id);
-
-    // Set cookie
-    // Check if running on Vercel (deployed) instead of relying on NODE_ENV
-    // VERCEL_URL is automatically provided by Vercel
-    // After setting trust proxy, req.protocol should correctly detect HTTPS
-    const isDeployed = !!process.env.VERCEL_URL || req.protocol === 'https';
-    const cookieOptions: any = {
-      httpOnly: true,
-      sameSite: isDeployed ? ('none' as const) : ('lax' as const),
-      secure: isDeployed, // Must be true when sameSite is 'none'
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/', // Explicitly set path to root
-    };
-    
-    // Only set domain if explicitly configured (undefined domain can cause issues)
-    if (process.env.COOKIE_DOMAIN) {
-      cookieOptions.domain = process.env.COOKIE_DOMAIN;
-    }
-    
-    // Log cookie settings for debugging (always log in deployment)
-    console.log('[Login] Setting cookie:', {
-      isDeployed,
-      hasVercelUrl: !!process.env.VERCEL_URL,
-      vercelUrl: process.env.VERCEL_URL,
-      protocol: req.protocol,
-      xForwardedProto: req.headers['x-forwarded-proto'],
-      sameSite: cookieOptions.sameSite,
-      secure: cookieOptions.secure,
-      origin: req.headers.origin,
-      host: req.headers.host,
-      cookieDomain: cookieOptions.domain || 'not set',
-    });
-    
-    res.cookie('token', token, cookieOptions);
-    
-    // Log actual Set-Cookie header value for debugging
-    const setCookieHeader = res.getHeader('Set-Cookie');
-    if (setCookieHeader) {
-      console.log('[Login] Set-Cookie header sent:', Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader);
-    } else {
-      console.warn('[Login] ⚠️ Set-Cookie header is missing!');
-    }
-
-    // Note: CORS headers are already set by the CORS middleware in index.ts
-    // We don't need to set them again here as it may cause conflicts
-
-    res.json({
-      message: 'Login successful',
-      user: {
-        id: user.id,
-        email: user.email,
-        createdAt: user.createdAt,
-      },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({
-        code: 'VALIDATION_ERROR',
-        message: 'Invalid input',
-        details: error.errors,
-      });
-      return;
-    }
-
-    console.error('Login error:', error);
-    res.status(500).json({
-      code: 'INTERNAL_ERROR',
-      message: 'An error occurred during login',
-    });
+    setAuthCookieAndRedirect(req, res, user);
   }
-});
+);
+
+/**
+ * @swagger
+ * /auth/github:
+ *   get:
+ *     summary: Start GitHub OAuth login
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Redirect to GitHub OAuth
+ */
+router.get('/github', passport.authenticate('github', { scope: ['user:email'] }));
+
+/**
+ * @swagger
+ * /auth/github/callback:
+ *   get:
+ *     summary: GitHub OAuth callback
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Redirect to frontend with JWT cookie set
+ */
+router.get(
+  '/github/callback',
+  passport.authenticate('github', { failureRedirect: '/', session: false }),
+  (req: Request, res: Response) => {
+    // @ts-ignore - passport adds user to request
+    const user = (req as any).user;
+    if (!user) {
+      const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+      return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+    }
+    setAuthCookieAndRedirect(req, res, user);
+  }
+);
 
 /**
  * @swagger
  * /auth/me:
  *   get:
- *     summary: Get current user information
+ *     summary: Get current user information (optional authentication)
  *     tags: [Auth]
- *     security:
- *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: User information
+ *         description: User information or null if not authenticated
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
  *                 user:
+ *                   nullable: true
  *                   $ref: '#/components/schemas/User'
- *       401:
- *         description: Unauthorized
+ *       404:
+ *         description: User not found
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// GET /auth/me
-router.get('/me', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// GET /auth/me - Optional authentication (returns user or null)
+router.get('/me', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({
-        code: 'UNAUTHORIZED',
-        message: 'Not authenticated',
-      });
+    if (!req.user || !('userId' in req.user)) {
+      // Not authenticated - return null user (anonymous mode)
+      res.json({ user: null });
       return;
     }
 
+    const jwtPayload = req.user as { userId: number };
+    const userId = jwtPayload.userId;
     const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
+      where: { id: userId },
       select: {
         id: true,
         email: true,
+        name: true,
+        avatar: true,
+        provider: true,
         createdAt: true,
       },
     });
@@ -370,15 +192,13 @@ router.post('/logout', (req: Request, res: Response): void => {
     secure: isDeployed,
     path: '/',
   };
-  
+
   if (process.env.COOKIE_DOMAIN) {
     cookieOptions.domain = process.env.COOKIE_DOMAIN;
   }
-  
+
   res.clearCookie('token', cookieOptions);
   res.json({ message: 'Logout successful' });
 });
 
 export default router;
-
-

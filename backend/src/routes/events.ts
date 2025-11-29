@@ -1,16 +1,17 @@
 import { Router, Request, Response } from 'express';
-import { authMiddleware } from '../middleware/auth';
+import { optionalAuthMiddleware } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { getUserName, getAnonymousUserId } from '../lib/userUtils';
 import { 
-  createGroupSchema, 
-  updateGroupSchema, 
-  groupParamsSchema,
+  createEventSchema, 
+  updateEventSchema, 
+  eventParamsSchema,
   timeMidpointQuerySchema,
-  type CreateGroupRequest,
-  type UpdateGroupRequest,
-  type GroupParams,
+  type CreateEventRequest,
+  type UpdateEventRequest,
+  type EventParams,
   type TimeMidpointQuery
-} from '../schemas/groups';
+} from '../schemas/events';
 import { gmapsClient, GMAPS_KEY } from '../lib/gmaps';
 import { createCache, makeCacheKey } from '../lib/cache';
 
@@ -27,82 +28,74 @@ const routesCache = createCache<any>(5 * 60 * 1000);
 
 /**
  * @swagger
- * /groups:
+ * /events:
  *   get:
- *     summary: List all groups for current user
- *     tags: [Groups]
- *     security:
- *       - cookieAuth: []
+ *     summary: List all events for current user (or empty array for anonymous users)
+ *     tags: [Events]
  *     responses:
  *       200:
- *         description: List of groups
+ *         description: List of events
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 groups:
+ *                 events:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Group'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *                     $ref: '#/components/schemas/Event'
  */
-// GET /groups - List all groups for current user
-router.get('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// GET /events - List all events for current user (supports anonymous)
+router.get('/', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user!.userId;
-    
-    const groups = await prisma.group.findMany({
-      where: {
-        members: {
-          some: {
-            userId: userId
-          }
-        }
-      },
-      include: {
-        owner: {
-          select: { id: true, email: true }
-        },
-        members: {
-          include: {
-            user: {
-              select: { id: true, email: true }
+    // If user is authenticated, filter by username
+    if (req.user && 'userId' in req.user) {
+      const jwtPayload = req.user as { userId: number };
+      const userName = await getUserName(jwtPayload.userId);
+      
+      const events = await prisma.event.findMany({
+        where: {
+          members: {
+            some: {
+              username: userName
             }
           }
         },
-        _count: {
-          select: { members: true }
+        include: {
+          members: {
+            orderBy: {
+              id: 'asc'
+            }
+          },
+          _count: {
+            select: { members: true }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
         }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+      });
 
-    res.json({ groups });
+      res.json({ events });
+    } else {
+      // Anonymous user - return empty array (events are separate for anonymous users)
+      res.json({ events: [] });
+    }
   } catch (error) {
-    console.error('Error fetching groups:', error);
+    console.error('Error fetching events:', error);
     res.status(500).json({ 
       code: 'INTERNAL_ERROR',
-      message: 'Failed to fetch groups' 
+      message: 'Failed to fetch events' 
     });
   }
 });
 
 /**
  * @swagger
- * /groups:
+ * /events:
  *   post:
- *     summary: Create a new group
- *     tags: [Groups]
- *     security:
- *       - cookieAuth: []
+ *     summary: Create a new event (supports anonymous users)
+ *     tags: [Events]
  *     requestBody:
  *       required: true
  *       content:
@@ -117,31 +110,25 @@ router.get('/', authMiddleware, async (req: Request, res: Response): Promise<voi
  *                 example: "Weekend Meetup"
  *     responses:
  *       201:
- *         description: Group created successfully
+ *         description: Event created successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 group:
- *                   $ref: '#/components/schemas/Group'
+ *                 event:
+ *                   $ref: '#/components/schemas/Event'
  *       400:
  *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-// POST /groups - Create new group
-router.post('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// POST /events - Create new event (supports anonymous users)
+router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const validation = createGroupSchema.safeParse(req.body);
+    const validation = createEventSchema.safeParse(req.body);
     if (!validation.success) {
       res.status(400).json({
         code: 'VALIDATION_ERROR',
@@ -151,28 +138,38 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const { name } = validation.data as CreateGroupRequest;
-    const userId = req.user!.userId;
+    const { name } = validation.data as CreateEventRequest;
+    
+    // Determine owner name - use authenticated user's name or anonymous identifier
+    let ownerName: string;
+    if (req.user && 'userId' in req.user) {
+      const jwtPayload = req.user as { userId: number };
+      ownerName = await getUserName(jwtPayload.userId);
+    } else {
+      // Anonymous user - generate a session-based identifier
+      const sessionId = req.headers['x-session-id'] as string || req.cookies.sessionId || '';
+      ownerName = getAnonymousUserId(sessionId);
+    }
 
-    const group = await prisma.group.create({
+    // Determine username for the creator member
+    const username = req.user && 'userId' in req.user 
+      ? await getUserName((req.user as { userId: number }).userId)
+      : ownerName; // For anonymous, use the same identifier
+
+    const event = await prisma.event.create({
       data: {
         name,
-        ownerId: userId,
+        ownerName,
         members: {
           create: {
-            userId: userId
+            username: username
           }
         }
       },
       include: {
-        owner: {
-          select: { id: true, email: true }
-        },
         members: {
-          include: {
-            user: {
-              select: { id: true, email: true }
-            }
+          orderBy: {
+            id: 'asc'
           }
         },
         _count: {
@@ -181,12 +178,12 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
       }
     });
 
-    res.status(201).json({ group });
+    res.status(201).json({ event });
   } catch (error) {
-    console.error('Error creating group:', error);
+    console.error('Error creating event:', error);
     res.status(500).json({
       code: 'INTERNAL_ERROR',
-      message: 'Failed to create group'
+      message: 'Failed to create event'
     });
   }
 });
@@ -229,57 +226,52 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// GET /groups/:id - Get group details with members
-router.get('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// GET /events/:id - Get event details with members (public access)
+router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const validation = groupParamsSchema.safeParse(req.params);
+    const validation = eventParamsSchema.safeParse(req.params);
     if (!validation.success) {
       res.status(400).json({
         code: 'VALIDATION_ERROR',
-        message: 'Invalid group ID',
+        message: 'Invalid event ID',
         errors: validation.error.errors
       });
       return;
     }
 
-    const { id } = validation.data as GroupParams;
+    const { id } = validation.data as EventParams;
 
-    // Allow any authenticated user to view group (needed for joining)
-    const group = await prisma.group.findUnique({
+    // Allow public access to view event (needed for joining)
+    const event = await prisma.event.findUnique({
       where: {
         id
       },
       include: {
-        owner: {
-          select: { id: true, email: true }
-        },
         members: {
-          include: {
-            user: {
-              select: { id: true, email: true }
-            }
-          },
           orderBy: {
             id: 'asc'
           }
+        },
+        _count: {
+          select: { members: true }
         }
       }
     });
 
-    if (!group) {
+    if (!event) {
       res.status(404).json({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found'
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found'
       });
       return;
     }
 
-    res.json({ group });
+    res.json({ event });
   } catch (error) {
-    console.error('Error fetching group:', error);
+    console.error('Error fetching event:', error);
     res.status(500).json({
       code: 'INTERNAL_ERROR',
-      message: 'Failed to fetch group'
+      message: 'Failed to fetch event'
     });
   }
 });
@@ -342,20 +334,20 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response): Promise<
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// PATCH /groups/:id - Update group (owner only)
-router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// PATCH /events/:id - Update event (owner or members can update)
+router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const paramsValidation = groupParamsSchema.safeParse(req.params);
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
     if (!paramsValidation.success) {
       res.status(400).json({
         code: 'VALIDATION_ERROR',
-        message: 'Invalid group ID',
+        message: 'Invalid event ID',
         errors: paramsValidation.error.errors
       });
       return;
     }
 
-    const bodyValidation = updateGroupSchema.safeParse(req.body);
+    const bodyValidation = updateEventSchema.safeParse(req.body);
     if (!bodyValidation.success) {
       res.status(400).json({
         code: 'VALIDATION_ERROR',
@@ -365,53 +357,60 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
       return;
     }
 
-    const { id } = paramsValidation.data as GroupParams;
-    const { name } = bodyValidation.data as UpdateGroupRequest;
-    const userId = req.user!.userId;
+    const { id } = paramsValidation.data as EventParams;
+    const { name } = bodyValidation.data as UpdateEventRequest;
+    
+    // Get current user's name (or use anonymous identifier)
+    let userName: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      userName = await getUserName((req.user as { userId: number }).userId);
+    }
 
-    // Check if user is a member of the group
-    const group = await prisma.group.findFirst({
-      where: {
-        id,
-        members: {
-          some: {
-            userId: userId
-          }
-        }
+    // Check if event exists
+    const event = await prisma.event.findUnique({
+      where: { id },
+      include: {
+        members: true
       }
     });
 
-    if (!group) {
+    if (!event) {
       res.status(404).json({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found or you are not a member'
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found'
       });
       return;
     }
 
-    const updatedGroup = await prisma.group.update({
-      where: { id },
-      data: { name },
-      include: {
-        owner: {
-          select: { id: true, email: true }
-        },
-        members: {
-          include: {
-            user: {
-              select: { id: true, email: true }
+    // Check if user is the owner (by ownerName match) or a member
+    if (userName && (event.ownerName === userName || event.members.some(m => m.username === userName))) {
+      const updatedEvent = await prisma.event.update({
+        where: { id },
+        data: { name },
+        include: {
+          members: {
+            orderBy: {
+              id: 'asc'
             }
+          },
+          _count: {
+            select: { members: true }
           }
         }
-      }
-    });
+      });
 
-    res.json({ group: updatedGroup });
+      res.json({ event: updatedEvent });
+    } else {
+      res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'Only event owner or members can update the event'
+      });
+    }
   } catch (error) {
-    console.error('Error updating group:', error);
+    console.error('Error updating event:', error);
     res.status(500).json({
       code: 'INTERNAL_ERROR',
-      message: 'Failed to update group'
+      message: 'Failed to update event'
     });
   }
 });
@@ -467,49 +466,65 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
  *               $ref: '#/components/schemas/Error'
  */
 // DELETE /groups/:id - Delete group (owner only)
-router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const validation = groupParamsSchema.safeParse(req.params);
+    const validation = eventParamsSchema.safeParse(req.params);
     if (!validation.success) {
       res.status(400).json({
         code: 'VALIDATION_ERROR',
-        message: 'Invalid group ID',
+        message: 'Invalid event ID',
         errors: validation.error.errors
       });
       return;
     }
 
-    const { id } = validation.data as GroupParams;
-    const userId = req.user!.userId;
+    const { id } = validation.data as EventParams;
+    
+    // Get current user's name (must be authenticated for delete)
+    if (!req.user || !('userId' in req.user)) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required to delete events'
+      });
+      return;
+    }
+    
+    const jwtPayload = req.user as { userId: number };
+    const userName = await getUserName(jwtPayload.userId);
 
-    // Check if user is the owner
-    const group = await prisma.group.findFirst({
-      where: {
-        id,
-        ownerId: userId
-      }
+    // Check if event exists and user is the owner
+    const event = await prisma.event.findUnique({
+      where: { id }
     });
 
-    if (!group) {
+    if (!event) {
       res.status(404).json({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found or you are not the owner'
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found'
       });
       return;
     }
 
-    await prisma.group.delete({
+    if (event.ownerName !== userName) {
+      res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'Only event owner can delete the event'
+      });
+      return;
+    }
+
+    await prisma.event.delete({
       where: { id }
     });
 
     res.json({
-      message: 'Group deleted successfully'
+      message: 'Event deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting group:', error);
+    console.error('Error deleting event:', error);
     res.status(500).json({
       code: 'INTERNAL_ERROR',
-      message: 'Failed to delete group'
+      message: 'Failed to delete event'
     });
   }
 });
@@ -569,32 +584,30 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// GET /groups/:id/midpoint - Calculate midpoint and nearby places
-router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// GET /events/:id/midpoint - Calculate midpoint and nearby places
+router.get('/:id/midpoint', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const validation = groupParamsSchema.safeParse(req.params);
+    const validation = eventParamsSchema.safeParse(req.params);
     if (!validation.success) {
       res.status(400).json({
         code: 'VALIDATION_ERROR',
-        message: 'Invalid group ID',
+        message: 'Invalid event ID',
         errors: validation.error.errors
       });
       return;
     }
 
-    const { id } = validation.data as GroupParams;
-    const userId = req.user!.userId;
+    const { id } = validation.data as EventParams;
+    
+    // Get current user's name (optional - public access for midpoint calculation)
+    let userName: string | null = null;
+    if (req.user && 'userId' in req.user) {
+      userName = await getUserName((req.user as { userId: number }).userId);
+    }
 
-    // Check if user has access to this group
-    const group = await prisma.group.findFirst({
-      where: {
-        id,
-        members: {
-          some: {
-            userId: userId
-          }
-        }
-      },
+    // Get event - public access, no membership check needed for viewing midpoint
+    const event = await prisma.event.findUnique({
+      where: { id },
       include: {
         members: {
           where: {
@@ -603,22 +616,22 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
               { lng: { not: null } }
             ]
           },
-          include: {
-            user: true
+          orderBy: {
+            id: 'asc'
           }
         }
       }
     });
 
-    if (!group) {
+    if (!event) {
       res.status(404).json({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found or access denied'
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found'
       });
       return;
     }
 
-    if (group.members.length < 2) {
+    if (event.members.length < 2) {
       res.status(400).json({
         code: 'INSUFFICIENT_LOCATIONS',
         message: 'At least 2 members must have set their locations'
@@ -627,12 +640,12 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
     }
 
     // Create cache key based on member locations and travel modes
-    const locationData = group.members.map((m: any) => ({ 
+    const locationData = event.members.map((m: any) => ({ 
       lat: m.lat, 
       lng: m.lng, 
       travelMode: m.travelMode || 'driving' 
     })).sort();
-    const cacheKey = makeCacheKey('midpoint', { groupId: id, locations: locationData });
+    const cacheKey = makeCacheKey('midpoint', { eventId: id, locations: locationData });
     
     // Check cache first
     const cached = midpointCache.get(cacheKey);
@@ -642,11 +655,11 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
     }
 
     // Calculate midpoint
-    const totalLat = group.members.reduce((sum: number, member: any) => sum + (member.lat || 0), 0);
-    const totalLng = group.members.reduce((sum: number, member: any) => sum + (member.lng || 0), 0);
+    const totalLat = event.members.reduce((sum: number, member: any) => sum + (member.lat || 0), 0);
+    const totalLng = event.members.reduce((sum: number, member: any) => sum + (member.lng || 0), 0);
     const midpoint = {
-      lat: totalLat / group.members.length,
-      lng: totalLng / group.members.length
+      lat: totalLat / event.members.length,
+      lng: totalLng / event.members.length
     };
 
     // Get address for midpoint using reverse geocoding
@@ -668,7 +681,7 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
       }
 
       // Calculate travel times for each member to the midpoint
-      const travelTimePromises = group.members.map(async (member: any) => {
+      const travelTimePromises = event.members.map(async (member: any) => {
         try {
           const directionsResult = await gmapsClient.directions({
             params: {
@@ -683,8 +696,8 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
             const route = directionsResult.data.routes[0];
             const leg = route.legs[0];
             return {
-              userId: member.userId || 0, // Use 0 for offline members
-              userEmail: member.user?.email || member.nickname || 'Unknown',
+              username: member.username || member.nickname || 'Unknown',
+              memberId: member.id,
               travelMode: member.travelMode || 'driving',
               duration: leg.duration.text,
               durationValue: leg.duration.value, // in seconds
@@ -693,12 +706,12 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
             };
           }
         } catch (error) {
-          console.error(`Error calculating travel time for user ${member.userId}:`, error);
+          console.error(`Error calculating travel time for member ${member.id}:`, error);
         }
         
         return {
-          userId: member.userId,
-          userEmail: member.user.email,
+          username: member.username || member.nickname || 'Unknown',
+          memberId: member.id,
           travelMode: member.travelMode || 'driving',
           duration: '無法計算',
           durationValue: null,
@@ -738,7 +751,7 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
       address,
       suggested_places: suggestedPlaces,
       member_travel_times: memberTravelTimes,
-      member_count: group.members.length,
+      member_count: event.members.length,
       cached: false
     };
 
@@ -829,15 +842,15 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// GET /groups/:id/midpoint_by_time - Calculate time-based optimal midpoint
-router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// GET /events/:id/midpoint_by_time - Calculate time-based optimal midpoint
+router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     // Validate group ID
-    const paramsValidation = groupParamsSchema.safeParse(req.params);
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
     if (!paramsValidation.success) {
       res.status(422).json({
         code: 'VALIDATION_ERROR',
-        message: 'Invalid group ID',
+        message: 'Invalid event ID',
         errors: paramsValidation.error.errors
       });
       return;
@@ -854,21 +867,13 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
       return;
     }
 
-    const { id } = paramsValidation.data as GroupParams;
+    const { id } = paramsValidation.data as EventParams;
     const { objective } = queryValidation.data as TimeMidpointQuery;
-    const userId = req.user!.userId;
     const forceRecalculate = req.query.forceRecalculate === 'true';
 
-    // Check if user has access to this group
-    const group = await prisma.group.findFirst({
-      where: {
-        id,
-        members: {
-          some: {
-            userId: userId
-          }
-        }
-      },
+    // Get event - public access for midpoint calculation
+    const event = await prisma.event.findUnique({
+      where: { id },
       include: {
         members: {
           where: {
@@ -877,27 +882,22 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
               { lng: { not: null } }
             ]
           },
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true
-              }
-            }
+          orderBy: {
+            id: 'asc'
           }
         }
       }
     });
 
-    if (!group) {
+    if (!event) {
       res.status(404).json({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found or access denied'
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found'
       });
       return;
     }
 
-    if (!group || !group.members || group.members.length < 2) {
+    if (!event || !event.members || event.members.length < 2) {
       res.status(400).json({
         code: 'NOT_ENOUGH_MEMBERS',
         message: 'At least 2 members must have set their locations'
@@ -906,7 +906,7 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
     }
 
     // Generate cache key with member locations and travel modes
-    const locationData = (group as any).members.map((m: any) => ({ 
+    const locationData = event.members.map((m: any) => ({ 
       lat: m.lat, 
       lng: m.lng,
       travelMode: m.travelMode || 'driving' 
@@ -914,9 +914,9 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
       if (a.lat !== b.lat) return a.lat! - b.lat!;
       return a.lng! - b.lng!;
     });
-    const cacheKey = makeCacheKey('midpoint_by_time', { groupId: id, objective, locations: locationData });
+    const cacheKey = makeCacheKey('midpoint_by_time', { eventId: id, objective, locations: locationData });
     
-    console.log(`[Time Midpoint] Cache key for group ${id}, objective: ${objective}`);
+    console.log(`[Time Midpoint] Cache key for event ${id}, objective: ${objective}`);
     console.log(`[Time Midpoint] Member locations:`, locationData);
     console.log(`[Time Midpoint] Force recalculate: ${forceRecalculate}`);
     
@@ -936,18 +936,19 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
 
     // Step 3: Use iterative optimization starting from geometric center
     console.log(`[Time Midpoint] Starting iterative optimization from geometric center`);
-    console.log(`[Time Midpoint] Group members:`, (group as any).members.map((m: any) => ({
-      id: m.userId || m.nickname,
+    console.log(`[Time Midpoint] Event members:`, event.members.map((m: any) => ({
+      id: m.id,
+      username: m.username || m.nickname,
       lat: m.lat,
       lng: m.lng,
       travelMode: m.travelMode
     })));
     
     // Calculate geometric center as starting point
-    const totalLat = (group as any).members.reduce((sum: number, m: any) => sum + (m.lat || 0), 0);
-    const totalLng = (group as any).members.reduce((sum: number, m: any) => sum + (m.lng || 0), 0);
-    let currentLat = totalLat / (group as any).members.length;
-    let currentLng = totalLng / (group as any).members.length;
+    const totalLat = event.members.reduce((sum: number, m: any) => sum + (m.lat || 0), 0);
+    const totalLng = event.members.reduce((sum: number, m: any) => sum + (m.lng || 0), 0);
+    let currentLat = totalLat / event.members.length;
+    let currentLng = totalLng / event.members.length;
     
     console.log(`[Time Midpoint] Initial center: ${currentLat}, ${currentLng}`);
     
@@ -964,7 +965,7 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
       const travelTimes: number[] = [];
       let allSuccess = true;
       
-      for (const member of (group as any).members) {
+      for (const member of event.members) {
         try {
           const memberMode = member.travelMode || 'driving';
           const result = await gmapsClient.distancematrix({
@@ -979,7 +980,7 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
           if (result.data.status === 'OK' && result.data.rows[0].elements[0].status === 'OK') {
             const time = result.data.rows[0].elements[0].duration.value;
             travelTimes.push(time);
-            console.log(`[Time Midpoint] Member ${member.userId || member.nickname} (${memberMode}): ${Math.round(time / 60)} min`);
+            console.log(`[Time Midpoint] Member ${member.username || member.nickname || member.id} (${memberMode}): ${Math.round(time / 60)} min`);
           } else if (memberMode === 'transit') {
             // Fallback to driving for transit
             const fallbackResult = await gmapsClient.distancematrix({
@@ -993,7 +994,7 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
             if (fallbackResult.data.status === 'OK' && fallbackResult.data.rows[0].elements[0].status === 'OK') {
               const time = fallbackResult.data.rows[0].elements[0].duration.value;
               travelTimes.push(time);
-              console.log(`[Time Midpoint] Member ${member.userId || member.nickname} (fallback driving): ${Math.round(time / 60)} min`);
+              console.log(`[Time Midpoint] Member ${member.username || member.nickname || member.id} (fallback driving): ${Math.round(time / 60)} min`);
             } else {
               allSuccess = false;
               break;
@@ -1009,7 +1010,7 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
         }
       }
       
-      if (!allSuccess || travelTimes.length !== (group as any).members.length) {
+      if (!allSuccess || travelTimes.length !== event.members.length) {
         console.log(`[Time Midpoint] Failed to calculate all travel times at iteration ${iter + 1}`);
         break;
       }
@@ -1035,7 +1036,7 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
       }
       
       // Move towards the member with longest travel time
-      const slowestMember = (group as any).members[maxTimeIdx];
+      const slowestMember = event.members[maxTimeIdx];
       const latDiff = slowestMember.lat! - currentLat;
       const lngDiff = slowestMember.lng! - currentLng;
       const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
@@ -1101,12 +1102,12 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
     const destinations = candidates.map(c => `${c.lat},${c.lng}`);
     const distanceMatrixResults: any[] = [];
     
-    console.log(`[Time Midpoint] Calculating travel times for ${(group as any).members.length} members to ${candidates.length} destinations`);
+    console.log(`[Time Midpoint] Calculating travel times for ${event.members.length} members to ${candidates.length} destinations`);
 
-    for (const member of (group as any).members) {
+    for (const member of event.members) {
       try {
         let memberMode = member.travelMode || 'driving';
-        console.log(`[Time Midpoint] Calling Distance Matrix for member ${member.userId || member.nickname} with mode: ${memberMode}`);
+        console.log(`[Time Midpoint] Calling Distance Matrix for member ${member.username || member.nickname || member.id} with mode: ${memberMode}`);
         
         let result = await gmapsClient.distancematrix({
           params: {
@@ -1121,7 +1122,7 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
         if (result.data.status === 'OK') {
           const hasValidRoutes = result.data.rows[0].elements.some((e: any) => e.status === 'OK');
           if (!hasValidRoutes && memberMode === 'transit') {
-            console.log(`[Time Midpoint] Transit failed for member ${member.userId || member.nickname}, falling back to driving`);
+            console.log(`[Time Midpoint] Transit failed for member ${member.username || member.nickname || member.id}, falling back to driving`);
             result = await gmapsClient.distancematrix({
               params: {
                 origins: [`${member.lat},${member.lng}`],
@@ -1133,14 +1134,14 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
           }
           distanceMatrixResults.push(result.data.rows[0]);
         } else {
-          console.error(`Distance Matrix error for member ${member.userId || member.nickname}:`, result.data.status);
+          console.error(`Distance Matrix error for member ${member.username || member.nickname || member.id}:`, result.data.status);
           // Add empty row for this member
           distanceMatrixResults.push({
             elements: destinations.map(() => ({ status: 'ZERO_RESULTS' }))
           });
         }
       } catch (error) {
-        console.error(`Error calling Distance Matrix for member ${member.userId || member.nickname}:`, error);
+        console.error(`Error calling Distance Matrix for member ${member.username || member.nickname || member.id}:`, error);
         // Add empty row for this member
         distanceMatrixResults.push({
           elements: destinations.map(() => ({ status: 'ZERO_RESULTS' }))
@@ -1157,23 +1158,30 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
     }
 
     // Step 6: Score candidates
+    type MemberTime = {
+      memberId: number;
+      username: string;
+      travelTime: number;
+      distance: number;
+    };
+    
     const candidateScores: Array<{
       candidate: any;
       score: number;
       totalTime: number;
       maxTime: number;
-      memberTimes: Array<{ userId: number; userEmail: string; travelTime: number; distance: number }>;
+      memberTimes: MemberTime[];
     }> = [];
     
     let invalidCount = 0;
 
     for (let candIdx = 0; candIdx < candidates.length; candIdx++) {
-      const memberTimes: Array<{ userId: number; userEmail: string; travelTime: number; distance: number }> = [];
+      const memberTimes: MemberTime[] = [];
       let totalTime = 0;
       let maxTime = 0;
       let hasInvalidData = false;
 
-      for (let memberIdx = 0; memberIdx < (group as any).members.length; memberIdx++) {
+      for (let memberIdx = 0; memberIdx < event.members.length; memberIdx++) {
         const element = distanceMatrixResults[memberIdx].elements[candIdx];
         
         if (element.status !== 'OK' || !element.duration) {
@@ -1184,10 +1192,11 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
 
         const travelTime = element.duration.value; // seconds
         const distance = element.distance.value; // meters
+        const member = event.members[memberIdx];
 
         memberTimes.push({
-          userId: (group as any).members[memberIdx].userId || 0, // Use 0 for offline members
-          userEmail: (group as any).members[memberIdx].user?.email || (group as any).members[memberIdx].nickname || 'Unknown',
+          memberId: member.id,
+          username: member.username || member.nickname || 'Unknown',
           travelTime,
           distance
         });
@@ -1232,8 +1241,8 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
     console.log(`[Time Midpoint] Max time: ${Math.round(best.maxTime / 60)} min`);
     console.log(`[Time Midpoint] Individual member times:`);
     best.memberTimes.forEach((mt, idx) => {
-      const member = (group as any).members[idx];
-      console.log(`  - ${mt.userEmail} (${member.travelMode}): ${Math.round(mt.travelTime / 60)} min, ${(mt.distance / 1000).toFixed(1)} km`);
+      const member = event.members[idx];
+      console.log(`  - ${mt.username} (${member.travelMode || 'driving'}): ${Math.round(mt.travelTime / 60)} min, ${(mt.distance / 1000).toFixed(1)} km`);
     });
     console.log(`[Time Midpoint] =======================`);
 
@@ -1338,22 +1347,21 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// GET /groups/:id/routes_to_midpoint - Get routes from members to midpoint
-router.get('/:id/routes_to_midpoint', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// GET /events/:id/routes_to_midpoint - Get routes from members to midpoint
+router.get('/:id/routes_to_midpoint', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     // Validate group ID
-    const paramsValidation = groupParamsSchema.safeParse(req.params);
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
     if (!paramsValidation.success) {
       res.status(422).json({
         code: 'VALIDATION_ERROR',
-        message: 'Invalid group ID',
+        message: 'Invalid event ID',
         errors: paramsValidation.error.errors
       });
       return;
     }
 
-    const { id } = paramsValidation.data as GroupParams;
-    const userId = req.user!.userId;
+    const { id } = paramsValidation.data as EventParams;
     const { midpointLat, midpointLng } = req.query;
 
     // Validate required query params
@@ -1366,23 +1374,16 @@ router.get('/:id/routes_to_midpoint', authMiddleware, async (req: Request, res: 
     }
 
     // Check cache first
-    const cacheKey = makeCacheKey('routes', { groupId: id, midpointLat, midpointLng });
+    const cacheKey = makeCacheKey('routes', { eventId: id, midpointLat, midpointLng });
     const cached = routesCache.get(cacheKey);
     if (cached) {
       res.json({ ...cached, cached: true });
       return;
     }
 
-    // Check if user has access to this group
-    const group = await prisma.group.findFirst({
-      where: {
-        id,
-        members: {
-          some: {
-            userId: userId
-          }
-        }
-      },
+    // Get event - public access
+    const event = await prisma.event.findUnique({
+      where: { id },
       include: {
         members: {
           where: {
@@ -1391,22 +1392,17 @@ router.get('/:id/routes_to_midpoint', authMiddleware, async (req: Request, res: 
               { lng: { not: null } }
             ]
           },
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true
-              }
-            }
+          orderBy: {
+            id: 'asc'
           }
         }
       }
     });
 
-    if (!group) {
+    if (!event) {
       res.status(404).json({
-        code: 'GROUP_NOT_FOUND',
-        message: 'Group not found or access denied'
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found'
       });
       return;
     }
@@ -1414,13 +1410,13 @@ router.get('/:id/routes_to_midpoint', authMiddleware, async (req: Request, res: 
     // Calculate routes for each member
     const routes: Array<{
       memberId: number;
-      memberEmail: string;
+      username: string;
       polyline: string;
       duration: number;
       distance: number;
     }> = [];
 
-    for (const member of (group as any).members) {
+    for (const member of event.members) {
       try {
         const directionsResult = await gmapsClient.directions({
           params: {
@@ -1436,15 +1432,15 @@ router.get('/:id/routes_to_midpoint', authMiddleware, async (req: Request, res: 
           const leg = route.legs[0];
           
           routes.push({
-            memberId: member.userId || 0, // Use 0 for offline members
-            memberEmail: member.user?.email || member.nickname || 'Unknown',
+            memberId: member.id,
+            username: member.username || member.nickname || 'Unknown',
             polyline: route.overview_polyline.points,
             duration: leg.duration.value,
             distance: leg.distance.value
           });
         }
       } catch (error) {
-        console.error(`Error calculating route for member ${member.userId}:`, error);
+        console.error(`Error calculating route for member ${member.id}:`, error);
       }
     }
 
