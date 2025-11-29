@@ -10,7 +10,6 @@ import {
   Paper,
   Collapse,
   IconButton,
-  Tooltip,
   TextField,
   Button,
   FormControlLabel,
@@ -26,30 +25,22 @@ import {
   LocationOn as LocationIcon,
   People as PeopleIcon,
   ExpandMore as ExpandMoreIcon,
-  TouchApp as PokeIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
-import { eventsApi, type Event, type Member } from '../api/events';
+import { eventsApi } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
-import { usePusher } from '../hooks/usePusher';
-import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
-import { useAuth } from '../hooks/useAuth';
-import type { PokeEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
 import type { Event, EventMember, TravelMode } from '../types/events';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   
   const [event, setEvent] = useState<Event | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<EventMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [memberListExpanded, setMemberListExpanded] = useState(true);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'info' });
-  const [pokingMemberId, setPokingMemberId] = useState<number | null>(null);
 
   // 加入聚會相關狀態
   const [hasJoined, setHasJoined] = useState(false);
@@ -75,13 +66,7 @@ export default function EventRoom() {
   // 使用進度條 hook（始終調用，內部處理 null）
   const progress = useEventProgress(event);
 
-  // 獲取當前用戶的 memberId
-  // 使用 user.userId（User.userId）來匹配 Member.userId
-  const currentMemberId = user?.userId
-    ? event?.members?.find((m) => m.userId === user.userId)?.id
-    : undefined;
-
-  // 載入真實 API 資料
+  // 載入 Mock Data
   useEffect(() => {
     if (!id) {
       setError('找不到聚會 ID');
@@ -89,16 +74,6 @@ export default function EventRoom() {
       return;
     }
 
-    const fetchEvent = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const eventId = parseInt(id, 10);
-        if (isNaN(eventId)) {
-          setError('無效的聚會 ID');
-          setLoading(false);
-          return;
-        }
     // 檢查 localStorage 是否已加入此聚會
     const storageKey = `event_${id}_member`;
     const storedMember = localStorage.getItem(storageKey);
@@ -115,18 +90,48 @@ export default function EventRoom() {
       }
     }
 
-    // 模擬 API 載入延遲
-    setTimeout(() => {
-      const mockEvent = getMockEventById(id);
-      let mockMembers = getMockMembersByEventId(id);
+    // 呼叫真實 API
+    const fetchEvent = async () => {
+      try {
+        const response = await eventsApi.getEvent(parseInt(id));
 
-        const response = await eventsApi.getEvent(eventId);
-        const eventData = response.event;
+        if (!response || !response.event) {
+          setError('找不到此聚會');
+          setLoading(false);
+          return;
+        }
+
+        setEvent(response.event);
+        let apiMembers = response.event.members || [];
         
-        setEvent(eventData);
+        // 如果 localStorage 有成員數據，將其恢復到成員列表中
+        if (savedMemberData) {
+          // 檢查成員列表中是否已存在該成員
+          const memberExists = apiMembers.some(m => m.id === savedMemberData.memberId);
+          
+          if (!memberExists) {
+            // 從 localStorage 恢復成員信息
+            const restoredMember: EventMember = {
+              id: savedMemberData.memberId,
+              eventId: Number(id),
+              userId: savedMemberData.userId || `guest_${savedMemberData.memberId}`,
+              nickname: savedMemberData.nickname || '我',
+              shareLocation: savedMemberData.shareLocation !== false,
+              travelMode: savedMemberData.travelMode || 'transit',
+              lat: savedMemberData.lat,
+              lng: savedMemberData.lng,
+              address: savedMemberData.address,
+              arrivalTime: savedMemberData.arrivalTime,
+              createdAt: savedMemberData.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            
+            apiMembers = [...apiMembers, restoredMember];
+          }
+        }
         
         // 排序成員：已到達 → 分享位置中 → 前往中
-        const sortedMembers = [...(eventData.members || [])].sort((a, b) => {
+        const sortedMembers = [...apiMembers].sort((a, b) => {
           if (a.arrivalTime && !b.arrivalTime) return -1;
           if (!a.arrivalTime && b.arrivalTime) return 1;
           if (!a.arrivalTime && !b.arrivalTime) {
@@ -136,10 +141,10 @@ export default function EventRoom() {
           return 0;
         });
         setMembers(sortedMembers);
-      } catch (err) {
-        console.error('Error fetching event:', err);
-        setError(err instanceof Error ? err.message : '無法載入聚會資訊');
-      } finally {
+        setLoading(false);
+      } catch (err: any) {
+        console.error('載入聚會失敗:', err);
+        setError(err.response?.data?.message || '載入聚會失敗');
         setLoading(false);
       }
     };
@@ -147,53 +152,133 @@ export default function EventRoom() {
     fetchEvent();
   }, [id]);
 
-  // 請求通知權限
-  useEffect(() => {
-    requestNotificationPermission().catch((err) => {
-      console.warn('[EventRoom] Failed to request notification permission:', err);
-    });
-  }, []);
-
-  // 整合 Pusher - 監聽 poke 事件
-  usePusher({
-    channelName: event ? `event-${event.id}` : null,
-    eventName: 'poke',
-    onEvent: (data: PokeEvent) => {
-      // 僅在收到 poke 事件且 toMemberId 匹配當前用戶的 memberId 時顯示通知
-      if (currentMemberId && data.toMemberId === currentMemberId) {
-        showPokeNotification(data.fromNickname, data.count);
-      }
-    },
-    onError: (error) => {
-      console.error('[EventRoom] Pusher error:', error);
-    },
-    debug: false,
-  });
-
-  // 戳一下功能
-  const handlePoke = async (targetMemberId: number) => {
+  // 加入聚會
+  const handleJoinEvent = async () => {
     if (!event || !id) return;
+    
+    if (!joinForm.nickname.trim()) {
+      setSnackbar({ open: true, message: '請輸入暱稱', severity: 'error' });
+      return;
+    }
 
+    setJoining(true);
+    
     try {
-      setPokingMemberId(targetMemberId);
-      const eventId = parseInt(id, 10);
-      const result = await eventsApi.pokeMember(eventId, targetMemberId);
+      // TODO: 改用真實 API
+      // const response = await eventsApi.joinEvent(Number(id), joinForm);
       
-      setSnackbar({
-        open: true,
-        message: `已戳 ${members.find(m => m.id === targetMemberId)?.nickname || '成員'} (${result.pokeCount} 次)`,
-        severity: 'success',
+      // 模擬 API 延遲
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Mock response
+      const newMemberId = members.length + 1;
+      const newMember: EventMember = {
+        id: newMemberId,
+        eventId: Number(id),
+        userId: `guest_${Date.now()}`,
+        nickname: joinForm.nickname,
+        shareLocation: joinForm.shareLocation,
+        travelMode: joinForm.travelMode,
+        lat: undefined,
+        lng: undefined,
+        address: undefined,
+        arrivalTime: undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      // 儲存到 localStorage（完整成員信息）
+      const storageKey = `event_${id}_member`;
+      localStorage.setItem(storageKey, JSON.stringify({
+        memberId: newMemberId,
+        userId: `guest_${Date.now()}`,
+        nickname: joinForm.nickname,
+        shareLocation: joinForm.shareLocation,
+        travelMode: joinForm.travelMode,
+        guestToken: `mock_guest_token_${Date.now()}`,
+        arrivalTime: null,
+        createdAt: new Date().toISOString(),
+      }));
+      
+      setHasJoined(true);
+      setCurrentMemberId(newMemberId);
+      
+      // 添加新成員並重新排序
+      const updatedMembers = [...members, newMember].sort((a, b) => {
+        if (a.arrivalTime && !b.arrivalTime) return -1;
+        if (!a.arrivalTime && b.arrivalTime) return 1;
+        if (!a.arrivalTime && !b.arrivalTime) {
+          if (a.shareLocation && !b.shareLocation) return -1;
+          if (!a.shareLocation && b.shareLocation) return 1;
+        }
+        return 0;
       });
-    } catch (err: any) {
-      console.error('Error poking member:', err);
-      const errorMessage = err?.response?.data?.message || err?.message || '戳人失敗';
-      setSnackbar({
-        open: true,
-        message: errorMessage,
-        severity: 'error',
+      
+      setMembers(updatedMembers);
+      setSnackbar({ open: true, message: '成功加入聚會！', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ 
+        open: true, 
+        message: err instanceof Error ? err.message : '加入失敗，請稍後再試', 
+        severity: 'error' 
       });
     } finally {
-      setPokingMemberId(null);
+      setJoining(false);
+    }
+  };
+
+  // 標記「我到了」
+  const handleMarkArrival = async () => {
+    if (!event || !id || !currentMemberId) return;
+    
+    setMarking(true);
+    
+    try {
+      // TODO: 改用真實 API
+      // const response = await eventsApi.markArrival(Number(id));
+      
+      // 模擬 API 延遲
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // 更新本地狀態
+      setHasArrived(true);
+      const arrivalTime = new Date().toISOString();
+      
+      // 更新 localStorage
+      const storageKey = `event_${id}_member`;
+      const storedMember = localStorage.getItem(storageKey);
+      if (storedMember) {
+        const memberData = JSON.parse(storedMember);
+        memberData.arrivalTime = arrivalTime;
+        localStorage.setItem(storageKey, JSON.stringify(memberData));
+      }
+      
+      // 更新成員列表並重新排序
+      const updatedMembers = members.map(m => 
+        m.id === currentMemberId 
+          ? { ...m, arrivalTime } 
+          : m
+      ).sort((a, b) => {
+        if (a.arrivalTime && !b.arrivalTime) return -1;
+        if (!a.arrivalTime && b.arrivalTime) return 1;
+        if (!a.arrivalTime && !b.arrivalTime) {
+          if (a.shareLocation && !b.shareLocation) return -1;
+          if (!a.shareLocation && b.shareLocation) return 1;
+        }
+        return 0;
+      });
+      
+      setMembers(updatedMembers);
+      
+      setSnackbar({ open: true, message: '✅ 已標記到達！', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ 
+        open: true, 
+        message: err instanceof Error ? err.message : '標記失敗，請稍後再試', 
+        severity: 'error' 
+      });
+    } finally {
+      setMarking(false);
     }
   };
 
@@ -775,26 +860,6 @@ export default function EventRoom() {
                         flexShrink: 0,
                       }}
                     />
-
-                    {/* 戳一下按鈕 - 僅顯示給其他成員 */}
-                    {currentMemberId && member.id !== currentMemberId && (
-                      <Tooltip title="戳一下">
-                        <IconButton
-                          size="small"
-                          onClick={() => handlePoke(member.id)}
-                          disabled={pokingMemberId === member.id}
-                          sx={{
-                            color: 'primary.main',
-                            '&:hover': {
-                              bgcolor: 'primary.light',
-                              color: 'primary.dark',
-                            },
-                          }}
-                        >
-                          <PokeIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
                   </Box>
                 );
               })}
@@ -804,21 +869,6 @@ export default function EventRoom() {
           </Collapse>
         </Paper>
 
-        {/* Snackbar for notifications */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={3000}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert
-            onClose={() => setSnackbar({ ...snackbar, open: false })}
-            severity={snackbar.severity}
-            sx={{ width: '100%' }}
-          >
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
         {/* 「我到了」按鈕 - 成員列表下方 */}
         {!hasArrived && (
           <Paper

@@ -32,6 +32,7 @@ export const createEventSchema = z.object({
   }
 );
 
+
 export const updateEventSchema = z.object({
   name: z.string().min(1, 'Event name is required').max(100, 'Event name must be less than 100 characters'),
 });
