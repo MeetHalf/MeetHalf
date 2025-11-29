@@ -6,21 +6,28 @@ import { optionalAuthMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-// Helper function to set JWT cookie and redirect
-function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
-  const token = signToken(user.id);
+// Helper function to get consistent cookie options
+function getCookieOptions(req: Request): any {
   const isDeployed = !!process.env.VERCEL_URL || req.protocol === 'https';
   const cookieOptions: any = {
     httpOnly: true,
     sameSite: isDeployed ? ('none' as const) : ('lax' as const),
     secure: isDeployed,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   };
 
   if (process.env.COOKIE_DOMAIN) {
     cookieOptions.domain = process.env.COOKIE_DOMAIN;
   }
+
+  return cookieOptions;
+}
+
+// Helper function to set JWT cookie and redirect
+function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
+  const token = signToken(user.id);
+  const cookieOptions = getCookieOptions(req);
+  cookieOptions.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   res.cookie('token', token, cookieOptions);
 
@@ -201,19 +208,25 @@ router.get('/me', optionalAuthMiddleware, async (req: Request, res: Response): P
  */
 // POST /auth/logout
 router.post('/logout', (req: Request, res: Response): void => {
-  const isDeployed = !!process.env.VERCEL_URL || req.protocol === 'https';
-  const cookieOptions: any = {
-    httpOnly: true,
-    sameSite: isDeployed ? ('none' as const) : ('lax' as const),
-    secure: isDeployed,
-    path: '/',
-  };
-
-  if (process.env.COOKIE_DOMAIN) {
-    cookieOptions.domain = process.env.COOKIE_DOMAIN;
-  }
-
+  // Use the same cookie options function to ensure consistency
+  // This ensures we only clear cookies from the same domain/path where they were set
+  const cookieOptions = getCookieOptions(req);
+  
+  // Clear cookie with the exact same options used when setting it
+  // This is safe because:
+  // 1. Cookies are domain-scoped - only affects the current domain (or COOKIE_DOMAIN if set)
+  // 2. Will NOT affect cookies from other websites (e.g., google.com)
+  // 3. Will only clear the 'token' cookie, not other cookies
   res.clearCookie('token', cookieOptions);
+  
+  // Also try to clear with empty value and expired date as a fallback
+  // This ensures the cookie is cleared even if clearCookie() doesn't work
+  res.cookie('token', '', {
+    ...cookieOptions,
+    maxAge: 0,
+    expires: new Date(0),
+  });
+  
   res.json({ message: 'Logout successful' });
 });
 
