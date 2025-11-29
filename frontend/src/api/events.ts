@@ -48,6 +48,16 @@ export interface Member {
 
 export interface CreateEventRequest {
   name: string;
+  startTime?: string; // ISO 8601 - Optional, defaults to 1 hour from now
+  endTime?: string; // ISO 8601 - Optional, defaults to 3 hours from now
+  ownerId?: string; // Optional: auto-filled from JWT if authenticated
+  useMeetHalf?: boolean;
+  status?: 'upcoming' | 'ongoing' | 'ended';
+  meetingPointLat?: number | null;
+  meetingPointLng?: number | null;
+  meetingPointName?: string | null;
+  meetingPointAddress?: string | null;
+  groupId?: number | null;
 }
 
 export interface UpdateEventRequest {

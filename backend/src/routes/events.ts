@@ -209,7 +209,16 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       return;
     }
 
-    const { name, startTime, endTime, ownerId, useMeetHalf, status, meetingPointLat, meetingPointLng, meetingPointName, meetingPointAddress, groupId } = validation.data as CreateEventRequest;
+    const { name, startTime: providedStartTime, endTime: providedEndTime, ownerId: providedOwnerId, useMeetHalf, status, meetingPointLat, meetingPointLng, meetingPointName, meetingPointAddress, groupId } = validation.data as CreateEventRequest;
+    
+    // Set default startTime and endTime if not provided
+    // Default: startTime = 1 hour from now, endTime = 3 hours from now
+    const now = new Date();
+    const defaultStartTime = new Date(now.getTime() + 60 * 60 * 1000); // +1 hour
+    const defaultEndTime = new Date(now.getTime() + 3 * 60 * 60 * 1000); // +3 hours
+    
+    const startTime = providedStartTime || defaultStartTime;
+    const endTime = providedEndTime || defaultEndTime;
     
     // Validate groupId if provided
     let validGroupId: number | null = null;
@@ -234,14 +243,51 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       validGroupId = groupId;
     }
     
-    // Determine memberUserId from ownerId or authenticated user
+    // Determine ownerId and memberUserId based on authentication status
+    let ownerId: string;
     let memberUserId: string | null = null;
+    
     if (req.user && 'userId' in req.user) {
+      // Authenticated user: automatically use their userId as ownerId
       const jwtPayload = req.user as { userId: number };
-      memberUserId = await getUserUserId(jwtPayload.userId);
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      
+      if (!userUserId) {
+        res.status(401).json({
+          code: 'UNAUTHORIZED',
+          message: 'User not found'
+        });
+        return;
+      }
+      
+      ownerId = userUserId; // Use authenticated user's userId as ownerId
+      memberUserId = userUserId;
+      
+      // If ownerId was provided, validate it matches the authenticated user
+      if (providedOwnerId && providedOwnerId !== userUserId) {
+        res.status(403).json({
+          code: 'FORBIDDEN',
+          message: 'Cannot create event with different ownerId than authenticated user'
+        });
+        return;
+      }
     } else {
-      // Anonymous user - use ownerId as memberUserId
-      memberUserId = ownerId;
+      // Anonymous user: ownerId must be provided
+      if (!providedOwnerId) {
+        res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'ownerId is required for anonymous users',
+          errors: [{
+            code: 'missing_owner_id',
+            path: ['ownerId'],
+            message: 'ownerId must be provided when not authenticated'
+          }]
+        });
+        return;
+      }
+      
+      ownerId = providedOwnerId;
+      memberUserId = providedOwnerId;
     }
 
     const event = await prisma.event.create({

@@ -14,9 +14,9 @@ const dateSchema = z.union([
 
 export const createEventSchema = z.object({
   name: z.string().min(1, 'Event name is required').max(100, 'Event name must be less than 100 characters'),
-  startTime: dateSchema,
-  endTime: dateSchema,
-  ownerId: z.string().min(1, 'Owner ID is required'),
+  startTime: dateSchema.optional(), // Optional: defaults to 1 hour from now
+  endTime: dateSchema.optional(), // Optional: defaults to 3 hours from now
+  ownerId: z.string().min(1, 'Owner ID is required').optional(), // Optional: will be auto-filled from JWT if authenticated
   useMeetHalf: z.boolean().default(false),
   status: z.enum(['upcoming', 'ongoing', 'ended']).optional(),
   meetingPointLat: z.number().optional().nullable(),
@@ -25,7 +25,13 @@ export const createEventSchema = z.object({
   meetingPointAddress: z.string().optional().nullable(),
   groupId: z.number().int().positive().optional().nullable(),
 }).refine(
-  (data) => data.endTime > data.startTime,
+  (data) => {
+    // Only validate if both times are provided
+    if (data.startTime && data.endTime) {
+      return data.endTime > data.startTime;
+    }
+    return true;
+  },
   {
     message: 'endTime must be after startTime',
     path: ['endTime'],
