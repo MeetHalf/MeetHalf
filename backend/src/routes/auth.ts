@@ -211,16 +211,49 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     const token = signToken(user.id);
 
     // Set cookie
-    // In production (Vercel), use 'none' for cross-site cookies
-    // In development, use 'lax' for same-site cookies
-    const isProduction = process.env.NODE_ENV === 'production';
-    res.cookie('token', token, {
+    // Check if running on Vercel (deployed) instead of relying on NODE_ENV
+    // VERCEL_URL is automatically provided by Vercel
+    // After setting trust proxy, req.protocol should correctly detect HTTPS
+    const isDeployed = !!process.env.VERCEL_URL || req.protocol === 'https';
+    const cookieOptions: any = {
       httpOnly: true,
-      sameSite: isProduction ? 'none' : 'lax',
-      secure: isProduction, // Must be true when sameSite is 'none'
+      sameSite: isDeployed ? ('none' as const) : ('lax' as const),
+      secure: isDeployed, // Must be true when sameSite is 'none'
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      domain: process.env.COOKIE_DOMAIN, // Optional: set cookie domain if needed
+      path: '/', // Explicitly set path to root
+    };
+    
+    // Only set domain if explicitly configured (undefined domain can cause issues)
+    if (process.env.COOKIE_DOMAIN) {
+      cookieOptions.domain = process.env.COOKIE_DOMAIN;
+    }
+    
+    // Log cookie settings for debugging (always log in deployment)
+    console.log('[Login] Setting cookie:', {
+      isDeployed,
+      hasVercelUrl: !!process.env.VERCEL_URL,
+      vercelUrl: process.env.VERCEL_URL,
+      protocol: req.protocol,
+      xForwardedProto: req.headers['x-forwarded-proto'],
+      sameSite: cookieOptions.sameSite,
+      secure: cookieOptions.secure,
+      origin: req.headers.origin,
+      host: req.headers.host,
+      cookieDomain: cookieOptions.domain || 'not set',
     });
+    
+    res.cookie('token', token, cookieOptions);
+    
+    // Log actual Set-Cookie header value for debugging
+    const setCookieHeader = res.getHeader('Set-Cookie');
+    if (setCookieHeader) {
+      console.log('[Login] Set-Cookie header sent:', Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader);
+    } else {
+      console.warn('[Login] ⚠️ Set-Cookie header is missing!');
+    }
+
+    // Note: CORS headers are already set by the CORS middleware in index.ts
+    // We don't need to set them again here as it may cause conflicts
 
     res.json({
       message: 'Login successful',
@@ -330,13 +363,19 @@ router.get('/me', authMiddleware, async (req: Request, res: Response): Promise<v
  */
 // POST /auth/logout
 router.post('/logout', (req: Request, res: Response): void => {
-  const isProduction = process.env.NODE_ENV === 'production';
-  res.clearCookie('token', {
+  const isDeployed = !!process.env.VERCEL_URL || req.protocol === 'https';
+  const cookieOptions: any = {
     httpOnly: true,
-    sameSite: isProduction ? 'none' : 'lax',
-    secure: isProduction,
-    domain: process.env.COOKIE_DOMAIN,
-  });
+    sameSite: isDeployed ? ('none' as const) : ('lax' as const),
+    secure: isDeployed,
+    path: '/',
+  };
+  
+  if (process.env.COOKIE_DOMAIN) {
+    cookieOptions.domain = process.env.COOKIE_DOMAIN;
+  }
+  
+  res.clearCookie('token', cookieOptions);
   res.json({ message: 'Logout successful' });
 });
 
