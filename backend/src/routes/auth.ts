@@ -23,6 +23,22 @@ function getCookieOptions(req: Request): any {
   return cookieOptions;
 }
 
+// Helper function to get frontend origin with smart fallback
+function getFrontendOrigin(): string {
+  // Priority: FRONTEND_ORIGIN > VERCEL_URL (for preview deployments) > localhost
+  if (process.env.FRONTEND_ORIGIN) {
+    return process.env.FRONTEND_ORIGIN;
+  }
+  // In production/Vercel, try to infer frontend URL from backend URL
+  if (process.env.VERCEL_URL) {
+    // If backend is on Vercel, frontend might be on same domain or different subdomain
+    // This is a fallback - should set FRONTEND_ORIGIN explicitly
+    console.warn('[AUTH] FRONTEND_ORIGIN not set, using VERCEL_URL fallback');
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return 'http://localhost:5173';
+}
+
 // Helper function to set JWT cookie and redirect
 function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
   const token = signToken(user.id);
@@ -32,7 +48,8 @@ function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
   res.cookie('token', token, cookieOptions);
 
   // Redirect to frontend
-  const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+  const frontendOrigin = getFrontendOrigin();
+  console.log('[AUTH] Redirecting to frontend:', `${frontendOrigin}/events`);
   res.redirect(`${frontendOrigin}/events`);
 }
 
@@ -64,12 +81,12 @@ router.get(
     passport.authenticate('google', { session: false }, (err: any, user: any, info: any) => {
       if (err) {
         console.error('Google OAuth error:', err);
-        const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+        const frontendOrigin = getFrontendOrigin();
         return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
       }
       if (!user) {
         console.error('Google OAuth: No user returned', info);
-        const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+        const frontendOrigin = getFrontendOrigin();
         return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
       }
       // Attach user to request
@@ -81,7 +98,7 @@ router.get(
     // @ts-ignore - passport adds user to request
     const user = (req as any).user;
     if (!user) {
-      const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+      const frontendOrigin = getFrontendOrigin();
       return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
     }
     setAuthCookieAndRedirect(req, res, user);
@@ -127,15 +144,18 @@ router.get(
       path: req.path,
       url: req.url,
     });
+    
+    // Custom callback handler - same pattern as Google for consistency
+    // This allows us to redirect to frontend on error instead of backend root
     passport.authenticate('github', { session: false }, (err: any, user: any, info: any) => {
       if (err) {
         console.error('[AUTH] GitHub OAuth error:', err);
-        const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+        const frontendOrigin = getFrontendOrigin();
         return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
       }
       if (!user) {
         console.error('[AUTH] GitHub OAuth: No user returned', info);
-        const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+        const frontendOrigin = getFrontendOrigin();
         return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
       }
       console.log('[AUTH] GitHub OAuth success, user:', { id: user.id, email: user.email });
@@ -149,7 +169,7 @@ router.get(
     const user = (req as any).user;
     if (!user) {
       console.error('[AUTH] GitHub callback: No user in request');
-      const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+      const frontendOrigin = getFrontendOrigin();
       return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
     }
     setAuthCookieAndRedirect(req, res, user);
