@@ -17,7 +17,32 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Security middlewares
-app.use(helmet());
+// Configure Helmet with CSP that allows Swagger UI CDN resources
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          'https://cdn.jsdelivr.net',
+          "'unsafe-inline'", // Required for Swagger UI inline scripts
+        ],
+        styleSrc: [
+          "'self'",
+          'https://cdn.jsdelivr.net',
+          "'unsafe-inline'", // Required for Swagger UI inline styles
+        ],
+        connectSrc: [
+          "'self'",
+          // Allow connections to API endpoints for Swagger spec
+        ],
+        fontSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+        imgSrc: ["'self'", 'data:', 'https:'],
+      },
+    },
+  })
+);
 
 // CORS configuration - allow frontend origins
 const allowedOrigins = [
