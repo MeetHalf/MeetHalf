@@ -208,8 +208,97 @@ router.get('/reverse', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /maps/nearby
- * Search for nearby places
+ * @swagger
+ * /maps/nearby:
+ *   get:
+ *     summary: Search for nearby places
+ *     tags: [Maps]
+ *     parameters:
+ *       - in: query
+ *         name: lat
+ *         required: true
+ *         schema:
+ *           type: number
+ *           format: float
+ *         description: Latitude
+ *         example: 25.0339639
+ *       - in: query
+ *         name: lng
+ *         required: true
+ *         schema:
+ *           type: number
+ *           format: float
+ *         description: Longitude
+ *         example: 121.5644722
+ *       - in: query
+ *         name: radius
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 100
+ *           maximum: 5000
+ *           default: 1500
+ *         description: Search radius in meters
+ *       - in: query
+ *         name: type
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Place type (e.g., restaurant, cafe, hotel)
+ *       - in: query
+ *         name: keyword
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Keyword for place search
+ *     responses:
+ *       200:
+ *         description: Nearby places found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       place_id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       vicinity:
+ *                         type: string
+ *                       location:
+ *                         type: object
+ *                         properties:
+ *                           lat:
+ *                             type: number
+ *                           lng:
+ *                             type: number
+ *                       rating:
+ *                         type: number
+ *                       user_ratings_total:
+ *                         type: integer
+ *                       types:
+ *                         type: array
+ *                         items:
+ *                           type: string
+ *                 cached:
+ *                   type: boolean
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/nearby', async (req: Request, res: Response) => {
   try {
@@ -262,8 +351,109 @@ router.get('/nearby', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /maps/directions
- * Get directions between two points
+ * @swagger
+ * /maps/directions:
+ *   post:
+ *     summary: Get directions between two points
+ *     tags: [Maps]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - origin
+ *               - destination
+ *             properties:
+ *               origin:
+ *                 type: object
+ *                 required:
+ *                   - lat
+ *                   - lng
+ *                 properties:
+ *                   lat:
+ *                     type: number
+ *                     format: float
+ *                     example: 25.0339639
+ *                   lng:
+ *                     type: number
+ *                     format: float
+ *                     example: 121.5644722
+ *               destination:
+ *                 type: object
+ *                 required:
+ *                   - lat
+ *                   - lng
+ *                 properties:
+ *                   lat:
+ *                     type: number
+ *                     format: float
+ *                     example: 25.0349639
+ *                   lng:
+ *                     type: number
+ *                     format: float
+ *                     example: 121.5654722
+ *               mode:
+ *                 type: string
+ *                 enum: [driving, walking, bicycling, transit]
+ *                 default: transit
+ *                 description: Travel mode
+ *               departureTime:
+ *                 type: string
+ *                 oneOf:
+ *                   - type: string
+ *                     enum: [now]
+ *                   - type: string
+ *                     format: date-time
+ *                 default: now
+ *                 description: Departure time (ISO 8601 or 'now')
+ *     responses:
+ *       200:
+ *         description: Directions calculated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 duration:
+ *                   type: object
+ *                   properties:
+ *                     text:
+ *                       type: string
+ *                       example: "15 分鐘"
+ *                     value:
+ *                       type: integer
+ *                       example: 900
+ *                 distance:
+ *                   type: object
+ *                   properties:
+ *                     text:
+ *                       type: string
+ *                       example: "2.5 km"
+ *                     value:
+ *                       type: integer
+ *                       example: 2500
+ *                 overview_polyline:
+ *                   type: object
+ *                   properties:
+ *                     points:
+ *                       type: string
+ *                       description: Encoded polyline string for map rendering
+ *                 cached:
+ *                   type: boolean
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/directions', async (req: Request, res: Response) => {
   try {

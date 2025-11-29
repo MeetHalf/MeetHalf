@@ -16,6 +16,91 @@ import {
 
 const router = Router();
 
+/**
+ * @swagger
+ * /members:
+ *   post:
+ *     summary: Add member to group (join group or add another user)
+ *     tags: [Members]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - groupId
+ *             properties:
+ *               userId:
+ *                 type: integer
+ *                 description: User ID to add (can be current user to join group)
+ *               groupId:
+ *                 type: integer
+ *                 description: Group ID
+ *               lat:
+ *                 type: number
+ *                 format: float
+ *                 minimum: -90
+ *                 maximum: 90
+ *                 description: Latitude (optional)
+ *               lng:
+ *                 type: number
+ *                 format: float
+ *                 minimum: -180
+ *                 maximum: 180
+ *                 description: Longitude (optional)
+ *               address:
+ *                 type: string
+ *                 maxLength: 255
+ *                 description: Address (optional)
+ *               travelMode:
+ *                 type: string
+ *                 enum: [driving, transit, walking, bicycling]
+ *                 description: Travel mode (optional)
+ *     responses:
+ *       201:
+ *         description: Member added successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 member:
+ *                   $ref: '#/components/schemas/Member'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Cannot add others if not a member
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Target user not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       409:
+ *         description: User is already a member
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // POST /members - Add member to group
 router.post('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -110,6 +195,77 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
   }
 });
 
+/**
+ * @swagger
+ * /members/{id}:
+ *   patch:
+ *     summary: Update member location and travel mode (own location only)
+ *     tags: [Members]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Member ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               lat:
+ *                 type: number
+ *                 format: float
+ *                 minimum: -90
+ *                 maximum: 90
+ *                 description: Latitude (optional)
+ *               lng:
+ *                 type: number
+ *                 format: float
+ *                 minimum: -180
+ *                 maximum: 180
+ *                 description: Longitude (optional)
+ *               address:
+ *                 type: string
+ *                 maxLength: 255
+ *                 description: Address (optional)
+ *               travelMode:
+ *                 type: string
+ *                 enum: [driving, transit, walking, bicycling]
+ *                 description: Travel mode (optional)
+ *     responses:
+ *       200:
+ *         description: Member location updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 member:
+ *                   $ref: '#/components/schemas/Member'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Member not found or you can only update your own location
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // PATCH /members/:id - Update member location
 router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -183,6 +339,56 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
   }
 });
 
+/**
+ * @swagger
+ * /members/{id}:
+ *   delete:
+ *     summary: Remove member from group (self or group owner)
+ *     tags: [Members]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Member ID
+ *     responses:
+ *       200:
+ *         description: Member removed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Validation error or owner cannot leave while other members exist
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Can only remove yourself or must be group owner
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Member not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // DELETE /members/:id - Remove member from group
 router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -265,6 +471,84 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
   }
 });
 
+/**
+ * @swagger
+ * /members/offline:
+ *   post:
+ *     summary: Create offline member (non-registered user)
+ *     tags: [Members]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - groupId
+ *               - nickname
+ *               - lat
+ *               - lng
+ *             properties:
+ *               groupId:
+ *                 type: integer
+ *                 description: Group ID
+ *               nickname:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 100
+ *                 description: Display name for offline member
+ *               lat:
+ *                 type: number
+ *                 format: float
+ *                 minimum: -90
+ *                 maximum: 90
+ *                 description: Latitude
+ *               lng:
+ *                 type: number
+ *                 format: float
+ *                 minimum: -180
+ *                 maximum: 180
+ *                 description: Longitude
+ *               address:
+ *                 type: string
+ *                 maxLength: 255
+ *                 description: Address (optional)
+ *               travelMode:
+ *                 type: string
+ *                 enum: [driving, transit, walking, bicycling]
+ *                 default: driving
+ *                 description: Travel mode
+ *     responses:
+ *       201:
+ *         description: Offline member created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 member:
+ *                   $ref: '#/components/schemas/Member'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Must be a member of the group
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // ✅ NEW: POST /members/offline - Create offline member
 router.post('/offline', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -321,6 +605,88 @@ router.post('/offline', authMiddleware, async (req: Request, res: Response): Pro
   }
 });
 
+/**
+ * @swagger
+ * /members/offline/{id}:
+ *   patch:
+ *     summary: Update offline member (group members can edit)
+ *     tags: [Members]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Offline member ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               nickname:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 100
+ *                 description: Display name (optional)
+ *               lat:
+ *                 type: number
+ *                 format: float
+ *                 minimum: -90
+ *                 maximum: 90
+ *                 description: Latitude (optional)
+ *               lng:
+ *                 type: number
+ *                 format: float
+ *                 minimum: -180
+ *                 maximum: 180
+ *                 description: Longitude (optional)
+ *               address:
+ *                 type: string
+ *                 maxLength: 255
+ *                 description: Address (optional)
+ *               travelMode:
+ *                 type: string
+ *                 enum: [driving, transit, walking, bicycling]
+ *                 description: Travel mode (optional)
+ *     responses:
+ *       200:
+ *         description: Offline member updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 member:
+ *                   $ref: '#/components/schemas/Member'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Must be a member of the group
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Offline member not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // ✅ NEW: PATCH /members/offline/:id - Update offline member
 router.patch('/offline/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -393,6 +759,56 @@ router.patch('/offline/:id', authMiddleware, async (req: Request, res: Response)
   }
 });
 
+/**
+ * @swagger
+ * /members/offline/{id}:
+ *   delete:
+ *     summary: Delete offline member (group members can delete)
+ *     tags: [Members]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Offline member ID
+ *     responses:
+ *       200:
+ *         description: Offline member deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Must be a member of the group
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Offline member not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // ✅ NEW: DELETE /members/offline/:id - Delete offline member
 router.delete('/offline/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {

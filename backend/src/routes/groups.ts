@@ -284,6 +284,64 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response): Promise<
   }
 });
 
+/**
+ * @swagger
+ * /groups/{id}:
+ *   patch:
+ *     summary: Update group name (members can update)
+ *     tags: [Groups]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 100
+ *                 example: "Updated Group Name"
+ *     responses:
+ *       200:
+ *         description: Group updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 group:
+ *                   $ref: '#/components/schemas/Group'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Group not found or user is not a member
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // PATCH /groups/:id - Update group (owner only)
 router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -358,6 +416,56 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
   }
 });
 
+/**
+ * @swagger
+ * /groups/{id}:
+ *   delete:
+ *     summary: Delete group (owner only)
+ *     tags: [Groups]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID
+ *     responses:
+ *       200:
+ *         description: Group deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Only group owner can delete
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Group not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // DELETE /groups/:id - Delete group (owner only)
 router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -647,6 +755,80 @@ router.get('/:id/midpoint', authMiddleware, async (req: Request, res: Response):
   }
 });
 
+/**
+ * @swagger
+ * /groups/{id}/midpoint_by_time:
+ *   get:
+ *     summary: Calculate time-based optimal midpoint (minimize total or maximum travel time)
+ *     tags: [Groups]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID
+ *       - in: query
+ *         name: objective
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [minimize_total, minimize_max]
+ *           default: minimize_total
+ *         description: Optimization objective - minimize total travel time or maximum travel time
+ *       - in: query
+ *         name: forceRecalculate
+ *         required: false
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Force recalculation and bypass cache
+ *     responses:
+ *       200:
+ *         description: Time-based midpoint calculation result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 midpoint:
+ *                   type: object
+ *                   properties:
+ *                     lat:
+ *                       type: number
+ *                     lng:
+ *                       type: number
+ *                 address:
+ *                   type: string
+ *                 total_travel_time:
+ *                   type: integer
+ *                 max_travel_time:
+ *                   type: integer
+ *                 member_travel_times:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 suggested_places:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 cached:
+ *                   type: boolean
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Group not found or insufficient member locations
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /groups/:id/midpoint_by_time - Calculate time-based optimal midpoint
 router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -1086,6 +1268,76 @@ router.get('/:id/midpoint_by_time', authMiddleware, async (req: Request, res: Re
   }
 });
 
+/**
+ * @swagger
+ * /groups/{id}/routes_to_midpoint:
+ *   get:
+ *     summary: Get routes from all members to the midpoint
+ *     tags: [Groups]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID
+ *       - in: query
+ *         name: midpointLat
+ *         required: true
+ *         schema:
+ *           type: number
+ *           format: float
+ *         description: Midpoint latitude
+ *       - in: query
+ *         name: midpointLng
+ *         required: true
+ *         schema:
+ *           type: number
+ *           format: float
+ *         description: Midpoint longitude
+ *     responses:
+ *       200:
+ *         description: Routes calculated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 routes:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       memberId:
+ *                         type: integer
+ *                       memberEmail:
+ *                         type: string
+ *                       polyline:
+ *                         type: string
+ *                         description: Encoded polyline string for map rendering
+ *                       duration:
+ *                         type: integer
+ *                         description: Duration in seconds
+ *                       distance:
+ *                         type: integer
+ *                         description: Distance in meters
+ *                 cached:
+ *                   type: boolean
+ *       422:
+ *         description: Validation error (missing midpointLat or midpointLng)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Group not found or access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /groups/:id/routes_to_midpoint - Get routes from members to midpoint
 router.get('/:id/routes_to_midpoint', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
