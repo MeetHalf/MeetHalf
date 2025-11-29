@@ -12,8 +12,24 @@ import {
   type EventParams,
   type TimeMidpointQuery
 } from '../schemas/events';
+import {
+  joinEventSchema,
+  updateLocationSchema,
+  pokeMemberSchema,
+  myEventsQuerySchema,
+  type JoinEventRequest,
+  type UpdateLocationRequest,
+  type PokeMemberRequest,
+  type MyEventsQuery,
+} from '../schemas/eventActions';
 import { gmapsClient, GMAPS_KEY } from '../lib/gmaps';
 import { createCache, makeCacheKey } from '../lib/cache';
+import { memberService } from '../services/MemberService';
+import { pokeService } from '../services/PokeService';
+import { eventService } from '../services/EventService';
+import { eventRepository } from '../repositories/EventRepository';
+import { memberRepository } from '../repositories/MemberRepository';
+import { generateGuestToken } from '../utils/jwt';
 
 const router = Router();
 
@@ -1466,6 +1482,714 @@ router.get('/:id/routes_to_midpoint', optionalAuthMiddleware, async (req: Reques
     res.status(500).json({
       code: 'INTERNAL_ERROR',
       message: 'Failed to calculate routes'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/join:
+ *   post:
+ *     summary: Join event as guest (no authentication required)
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - nickname
+ *             properties:
+ *               nickname:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 100
+ *                 example: "訪客小美"
+ *               shareLocation:
+ *                 type: boolean
+ *                 default: false
+ *               travelMode:
+ *                 type: string
+ *                 enum: [driving, transit, walking, bicycling]
+ *                 default: driving
+ *     responses:
+ *       201:
+ *         description: Successfully joined event
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 member:
+ *                   $ref: '#/components/schemas/Member'
+ *                 guestToken:
+ *                   type: string
+ *                   description: JWT token for guest authentication
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Event not found
+ */
+// POST /events/:id/join - Join event as guest
+router.post('/:id/join', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const bodyValidation = joinEventSchema.safeParse(req.body);
+    if (!bodyValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid input',
+        errors: bodyValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    const member = await memberService.joinEventAsGuest(id, bodyValidation.data);
+
+    // Generate guest token
+    const guestToken = generateGuestToken(member.id, id);
+
+    res.status(201).json({
+      member,
+      guestToken,
+    });
+  } catch (error: any) {
+    console.error('Error joining event:', error);
+    if (error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'EVENT_NOT_FOUND',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to join event',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/location:
+ *   post:
+ *     summary: Update member location (within time window only)
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - lat
+ *               - lng
+ *             properties:
+ *               lat:
+ *                 type: number
+ *                 format: float
+ *               lng:
+ *                 type: number
+ *                 format: float
+ *               address:
+ *                 type: string
+ *               travelMode:
+ *                 type: string
+ *                 enum: [driving, transit, walking, bicycling]
+ *     responses:
+ *       200:
+ *         description: Location updated successfully
+ *       400:
+ *         description: Validation error or outside time window
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Member not found
+ */
+// POST /events/:id/location - Update member location
+router.post('/:id/location', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const bodyValidation = updateLocationSchema.safeParse(req.body);
+    if (!bodyValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid input',
+        errors: bodyValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    // Get member ID from auth (JWT or guest token)
+    let memberId: number | null = null;
+    if (req.user && 'userId' in req.user) {
+      // Authenticated user - find their member record
+      const jwtPayload = req.user as { userId: number };
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      if (userUserId) {
+        const { memberRepository } = await import('../repositories/MemberRepository');
+        const member = await memberRepository.findByEventIdAndUserId(id, userUserId);
+        if (member) {
+          memberId = member.id;
+        }
+      }
+    } else if (req.user && 'memberId' in req.user) {
+      // Guest token
+      memberId = (req.user as { memberId: number }).memberId;
+    }
+
+    if (!memberId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const { memberService } = await import('../services/MemberService');
+    const updatedMember = await memberService.updateLocation(memberId, bodyValidation.data);
+
+    res.json({ member: updatedMember });
+  } catch (error: any) {
+    console.error('Error updating location:', error);
+    if (error.message === 'Member not found' || error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else if (error.message.includes('time window')) {
+      res.status(400).json({
+        code: 'OUTSIDE_TIME_WINDOW',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to update location',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/arrival:
+ *   post:
+ *     summary: Mark member arrival
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Arrival marked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 arrivalTime:
+ *                   type: string
+ *                   format: date-time
+ *                 status:
+ *                   type: string
+ *                   enum: [early, ontime, late]
+ *                 lateMinutes:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Member not found
+ */
+// POST /events/:id/arrival - Mark member arrival
+router.post('/:id/arrival', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    // Get member ID from auth
+    let memberId: number | null = null;
+    if (req.user && 'userId' in req.user) {
+      const jwtPayload = req.user as { userId: number };
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      if (userUserId) {
+        const { memberRepository } = await import('../repositories/MemberRepository');
+        const member = await memberRepository.findByEventIdAndUserId(id, userUserId);
+        if (member) {
+          memberId = member.id;
+        }
+      }
+    } else if (req.user && 'memberId' in req.user) {
+      memberId = (req.user as { memberId: number }).memberId;
+    }
+
+    if (!memberId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const { memberService } = await import('../services/MemberService');
+    const result = await memberService.markArrival(memberId);
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error marking arrival:', error);
+    if (error.message === 'Member not found' || error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to mark arrival',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/poke:
+ *   post:
+ *     summary: Poke a member (max 3 times per pair)
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - targetMemberId
+ *             properties:
+ *               targetMemberId:
+ *                 type: integer
+ *                 description: ID of the member to poke
+ *     responses:
+ *       200:
+ *         description: Poke successful
+ *       400:
+ *         description: Validation error or poke limit exceeded
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Member not found
+ */
+// POST /events/:id/poke - Poke a member
+router.post('/:id/poke', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { pokeMemberSchema } = await import('../schemas/eventActions');
+    const bodyValidation = pokeMemberSchema.safeParse(req.body);
+    if (!bodyValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid input',
+        errors: bodyValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+    const { targetMemberId } = bodyValidation.data;
+
+    // Get current member ID from auth
+    let fromMemberId: number | null = null;
+    if (req.user && 'userId' in req.user) {
+      const jwtPayload = req.user as { userId: number };
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      if (userUserId) {
+        const { memberRepository } = await import('../repositories/MemberRepository');
+        const member = await memberRepository.findByEventIdAndUserId(id, userUserId);
+        if (member) {
+          fromMemberId = member.id;
+        }
+      }
+    } else if (req.user && 'memberId' in req.user) {
+      fromMemberId = (req.user as { memberId: number }).memberId;
+    }
+
+    if (!fromMemberId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const { pokeService } = await import('../services/PokeService');
+    const result = await pokeService.pokeMember(id, fromMemberId, targetMemberId);
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error poking member:', error);
+    if (error.message === 'Member not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else if (error.message.includes('limit') || error.message.includes('Cannot poke yourself')) {
+      res.status(400).json({
+        code: 'BAD_REQUEST',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to poke member',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/pokes:
+ *   get:
+ *     summary: Get poke statistics for an event
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Poke statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 mostPoked:
+ *                   type: object
+ *                   properties:
+ *                     nickname:
+ *                       type: string
+ *                     count:
+ *                       type: integer
+ *                 mostPoker:
+ *                   type: object
+ *                   properties:
+ *                     nickname:
+ *                       type: string
+ *                     count:
+ *                       type: integer
+ *                 totalPokes:
+ *                   type: integer
+ *       404:
+ *         description: Event not found
+ */
+// GET /events/:id/pokes - Get poke statistics
+router.get('/:id/pokes', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+    const { pokeService } = await import('../services/PokeService');
+    const stats = await pokeService.getPokeStats(id);
+
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Error getting poke stats:', error);
+    if (error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to get poke statistics',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/result:
+ *   get:
+ *     summary: Get event result (rankings) - public endpoint
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Event result with rankings
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 eventId:
+ *                   type: integer
+ *                 rankings:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       memberId:
+ *                         type: integer
+ *                       nickname:
+ *                         type: string
+ *                       arrivalTime:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       status:
+ *                         type: string
+ *                         enum: [early, ontime, late, absent]
+ *                       lateMinutes:
+ *                         type: integer
+ *                         nullable: true
+ *                       rank:
+ *                         type: integer
+ *                         nullable: true
+ *                       pokeCount:
+ *                         type: integer
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     totalMembers:
+ *                       type: integer
+ *                     arrivedCount:
+ *                       type: integer
+ *                     lateCount:
+ *                       type: integer
+ *                     absentCount:
+ *                       type: integer
+ *       404:
+ *         description: Event not found
+ */
+// GET /events/:id/result - Get event result (rankings)
+router.get('/:id/result', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+    const { eventService } = await import('../services/EventService');
+    const result = await eventService.getEventResult(id);
+
+    res.json({ result });
+  } catch (error: any) {
+    console.error('Error getting event result:', error);
+    if (error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to get event result',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/my-events:
+ *   get:
+ *     summary: Get my events list (requires authentication)
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [upcoming, ongoing, ended, all]
+ *           default: all
+ *         description: Filter by status
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *         description: Number of events to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of events to skip
+ *     responses:
+ *       200:
+ *         description: List of events
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 events:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Event'
+ *                 total:
+ *                   type: integer
+ *                 hasMore:
+ *                   type: boolean
+ *       401:
+ *         description: Unauthorized
+ */
+// GET /events/my-events - Get my events list
+router.get('/my-events', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user || !('userId' in req.user)) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const { myEventsQuerySchema } = await import('../schemas/eventActions');
+    const queryValidation = myEventsQuerySchema.safeParse(req.query);
+    if (!queryValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid query parameters',
+        errors: queryValidation.error.errors,
+      });
+      return;
+    }
+
+    const jwtPayload = req.user as { userId: number };
+    const userUserId = await getUserUserId(jwtPayload.userId);
+
+    if (!userUserId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'User not found',
+      });
+      return;
+    }
+
+    const { status, limit, offset } = queryValidation.data;
+    const { eventRepository } = await import('../repositories/EventRepository');
+
+    const events = await eventRepository.findByUserId(userUserId, { status, limit, offset });
+    const total = await eventRepository.countByUserId(userUserId, status);
+    const hasMore = offset + limit < total;
+
+    res.json({
+      events,
+      total,
+      hasMore,
+    });
+  } catch (error) {
+    console.error('Error fetching my events:', error);
+    res.status(500).json({
+      code: 'INTERNAL_ERROR',
+      message: 'Failed to fetch events',
     });
   }
 });

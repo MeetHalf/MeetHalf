@@ -10,6 +10,7 @@ import authRouter from './routes/auth';
 import eventsRouter from './routes/events';
 import membersRouter from './routes/members';
 import mapsRouter from './routes/maps';
+import usersRouter from './routes/users';
 import { mapsRateLimiter } from './middleware/rateLimit';
 
 // Load environment variables
@@ -191,6 +192,7 @@ app.use('/auth', authRouter);
 app.use('/events', eventsRouter);
 app.use('/members', membersRouter);
 app.use('/maps', mapsRateLimiter, mapsRouter);
+app.use('/users', usersRouter);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

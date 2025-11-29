@@ -754,19 +754,19 @@ router.patch('/offline/:id', optionalAuthMiddleware, async (req: Request, res: R
 
     const { id } = memberIdValidation.data;
     
-    // Get current user's name (if authenticated)
-    let currentUserName: string | null = null;
+    // Get current user's userId (if authenticated)
+    let currentUserUserId: string | null = null;
     if (req.user && 'userId' in req.user) {
-      currentUserName = await getUserName((req.user as { userId: number }).userId);
+      currentUserUserId = await getUserUserId((req.user as { userId: number }).userId);
     }
 
-    // Check if this is an offline member
+    // Check if this is an offline member (offline members have userId === null)
     const member = await prisma.member.findUnique({
       where: { id },
       include: { event: true }
     });
 
-    if (!member || !member.isOffline) {
+    if (!member || member.userId !== null) {
       res.status(404).json({
         code: 'NOT_FOUND',
         message: 'Offline member not found'
@@ -775,11 +775,11 @@ router.patch('/offline/:id', optionalAuthMiddleware, async (req: Request, res: R
     }
 
     // Check if user is a member of the same event (if authenticated)
-    if (currentUserName) {
+    if (currentUserUserId) {
       const userMembership = await prisma.member.findFirst({
         where: {
           eventId: member.eventId,
-          username: currentUserName
+          userId: currentUserUserId
         }
       });
 
@@ -873,19 +873,19 @@ router.delete('/offline/:id', optionalAuthMiddleware, async (req: Request, res: 
 
     const { id } = validation.data;
     
-    // Get current user's name (if authenticated)
-    let currentUserName: string | null = null;
+    // Get current user's userId (if authenticated)
+    let currentUserUserId: string | null = null;
     if (req.user && 'userId' in req.user) {
-      currentUserName = await getUserName((req.user as { userId: number }).userId);
+      currentUserUserId = await getUserUserId((req.user as { userId: number }).userId);
     }
 
-    // Check if this is an offline member
+    // Check if this is an offline member (offline members have userId === null)
     const member = await prisma.member.findUnique({
       where: { id },
       include: { event: true }
     });
 
-    if (!member || !member.isOffline) {
+    if (!member || member.userId !== null) {
       res.status(404).json({
         code: 'NOT_FOUND',
         message: 'Offline member not found'
@@ -894,11 +894,11 @@ router.delete('/offline/:id', optionalAuthMiddleware, async (req: Request, res: 
     }
 
     // Check if user is a member of the same event (if authenticated)
-    if (currentUserName) {
+    if (currentUserUserId) {
       const userMembership = await prisma.member.findFirst({
         where: {
           eventId: member.eventId,
-          username: currentUserName
+          userId: currentUserUserId
         }
       });
 
