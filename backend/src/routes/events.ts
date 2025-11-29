@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import prisma from '../lib/prisma';
-import { getUserName, getAnonymousUserId } from '../lib/userUtils';
+import { getUserName, getUserUserId, getAnonymousUserId } from '../lib/userUtils';
 import { 
   createEventSchema, 
   updateEventSchema, 
@@ -12,8 +12,24 @@ import {
   type EventParams,
   type TimeMidpointQuery
 } from '../schemas/events';
+import {
+  joinEventSchema,
+  updateLocationSchema,
+  pokeMemberSchema,
+  myEventsQuerySchema,
+  type JoinEventRequest,
+  type UpdateLocationRequest,
+  type PokeMemberRequest,
+  type MyEventsQuery,
+} from '../schemas/eventActions';
 import { gmapsClient, GMAPS_KEY } from '../lib/gmaps';
 import { createCache, makeCacheKey } from '../lib/cache';
+import { memberService } from '../services/MemberService';
+import { pokeService } from '../services/PokeService';
+import { eventService } from '../services/EventService';
+import { eventRepository } from '../repositories/EventRepository';
+import { memberRepository } from '../repositories/MemberRepository';
+import { generateGuestToken } from '../utils/jwt';
 
 const router = Router();
 
@@ -47,17 +63,31 @@ const routesCache = createCache<any>(5 * 60 * 1000);
  */
 // GET /events - List all events for current user (supports anonymous)
 router.get('/', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  console.log('[EVENTS] GET /events - Request received', {
+    path: req.path,
+    url: req.url,
+    originalUrl: req.originalUrl,
+    hasUser: !!req.user,
+    userType: req.user ? (typeof req.user === 'object' && 'userId' in req.user ? 'authenticated' : 'unknown') : 'anonymous',
+  });
+  
   try {
-    // If user is authenticated, filter by username
+    // If user is authenticated, filter by userId
     if (req.user && 'userId' in req.user) {
+      console.log('[EVENTS] User is authenticated, fetching events for user');
       const jwtPayload = req.user as { userId: number };
-      const userName = await getUserName(jwtPayload.userId);
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      
+      if (!userUserId) {
+        res.json({ events: [] });
+        return;
+      }
       
       const events = await prisma.event.findMany({
         where: {
           members: {
             some: {
-              username: userName
+              userId: userUserId
             }
           }
         },
@@ -76,13 +106,15 @@ router.get('/', optionalAuthMiddleware, async (req: Request, res: Response): Pro
         }
       });
 
+      console.log('[EVENTS] Found events for authenticated user:', events.length);
       res.json({ events });
     } else {
       // Anonymous user - return empty array (events are separate for anonymous users)
+      console.log('[EVENTS] Anonymous user, returning empty array');
       res.json({ events: [] });
     }
   } catch (error) {
-    console.error('Error fetching events:', error);
+    console.error('[EVENTS] Error fetching events:', error);
     res.status(500).json({ 
       code: 'INTERNAL_ERROR',
       message: 'Failed to fetch events' 
@@ -138,31 +170,31 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       return;
     }
 
-    const { name } = validation.data as CreateEventRequest;
+    const { name, startTime, endTime } = validation.data as CreateEventRequest;
     
     // Determine owner name - use authenticated user's name or anonymous identifier
     let ownerName: string;
+    let memberUserId: string | null = null;
     if (req.user && 'userId' in req.user) {
       const jwtPayload = req.user as { userId: number };
       ownerName = await getUserName(jwtPayload.userId);
+      memberUserId = await getUserUserId(jwtPayload.userId);
     } else {
       // Anonymous user - generate a session-based identifier
       const sessionId = req.headers['x-session-id'] as string || req.cookies.sessionId || '';
       ownerName = getAnonymousUserId(sessionId);
+      memberUserId = ownerName; // For anonymous, use the same identifier
     }
-
-    // Determine username for the creator member
-    const username = req.user && 'userId' in req.user 
-      ? await getUserName((req.user as { userId: number }).userId)
-      : ownerName; // For anonymous, use the same identifier
 
     const event = await prisma.event.create({
       data: {
         name,
         ownerName,
+        startTime,
+        endTime,
         members: {
           create: {
-            username: username
+            userId: memberUserId
           }
         }
       },
@@ -360,10 +392,13 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
     const { id } = paramsValidation.data as EventParams;
     const { name } = bodyValidation.data as UpdateEventRequest;
     
-    // Get current user's name (or use anonymous identifier)
+    // Get current user's userId and name (or use anonymous identifier)
+    let userUserId: string | null = null;
     let userName: string | null = null;
     if (req.user && 'userId' in req.user) {
-      userName = await getUserName((req.user as { userId: number }).userId);
+      const jwtPayload = req.user as { userId: number };
+      userUserId = await getUserUserId(jwtPayload.userId);
+      userName = await getUserName(jwtPayload.userId);
     }
 
     // Check if event exists
@@ -382,8 +417,8 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
       return;
     }
 
-    // Check if user is the owner (by ownerName match) or a member
-    if (userName && (event.ownerName === userName || event.members.some(m => m.username === userName))) {
+    // Check if user is the owner (by ownerName match) or a member (by userId match)
+    if (userName && userUserId && (event.ownerName === userName || event.members.some(m => m.userId === userUserId))) {
       const updatedEvent = await prisma.event.update({
         where: { id },
         data: { name },
@@ -696,7 +731,7 @@ router.get('/:id/midpoint', optionalAuthMiddleware, async (req: Request, res: Re
             const route = directionsResult.data.routes[0];
             const leg = route.legs[0];
             return {
-              username: member.username || member.nickname || 'Unknown',
+              username: member.userId || member.nickname || 'Unknown',
               memberId: member.id,
               travelMode: member.travelMode || 'driving',
               duration: leg.duration.text,
@@ -710,7 +745,7 @@ router.get('/:id/midpoint', optionalAuthMiddleware, async (req: Request, res: Re
         }
         
         return {
-          username: member.username || member.nickname || 'Unknown',
+          username: member.userId || member.nickname || 'Unknown',
           memberId: member.id,
           travelMode: member.travelMode || 'driving',
           duration: '無法計算',
@@ -938,7 +973,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
     console.log(`[Time Midpoint] Starting iterative optimization from geometric center`);
     console.log(`[Time Midpoint] Event members:`, event.members.map((m: any) => ({
       id: m.id,
-      username: m.username || m.nickname,
+      username: m.userId || m.nickname,
       lat: m.lat,
       lng: m.lng,
       travelMode: m.travelMode
@@ -980,7 +1015,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
           if (result.data.status === 'OK' && result.data.rows[0].elements[0].status === 'OK') {
             const time = result.data.rows[0].elements[0].duration.value;
             travelTimes.push(time);
-            console.log(`[Time Midpoint] Member ${member.username || member.nickname || member.id} (${memberMode}): ${Math.round(time / 60)} min`);
+            console.log(`[Time Midpoint] Member ${member.userId || member.nickname || member.id} (${memberMode}): ${Math.round(time / 60)} min`);
           } else if (memberMode === 'transit') {
             // Fallback to driving for transit
             const fallbackResult = await gmapsClient.distancematrix({
@@ -994,7 +1029,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
             if (fallbackResult.data.status === 'OK' && fallbackResult.data.rows[0].elements[0].status === 'OK') {
               const time = fallbackResult.data.rows[0].elements[0].duration.value;
               travelTimes.push(time);
-              console.log(`[Time Midpoint] Member ${member.username || member.nickname || member.id} (fallback driving): ${Math.round(time / 60)} min`);
+              console.log(`[Time Midpoint] Member ${member.userId || member.nickname || member.id} (fallback driving): ${Math.round(time / 60)} min`);
             } else {
               allSuccess = false;
               break;
@@ -1107,7 +1142,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
     for (const member of event.members) {
       try {
         let memberMode = member.travelMode || 'driving';
-        console.log(`[Time Midpoint] Calling Distance Matrix for member ${member.username || member.nickname || member.id} with mode: ${memberMode}`);
+        console.log(`[Time Midpoint] Calling Distance Matrix for member ${member.userId || member.nickname || member.id} with mode: ${memberMode}`);
         
         let result = await gmapsClient.distancematrix({
           params: {
@@ -1122,7 +1157,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
         if (result.data.status === 'OK') {
           const hasValidRoutes = result.data.rows[0].elements.some((e: any) => e.status === 'OK');
           if (!hasValidRoutes && memberMode === 'transit') {
-            console.log(`[Time Midpoint] Transit failed for member ${member.username || member.nickname || member.id}, falling back to driving`);
+            console.log(`[Time Midpoint] Transit failed for member ${member.userId || member.nickname || member.id}, falling back to driving`);
             result = await gmapsClient.distancematrix({
               params: {
                 origins: [`${member.lat},${member.lng}`],
@@ -1134,14 +1169,14 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
           }
           distanceMatrixResults.push(result.data.rows[0]);
         } else {
-          console.error(`Distance Matrix error for member ${member.username || member.nickname || member.id}:`, result.data.status);
+          console.error(`Distance Matrix error for member ${member.userId || member.nickname || member.id}:`, result.data.status);
           // Add empty row for this member
           distanceMatrixResults.push({
             elements: destinations.map(() => ({ status: 'ZERO_RESULTS' }))
           });
         }
       } catch (error) {
-        console.error(`Error calling Distance Matrix for member ${member.username || member.nickname || member.id}:`, error);
+        console.error(`Error calling Distance Matrix for member ${member.userId || member.nickname || member.id}:`, error);
         // Add empty row for this member
         distanceMatrixResults.push({
           elements: destinations.map(() => ({ status: 'ZERO_RESULTS' }))
@@ -1160,7 +1195,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
     // Step 6: Score candidates
     type MemberTime = {
       memberId: number;
-      username: string;
+      username: string; // Keep as username for response (can be userId or nickname)
       travelTime: number;
       distance: number;
     };
@@ -1196,7 +1231,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
 
         memberTimes.push({
           memberId: member.id,
-          username: member.username || member.nickname || 'Unknown',
+          username: member.userId || member.nickname || 'Unknown',
           travelTime,
           distance
         });
@@ -1433,7 +1468,7 @@ router.get('/:id/routes_to_midpoint', optionalAuthMiddleware, async (req: Reques
           
           routes.push({
             memberId: member.id,
-            username: member.username || member.nickname || 'Unknown',
+            username: member.userId || member.nickname || 'Unknown',
             polyline: route.overview_polyline.points,
             duration: leg.duration.value,
             distance: leg.distance.value
@@ -1462,6 +1497,707 @@ router.get('/:id/routes_to_midpoint', optionalAuthMiddleware, async (req: Reques
   }
 });
 
+/**
+ * @swagger
+ * /events/{id}/join:
+ *   post:
+ *     summary: Join event as guest (no authentication required)
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - nickname
+ *             properties:
+ *               nickname:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 100
+ *                 example: "訪客小美"
+ *               shareLocation:
+ *                 type: boolean
+ *                 default: false
+ *               travelMode:
+ *                 type: string
+ *                 enum: [driving, transit, walking, bicycling]
+ *                 default: driving
+ *     responses:
+ *       201:
+ *         description: Successfully joined event
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 member:
+ *                   $ref: '#/components/schemas/Member'
+ *                 guestToken:
+ *                   type: string
+ *                   description: JWT token for guest authentication
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Event not found
+ */
+// POST /events/:id/join - Join event as guest
+router.post('/:id/join', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const bodyValidation = joinEventSchema.safeParse(req.body);
+    if (!bodyValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid input',
+        errors: bodyValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    const member = await memberService.joinEventAsGuest(id, bodyValidation.data);
+
+    // Generate guest token
+    const guestToken = generateGuestToken(member.id, id);
+
+    res.status(201).json({
+      member,
+      guestToken,
+    });
+  } catch (error: any) {
+    console.error('Error joining event:', error);
+    if (error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'EVENT_NOT_FOUND',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to join event',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/location:
+ *   post:
+ *     summary: Update member location (within time window only)
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - lat
+ *               - lng
+ *             properties:
+ *               lat:
+ *                 type: number
+ *                 format: float
+ *               lng:
+ *                 type: number
+ *                 format: float
+ *               address:
+ *                 type: string
+ *               travelMode:
+ *                 type: string
+ *                 enum: [driving, transit, walking, bicycling]
+ *     responses:
+ *       200:
+ *         description: Location updated successfully
+ *       400:
+ *         description: Validation error or outside time window
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Member not found
+ */
+// POST /events/:id/location - Update member location
+router.post('/:id/location', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const bodyValidation = updateLocationSchema.safeParse(req.body);
+    if (!bodyValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid input',
+        errors: bodyValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    // Get member ID from auth (JWT or guest token)
+    let memberId: number | null = null;
+    if (req.user && 'userId' in req.user) {
+      // Authenticated user - find their member record
+      const jwtPayload = req.user as { userId: number };
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      if (userUserId) {
+        const { memberRepository } = await import('../repositories/MemberRepository');
+        const member = await memberRepository.findByEventIdAndUserId(id, userUserId);
+        if (member) {
+          memberId = member.id;
+        }
+      }
+    } else if (req.user && 'memberId' in req.user) {
+      // Guest token
+      memberId = (req.user as { memberId: number }).memberId;
+    }
+
+    if (!memberId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const updatedMember = await memberService.updateLocation(memberId, bodyValidation.data);
+
+    res.json({ member: updatedMember });
+  } catch (error: any) {
+    console.error('Error updating location:', error);
+    if (error.message === 'Member not found' || error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else if (error.message.includes('time window')) {
+      res.status(400).json({
+        code: 'OUTSIDE_TIME_WINDOW',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to update location',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/arrival:
+ *   post:
+ *     summary: Mark member arrival
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Arrival marked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 arrivalTime:
+ *                   type: string
+ *                   format: date-time
+ *                 status:
+ *                   type: string
+ *                   enum: [early, ontime, late]
+ *                 lateMinutes:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Member not found
+ */
+// POST /events/:id/arrival - Mark member arrival
+router.post('/:id/arrival', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    // Get member ID from auth
+    let memberId: number | null = null;
+    if (req.user && 'userId' in req.user) {
+      const jwtPayload = req.user as { userId: number };
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      if (userUserId) {
+        const { memberRepository } = await import('../repositories/MemberRepository');
+        const member = await memberRepository.findByEventIdAndUserId(id, userUserId);
+        if (member) {
+          memberId = member.id;
+        }
+      }
+    } else if (req.user && 'memberId' in req.user) {
+      memberId = (req.user as { memberId: number }).memberId;
+    }
+
+    if (!memberId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const result = await memberService.markArrival(memberId);
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error marking arrival:', error);
+    if (error.message === 'Member not found' || error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to mark arrival',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/poke:
+ *   post:
+ *     summary: Poke a member (max 3 times per pair)
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - targetMemberId
+ *             properties:
+ *               targetMemberId:
+ *                 type: integer
+ *                 description: ID of the member to poke
+ *     responses:
+ *       200:
+ *         description: Poke successful
+ *       400:
+ *         description: Validation error or poke limit exceeded
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Member not found
+ */
+// POST /events/:id/poke - Poke a member
+router.post('/:id/poke', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const bodyValidation = pokeMemberSchema.safeParse(req.body);
+    if (!bodyValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid input',
+        errors: bodyValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+    const { targetMemberId } = bodyValidation.data;
+
+    // Get current member ID from auth
+    let fromMemberId: number | null = null;
+    if (req.user && 'userId' in req.user) {
+      const jwtPayload = req.user as { userId: number };
+      const userUserId = await getUserUserId(jwtPayload.userId);
+      if (userUserId) {
+        const { memberRepository } = await import('../repositories/MemberRepository');
+        const member = await memberRepository.findByEventIdAndUserId(id, userUserId);
+        if (member) {
+          fromMemberId = member.id;
+        }
+      }
+    } else if (req.user && 'memberId' in req.user) {
+      fromMemberId = (req.user as { memberId: number }).memberId;
+    }
+
+    if (!fromMemberId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const result = await pokeService.pokeMember(id, fromMemberId, targetMemberId);
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error poking member:', error);
+    if (error.message === 'Member not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else if (error.message.includes('limit') || error.message.includes('Cannot poke yourself')) {
+      res.status(400).json({
+        code: 'BAD_REQUEST',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to poke member',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/pokes:
+ *   get:
+ *     summary: Get poke statistics for an event
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Poke statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 mostPoked:
+ *                   type: object
+ *                   properties:
+ *                     nickname:
+ *                       type: string
+ *                     count:
+ *                       type: integer
+ *                 mostPoker:
+ *                   type: object
+ *                   properties:
+ *                     nickname:
+ *                       type: string
+ *                     count:
+ *                       type: integer
+ *                 totalPokes:
+ *                   type: integer
+ *       404:
+ *         description: Event not found
+ */
+// GET /events/:id/pokes - Get poke statistics
+router.get('/:id/pokes', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+    const stats = await pokeService.getPokeStats(id);
+
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Error getting poke stats:', error);
+    if (error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to get poke statistics',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/result:
+ *   get:
+ *     summary: Get event result (rankings) - public endpoint
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Event result with rankings
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 eventId:
+ *                   type: integer
+ *                 rankings:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       memberId:
+ *                         type: integer
+ *                       nickname:
+ *                         type: string
+ *                       arrivalTime:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       status:
+ *                         type: string
+ *                         enum: [early, ontime, late, absent]
+ *                       lateMinutes:
+ *                         type: integer
+ *                         nullable: true
+ *                       rank:
+ *                         type: integer
+ *                         nullable: true
+ *                       pokeCount:
+ *                         type: integer
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     totalMembers:
+ *                       type: integer
+ *                     arrivedCount:
+ *                       type: integer
+ *                     lateCount:
+ *                       type: integer
+ *                     absentCount:
+ *                       type: integer
+ *       404:
+ *         description: Event not found
+ */
+// GET /events/:id/result - Get event result (rankings)
+router.get('/:id/result', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+    const result = await eventService.getEventResult(id);
+
+    res.json({ result });
+  } catch (error: any) {
+    console.error('Error getting event result:', error);
+    if (error.message === 'Event not found') {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to get event result',
+      });
+    }
+  }
+});
+
+/**
+ * @swagger
+ * /events/my-events:
+ *   get:
+ *     summary: Get my events list (requires authentication)
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [upcoming, ongoing, ended, all]
+ *           default: all
+ *         description: Filter by status
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *         description: Number of events to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of events to skip
+ *     responses:
+ *       200:
+ *         description: List of events
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 events:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Event'
+ *                 total:
+ *                   type: integer
+ *                 hasMore:
+ *                   type: boolean
+ *       401:
+ *         description: Unauthorized
+ */
+// GET /events/my-events - Get my events list
+router.get('/my-events', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user || !('userId' in req.user)) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const queryValidation = myEventsQuerySchema.safeParse(req.query);
+    if (!queryValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid query parameters',
+        errors: queryValidation.error.errors,
+      });
+      return;
+    }
+
+    const jwtPayload = req.user as { userId: number };
+    const userUserId = await getUserUserId(jwtPayload.userId);
+
+    if (!userUserId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'User not found',
+      });
+      return;
+    }
+
+    const { status, limit, offset } = queryValidation.data;
+
+    const events = await eventRepository.findByUserId(userUserId, { status, limit, offset });
+    const total = await eventRepository.countByUserId(userUserId, status);
+    const hasMore = offset + limit < total;
+
+    res.json({
+      events,
+      total,
+      hasMore,
+    });
+  } catch (error) {
+    console.error('Error fetching my events:', error);
+    res.status(500).json({
+      code: 'INTERNAL_ERROR',
+      message: 'Failed to fetch events',
+    });
+  }
+});
+
+console.log('[EVENTS_ROUTER] Events router initialized and exported');
 export default router;
 
 

@@ -10,10 +10,19 @@ import authRouter from './routes/auth';
 import eventsRouter from './routes/events';
 import membersRouter from './routes/members';
 import mapsRouter from './routes/maps';
+import usersRouter from './routes/users';
 import { mapsRateLimiter } from './middleware/rateLimit';
 
 // Load environment variables
 dotenv.config();
+
+console.log('[INIT] Starting application initialization...');
+console.log('[INIT] Environment:', {
+  NODE_ENV: process.env.NODE_ENV,
+  VERCEL: process.env.VERCEL,
+  VERCEL_URL: process.env.VERCEL_URL,
+  PORT: process.env.PORT,
+});
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -68,11 +77,17 @@ const isVercelOrigin = (origin: string): boolean => {
 app.use(
   cors({
     origin: (origin, callback) => {
+      console.log('[CORS] Checking origin:', origin);
+      
       // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        console.log('[CORS] ✓ No origin, allowing request');
+        return callback(null, true);
+      }
       
       // In development, allow all origins
       if (process.env.NODE_ENV === 'development') {
+        console.log('[CORS] ✓ Development mode, allowing origin:', origin);
         return callback(null, true);
       }
       
@@ -80,20 +95,23 @@ app.use(
       if (process.env.FRONTEND_ORIGIN) {
         const isAllowed = allowedOrigins.some(allowed => origin === allowed);
         if (isAllowed) {
+          console.log('[CORS] ✓ Origin allowed (FRONTEND_ORIGIN match):', origin);
           return callback(null, true);
         }
         // If FRONTEND_ORIGIN is set but doesn't match, check if it's a Vercel origin
         // (useful for preview deployments that match the pattern)
         if (isVercelOrigin(origin)) {
+          console.log('[CORS] ✓ Origin allowed (Vercel origin):', origin);
           return callback(null, true);
         }
-        console.warn(`CORS blocked origin: ${origin} (FRONTEND_ORIGIN is set to: ${process.env.FRONTEND_ORIGIN})`);
+        console.warn(`[CORS] ✗ Blocked origin: ${origin} (FRONTEND_ORIGIN is set to: ${process.env.FRONTEND_ORIGIN})`);
         return callback(new Error('Not allowed by CORS'));
       }
       
       // If FRONTEND_ORIGIN is not set, allow all Vercel preview deployments
       // (fallback for convenience when FRONTEND_ORIGIN is not configured)
       if (isVercelOrigin(origin)) {
+        console.log('[CORS] ✓ Origin allowed (Vercel origin, no FRONTEND_ORIGIN):', origin);
         return callback(null, true);
       }
       
@@ -101,9 +119,10 @@ app.use(
       const isAllowed = allowedOrigins.some(allowed => origin === allowed);
       
       if (isAllowed) {
+        console.log('[CORS] ✓ Origin allowed (explicit match):', origin);
         callback(null, true);
       } else {
-        console.warn(`CORS blocked origin: ${origin}`);
+        console.warn(`[CORS] ✗ Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -117,8 +136,26 @@ app.use(passport.initialize());
 app.use(cookieParser());
 app.use(express.json());
 
+// Request logging middleware (log all incoming requests)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  console.log('[REQUEST]', {
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    originalUrl: req.originalUrl,
+    query: req.query,
+    headers: {
+      origin: req.headers.origin,
+      host: req.headers.host,
+      'user-agent': req.headers['user-agent'],
+    },
+  });
+  next();
+});
+
 // Health check
 app.get('/healthz', (req: Request, res: Response) => {
+  console.log('[HEALTH] Health check requested');
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -187,16 +224,32 @@ app.get('/api-docs', (req: Request, res: Response) => {
 });
 
 // Routes
+console.log('[ROUTES] Registering routes...');
 app.use('/auth', authRouter);
+console.log('[ROUTES] ✓ /auth registered');
 app.use('/events', eventsRouter);
+console.log('[ROUTES] ✓ /events registered');
 app.use('/members', membersRouter);
+console.log('[ROUTES] ✓ /members registered');
 app.use('/maps', mapsRateLimiter, mapsRouter);
+console.log('[ROUTES] ✓ /maps registered');
+app.use('/users', usersRouter);
+console.log('[ROUTES] ✓ /users registered');
+console.log('[ROUTES] All routes registered successfully');
 
 // 404 handler
 app.use((req: Request, res: Response) => {
+  console.log('[404] Route not found:', {
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    originalUrl: req.originalUrl,
+  });
   res.status(404).json({
     code: 'NOT_FOUND',
     message: 'Route not found',
+    path: req.path,
+    method: req.method,
   });
 });
 
@@ -208,7 +261,15 @@ interface AppError extends Error {
 }
 
 app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err);
+  console.error('[ERROR] Unhandled error:', {
+    error: err.message,
+    stack: err.stack,
+    code: err.code,
+    status: err.status,
+    path: req.path,
+    method: req.method,
+    url: req.url,
+  });
   
   res.status(err.status || 500).json({
     code: err.code || 'INTERNAL_ERROR',
@@ -217,14 +278,20 @@ app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// Export app for testing
+// Export app for Vercel serverless function
+// @vercel/node automatically handles Express apps exported as default
+console.log('[EXPORT] Exporting Express app for Vercel...');
 export default app;
+console.log('[EXPORT] ✓ App exported successfully');
 
-// Guard: do not start server in test mode
-if (process.env.NODE_ENV === 'test') {
-  // Test mode, skip server startup
+// Guard: do not start server in test mode or Vercel environment
+if (process.env.NODE_ENV === 'test' || process.env.VERCEL) {
+  // Test mode or Vercel, skip server startup
+  // Vercel will use the exported handler instead
+  console.log('[SERVER] Skipping server startup (test mode or Vercel environment)');
+  console.log('[SERVER] Vercel will use the exported handler');
 } else {
-  // Start server only in non-test environments
+  // Start server only in non-test, non-Vercel environments
   // Use 0.0.0.0 to allow external connections (e.g., from containers)
   // Use 127.0.0.1 for local development security
   const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');

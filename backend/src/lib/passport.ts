@@ -3,6 +3,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import prisma from './prisma';
 import { signToken } from '../utils/jwt';
+import { generateUserId } from './userUtils';
 
 // Note: We don't use Passport sessions - we use JWT cookies instead
 // serializeUser and deserializeUser are not needed
@@ -22,7 +23,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           if (process.env.VERCEL_URL) {
             return `https://${process.env.VERCEL_URL}/auth/google/callback`;
           }
-          return 'http://localhost:3000/auth/google/callback';
+          return 'http://meet-half-backend.vercel.app/auth/google/callback';;
         })(),
       },
       async (accessToken: any, refreshToken: any, profile: any, done: any) => {
@@ -47,9 +48,16 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
           if (user) {
             // Update existing user with Google info
+            // Generate userId if missing
+            let userId = user.userId;
+            if (!userId) {
+              userId = await generateUserId(email);
+            }
+            
             user = await prisma.user.update({
               where: { id: user.id },
               data: {
+                userId,
                 googleId: profile.id,
                 name: user.name || name,
                 email,
@@ -59,9 +67,11 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
               },
             });
           } else {
-            // Create new user
+            // Create new user with generated userId
+            const userId = await generateUserId(email);
             user = await prisma.user.create({
               data: {
+                userId,
                 googleId: profile.id,
                 email,
                 name,
@@ -90,12 +100,18 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
         callbackURL: (() => {
           // Priority: BACKEND_URL > VERCEL_URL > localhost
           if (process.env.BACKEND_URL) {
-            return `${process.env.BACKEND_URL}/auth/github/callback`;
+            const url = `${process.env.BACKEND_URL}/auth/github/callback`;
+            console.log('[PASSPORT] GitHub callback URL (BACKEND_URL):', url);
+            return url;
           }
           if (process.env.VERCEL_URL) {
-            return `https://${process.env.VERCEL_URL}/auth/github/callback`;
+            const url = `https://${process.env.VERCEL_URL}/auth/github/callback`;
+            console.log('[PASSPORT] GitHub callback URL (VERCEL_URL):', url);
+            return url;
           }
-          return 'http://localhost:3000/auth/github/callback';
+          const url = 'http://localhost:3000/auth/github/callback';
+          console.log('[PASSPORT] GitHub callback URL (localhost):', url);
+          return url;
         })(),
       },
       async (accessToken: any, refreshToken: any, profile: any, done: any) => {
@@ -116,9 +132,16 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 
           if (user) {
             // Update existing user with GitHub info
+            // Generate userId if missing
+            let userId = user.userId;
+            if (!userId) {
+              userId = await generateUserId(email);
+            }
+            
             user = await prisma.user.update({
               where: { id: user.id },
               data: {
+                userId,
                 githubId: profile.id.toString(),
                 name: user.name || name,
                 email,
@@ -128,9 +151,11 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
               },
             });
           } else {
-            // Create new user
+            // Create new user with generated userId
+            const userId = await generateUserId(email);
             user = await prisma.user.create({
               data: {
+                userId,
                 githubId: profile.id.toString(),
                 email,
                 name,

@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const createEventSchema = z.object({
   name: z.string().min(1, 'Event name is required').max(100, 'Event name must be less than 100 characters'),
+  startTime: z.coerce.date(),
+  endTime: z.coerce.date(),
 });
 
 export const updateEventSchema = z.object({
