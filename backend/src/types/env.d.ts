@@ -2,13 +2,11 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       PORT?: string;
-      DATABASE_URL?: string;
+      DATABASE_URL: string;
       JWT_SECRET: string;
       FRONTEND_ORIGIN?: string;
       NODE_ENV?: 'development' | 'production' | 'test';
-      // Turso (libSQL) specific
-      DATABASE_TURSO_DATABASE_URL?: string;
-      DATABASE_TURSO_AUTH_TOKEN?: string;
+      GOOGLE_MAPS_SERVER_KEY?: string;
     }
   }
 }

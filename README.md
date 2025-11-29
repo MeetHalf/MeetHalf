@@ -22,7 +22,7 @@ MeetHalf 是一個幫助朋友或同事快速找到「最方便會面的地點�
 ## 技術架構
 
 - **Frontend**: Vite + React 18 + TypeScript + Material-UI + Google Maps
-- **Backend**: Node.js + Express + TypeScript + Prisma + SQLite
+- **Backend**: Node.js + Express + TypeScript + Prisma + PostgreSQL
 - **Auth**: JWT (HttpOnly Cookie) + bcrypt
 
 ## 功能階段
@@ -174,7 +174,7 @@ graph TB
     end
     
     subgraph "Database"
-        K[(SQLite<br/>dev.db)]
+        K[(PostgreSQL<br/>meethalf)]
     end
     
     subgraph "External APIs"
@@ -230,7 +230,7 @@ graph TB
 - **限流**: Rate Limiter（防止 API 濫用）
 
 #### 資料庫 (Database)
-- **類型**: SQLite（開發環境）
+- **類型**: PostgreSQL
 - **ORM**: Prisma
 - **Schema**: User, Group, Member
 
@@ -744,7 +744,7 @@ npm run lint
 - Node.js + Express
 - TypeScript
 - Prisma（ORM）
-- SQLite（開發資料庫）
+- PostgreSQL
 - bcrypt（密碼雜湊）
 - jsonwebtoken（JWT 驗證）
 - Zod（Schema 驗證）
@@ -975,7 +975,7 @@ cors({
 #### 資料庫安全
 
 **現況**:
-- ✅ SQLite 檔案不上傳至 Git
+- ✅ PostgreSQL 連接字串僅存在於環境變數中
 - ✅ 密碼已雜湊，無明文密碼
 
 **生產環境建議**:
@@ -1038,7 +1038,7 @@ cors({
 | **UI 框架** | Material UI 等 | ✅ 完成 | Material-UI (MUI v5) |
 | **後端框架** | Node.js + Express | ✅ 完成 | Express + TypeScript |
 | **RESTful API** | 至少 /auth + 1 資源 | ✅ 完成 | /auth, /groups, /members, /maps |
-| **資料庫** | SQLite/MongoDB/PostgreSQL | ✅ 完成 | SQLite + Prisma ORM |
+| **資料庫** | SQLite/MongoDB/PostgreSQL | ✅ 完成 | PostgreSQL + Prisma ORM |
 | **Google Maps (前端)** | Maps JavaScript API | ✅ 完成 | 地圖顯示、標記、互動 |
 | **Google Maps (後端)** | Geocoding/Places/Directions | ✅ 完成 | 4 個 API 全部整合 |
 

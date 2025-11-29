@@ -2,16 +2,13 @@ import { beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 
 // Force test database isolation
-process.env.DATABASE_URL = 'file:./test.db';
+// Use a separate test database or in-memory for tests
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgresql://meethalf:meethalf_password@localhost:5432/meethalf_test';
 process.env.NODE_ENV = 'test';
 
 // Create test database instance
 export const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
+  log: ['error', 'warn'],
 });
 
 beforeAll(async () => {
