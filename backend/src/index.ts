@@ -219,14 +219,16 @@ app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// Export app for testing
+// Export app for Vercel serverless function
+// @vercel/node automatically handles Express apps exported as default
 export default app;
 
-// Guard: do not start server in test mode
-if (process.env.NODE_ENV === 'test') {
-  // Test mode, skip server startup
+// Guard: do not start server in test mode or Vercel environment
+if (process.env.NODE_ENV === 'test' || process.env.VERCEL) {
+  // Test mode or Vercel, skip server startup
+  // Vercel will use the exported handler instead
 } else {
-  // Start server only in non-test environments
+  // Start server only in non-test, non-Vercel environments
   // Use 0.0.0.0 to allow external connections (e.g., from containers)
   // Use 127.0.0.1 for local development security
   const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
