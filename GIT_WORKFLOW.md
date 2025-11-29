@@ -206,6 +206,66 @@ git commit              # 完成 merge
 - 經常 pull 最新變更避免衝突
 - Push 前先在本地測試
 - 使用 `closes #XX` 自動關閉 issue
+- **Merge 到 main 時使用 squash merge** 保持歷史乾淨
+
+---
+
+## 🎯 Squash Merge 到 Main
+
+### 為什麼使用 Squash Merge？
+
+✅ Main branch 歷史乾淨簡潔  
+✅ 每個 commit 代表一個完整功能  
+✅ 易於 revert 整個功能  
+✅ Dev branch 保留詳細歷史供查閱
+
+### 如何執行
+
+```bash
+# 1. 切換到 main
+git checkout main
+git pull origin main
+
+# 2. Squash merge dev branch
+git merge frontend-dev --squash
+
+# 3. 一次 commit 所有變更（記得 closes #XX）
+git commit -m "feat: complete EventRoom and ranking features
+
+- Add EventRoom page with real-time tracking
+- Add ranking popup with medals
+- Add Sidebar with 4 tabs
+- Mobile-first RWD optimization
+
+closes #16, closes #17, closes #18"
+
+# 4. Push 到 main
+git push origin main  # Issues 自動關閉 ✅
+```
+
+### 範例
+
+**Frontend-dev 有 5 個 commits:**
+```
+a1b2c3 feat: add EventRoom UI
+d4e5f6 fix: adjust mobile layout  
+g7h8i9 feat: add Pusher hook
+j1k2l3 feat: add ranking popup
+m4n5o6 style: improve animations
+```
+
+**Squash merge 到 main 後變成 1 個:**
+```
+xyz123 feat: complete EventRoom and ranking (closes #16, #17, #18)
+```
+
+### 注意事項
+
+⚠️ Squash merge 後，main 和 dev branch 會分叉  
+⚠️ 不要再把 main merge 回 dev branch  
+⚠️ Dev branch 繼續從上次的 commit 開發即可
+
+---
 
 ## 📚 參考資源
 
