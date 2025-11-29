@@ -263,13 +263,13 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       ownerId = userUserId; // Use authenticated user's userId as ownerId
       memberUserId = userUserId;
       
-      // If ownerId was provided, validate it matches the authenticated user
+      // If ownerId was provided but doesn't match, log a warning but use authenticated user's userId
+      // This allows frontend to always send ownerId without checking authentication status
       if (providedOwnerId && providedOwnerId !== userUserId) {
-        res.status(403).json({
-          code: 'FORBIDDEN',
-          message: 'Cannot create event with different ownerId than authenticated user'
+        console.warn('[EVENTS] Authenticated user provided different ownerId, ignoring it:', {
+          providedOwnerId,
+          authenticatedUserId: userUserId,
         });
-        return;
       }
     } else {
       // Anonymous user: ownerId must be provided

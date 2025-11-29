@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { eventsApi } from '../api/events';
 import {
   Box,
   Container,
@@ -34,6 +36,7 @@ import { loadGoogleMaps } from '../lib/googleMapsLoader';
 
 export default function CreateEvent() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   // Form state
   const [formData, setFormData] = useState({
@@ -150,28 +153,30 @@ export default function CreateEvent() {
     setSubmitting(true);
     
     try {
-      // 調用真實 API
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      
-      // Generate anonymous ownerId (guest user)
-      // Backend expects ownerId, for anonymous users we use a guest_ prefix
-      const anonymousOwnerId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const response = await axios.post(`${backendUrl}/events`, {
+      // Prepare request data
+      const requestData: any = {
         name: formData.name.trim(),
         startTime: formData.startTime.toISOString(),
         endTime: formData.endTime.toISOString(),
-        ownerId: anonymousOwnerId,  // Required by backend
         useMeetHalf: formData.useMeetHalf,
         meetingPointName: formData.useMeetHalf ? null : formData.meetingPointName,
         meetingPointAddress: formData.useMeetHalf ? null : formData.meetingPointAddress,
         meetingPointLat: formData.useMeetHalf ? null : formData.meetingPointLat,
         meetingPointLng: formData.useMeetHalf ? null : formData.meetingPointLng,
-      }, {
-        withCredentials: true,
-      });
+      };
       
-      const createdEventId = response.data.event.id;
+      // Only add ownerId for anonymous users
+      // Authenticated users: backend will automatically use their userId from JWT
+      if (!user) {
+        // Anonymous user: generate guest ownerId
+        const anonymousOwnerId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        requestData.ownerId = anonymousOwnerId;
+      }
+      // If user is authenticated, don't pass ownerId - backend will use JWT userId
+      
+      const response = await eventsApi.createEvent(requestData);
+      
+      const createdEventId = response.event.id;
       const createdShareUrl = `${window.location.origin}/events/${createdEventId}`;
       
       setEventId(createdEventId);
