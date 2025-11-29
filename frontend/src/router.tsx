@@ -3,7 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Events from './pages/Events';
-import GroupDetail from './pages/EventsDetail';
+import EventDetail from './pages/EventDetail';
 import { Box, CircularProgress } from '@mui/material';
 
 // Loading Route wrapper
@@ -44,7 +44,7 @@ export const router = createBrowserRouter([
     path: '/events/:id',
     element: (
       <LoadingRoute>
-        <GroupDetail />
+        <EventDetail />
       </LoadingRoute>
     ),
   },

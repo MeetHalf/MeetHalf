@@ -20,63 +20,52 @@ import type {
 // ============================================
 
 export const mockEvent1: Event = {
-  id: 'evt_hotpot_friday',
-  title: '週五火鍋聚會',
-  datetime: '2025-12-06T19:00:00+08:00',
-  meetingPoint: {
-    lat: 25.033,
-    lng: 121.565,
-    name: '台北101',
-    address: '台北市信義區信義路五段7號',
-  },
-  timeWindow: {
-    before: 30,
-    after: 30,
-  },
-  ownerId: 1,
+  id: 1,
+  name: '週五火鍋聚會',
+  ownerName: 'user123',
+  startTime: '2025-12-06T19:00:00+08:00',
+  endTime: '2025-12-06T21:00:00+08:00',
+  meetingPointLat: 25.033,
+  meetingPointLng: 121.565,
+  meetingPointName: '台北101',
+  meetingPointAddress: '台北市信義區信義路五段7號',
   status: 'ongoing',
   useMeetHalf: false,
+  groupId: undefined,
   createdAt: '2025-11-29T10:00:00Z',
   updatedAt: '2025-11-29T10:00:00Z',
 };
 
 export const mockEvent2: Event = {
-  id: 'evt_movie_sunday',
-  title: '週日電影',
-  datetime: '2025-12-08T14:00:00+08:00',
-  meetingPoint: {
-    lat: 25.042,
-    lng: 121.517,
-    name: '台北車站',
-    address: '台北市中正區北平西路3號',
-  },
-  timeWindow: {
-    before: 30,
-    after: 30,
-  },
-  ownerId: 1,
+  id: 2,
+  name: '週日電影',
+  ownerName: 'user123',
+  startTime: '2025-12-08T14:00:00+08:00',
+  endTime: '2025-12-08T17:00:00+08:00',
+  meetingPointLat: 25.042,
+  meetingPointLng: 121.517,
+  meetingPointName: '台北車站',
+  meetingPointAddress: '台北市中正區北平西路3號',
   status: 'upcoming',
   useMeetHalf: false,
+  groupId: undefined,
   createdAt: '2025-11-29T11:00:00Z',
   updatedAt: '2025-11-29T11:00:00Z',
 };
 
 export const mockEvent3: Event = {
-  id: 'evt_lunch_yesterday',
-  title: '昨天的午餐聚會',
-  datetime: '2025-11-28T12:00:00+08:00',
-  meetingPoint: {
-    lat: 25.047,
-    lng: 121.517,
-    name: '信義商圈',
-  },
-  timeWindow: {
-    before: 30,
-    after: 30,
-  },
-  ownerId: 2,
+  id: 3,
+  name: '昨天的午餐聚會',
+  ownerName: 'user456',
+  startTime: '2025-11-28T12:00:00+08:00',
+  endTime: '2025-11-28T14:00:00+08:00',
+  meetingPointLat: 25.047,
+  meetingPointLng: 121.517,
+  meetingPointName: '信義商圈',
+  meetingPointAddress: undefined,
   status: 'ended',
   useMeetHalf: false,
+  groupId: undefined,
   createdAt: '2025-11-28T08:00:00Z',
   updatedAt: '2025-11-28T13:00:00Z',
 };
@@ -87,79 +76,71 @@ export const mockEvent3: Event = {
 
 export const mockMembers: EventMember[] = [
   {
-    id: 'mem_user_1',
-    eventId: 'evt_hotpot_friday',
-    userId: 1,
+    id: 1,
+    eventId: 1,
+    userId: '1',
     nickname: '小明',
-    isGuest: false,
     shareLocation: true,
-    currentLocation: {
-      lat: 25.040,
-      lng: 121.560,
-      updatedAt: '2025-12-06T18:55:30Z',
-    },
+    lat: 25.040,
+    lng: 121.560,
+    address: undefined,
     arrivalTime: '2025-12-06T18:55:00Z',
     travelMode: 'transit',
     createdAt: '2025-11-29T10:05:00Z',
     updatedAt: '2025-12-06T18:55:30Z',
   },
   {
-    id: 'mem_user_2',
-    eventId: 'evt_hotpot_friday',
-    userId: 2,
+    id: 2,
+    eventId: 1,
+    userId: '2',
     nickname: '小華',
-    isGuest: false,
     shareLocation: true,
-    currentLocation: {
-      lat: 25.045,
-      lng: 121.555,
-      updatedAt: '2025-12-06T18:58:20Z',
-    },
+    lat: 25.045,
+    lng: 121.555,
+    address: undefined,
     arrivalTime: '2025-12-06T18:58:00Z',
     travelMode: 'driving',
     createdAt: '2025-11-29T10:10:00Z',
     updatedAt: '2025-12-06T18:58:20Z',
   },
   {
-    id: 'mem_guest_3',
-    eventId: 'evt_hotpot_friday',
-    guestId: 'guest_abc123',
+    id: 3,
+    eventId: 1,
+    userId: 'guest_abc123',
     nickname: '訪客小美',
-    isGuest: true,
     shareLocation: true,
-    currentLocation: {
-      lat: 25.035,
-      lng: 121.570,
-      updatedAt: '2025-12-06T19:05:15Z',
-    },
+    lat: 25.035,
+    lng: 121.570,
+    address: undefined,
     arrivalTime: '2025-12-06T19:05:00Z',
     travelMode: 'walking',
     createdAt: '2025-12-06T18:30:00Z',
     updatedAt: '2025-12-06T19:05:15Z',
   },
   {
-    id: 'mem_user_4',
-    eventId: 'evt_hotpot_friday',
-    userId: 4,
+    id: 4,
+    eventId: 1,
+    userId: '4',
     nickname: '小王',
-    isGuest: false,
     shareLocation: true,
-    currentLocation: {
-      lat: 25.050,
-      lng: 121.545,
-      updatedAt: '2025-12-06T19:10:45Z',
-    },
+    lat: 25.050,
+    lng: 121.545,
+    address: undefined,
+    arrivalTime: undefined,
     travelMode: 'bicycling',
     createdAt: '2025-11-29T10:15:00Z',
     updatedAt: '2025-12-06T19:10:45Z',
   },
   {
-    id: 'mem_guest_5',
-    eventId: 'evt_hotpot_friday',
-    guestId: 'guest_xyz789',
+    id: 5,
+    eventId: 1,
+    userId: 'guest_xyz789',
     nickname: '訪客小李',
-    isGuest: true,
     shareLocation: false,
+    lat: undefined,
+    lng: undefined,
+    address: undefined,
+    arrivalTime: undefined,
     travelMode: 'transit',
     createdAt: '2025-12-06T18:45:00Z',
     updatedAt: '2025-12-06T18:45:00Z',
@@ -171,10 +152,10 @@ export const mockMembers: EventMember[] = [
 // ============================================
 
 export const mockEventResult: EventResult = {
-  eventId: 'evt_hotpot_friday',
+  eventId: 1,
   rankings: [
     {
-      memberId: 'mem_user_1',
+      memberId: 1,
       nickname: '小明',
       arrivalTime: '2025-12-06T18:55:00Z',
       status: 'early',
@@ -183,7 +164,7 @@ export const mockEventResult: EventResult = {
       pokeCount: 0,
     },
     {
-      memberId: 'mem_user_2',
+      memberId: 2,
       nickname: '小華',
       arrivalTime: '2025-12-06T18:58:00Z',
       status: 'ontime',
@@ -192,7 +173,7 @@ export const mockEventResult: EventResult = {
       pokeCount: 0,
     },
     {
-      memberId: 'mem_guest_3',
+      memberId: 3,
       nickname: '訪客小美',
       arrivalTime: '2025-12-06T19:05:00Z',
       status: 'late',
@@ -201,7 +182,7 @@ export const mockEventResult: EventResult = {
       pokeCount: 2,
     },
     {
-      memberId: 'mem_user_4',
+      memberId: 4,
       nickname: '小王',
       arrivalTime: '2025-12-06T19:15:00Z',
       status: 'late',
@@ -210,7 +191,7 @@ export const mockEventResult: EventResult = {
       pokeCount: 5,
     },
     {
-      memberId: 'mem_guest_5',
+      memberId: 5,
       nickname: '訪客小李',
       status: 'absent',
       rank: 5,
@@ -251,41 +232,46 @@ export const mockEventResult: EventResult = {
 
 export const mockMyEvents: MyEventItem[] = [
   {
-    id: 'evt_hotpot_friday',
-    title: '週五火鍋聚會',
-    datetime: '2025-12-06T19:00:00+08:00',
+    id: 1,
+    name: '週五火鍋聚會',
+    startTime: '2025-12-06T19:00:00+08:00',
+    endTime: '2025-12-06T21:00:00+08:00',
     status: 'ongoing',
     memberCount: 5,
   },
   {
-    id: 'evt_movie_sunday',
-    title: '週日電影',
-    datetime: '2025-12-08T14:00:00+08:00',
+    id: 2,
+    name: '週日電影',
+    startTime: '2025-12-08T14:00:00+08:00',
+    endTime: '2025-12-08T17:00:00+08:00',
     status: 'upcoming',
     memberCount: 3,
   },
   {
-    id: 'evt_lunch_yesterday',
-    title: '昨天的午餐聚會',
-    datetime: '2025-11-28T12:00:00+08:00',
+    id: 3,
+    name: '昨天的午餐聚會',
+    startTime: '2025-11-28T12:00:00+08:00',
+    endTime: '2025-11-28T14:00:00+08:00',
     status: 'ended',
     memberCount: 6,
     myStatus: 'ontime',
     myRank: 2,
   },
   {
-    id: 'evt_dinner_last_week',
-    title: '上週晚餐',
-    datetime: '2025-11-22T18:30:00+08:00',
+    id: 4,
+    name: '上週晚餐',
+    startTime: '2025-11-22T18:30:00+08:00',
+    endTime: '2025-11-22T20:30:00+08:00',
     status: 'ended',
     memberCount: 4,
     myStatus: 'early',
     myRank: 1,
   },
   {
-    id: 'evt_coffee_break',
-    title: '咖啡時光',
-    datetime: '2025-11-20T15:00:00+08:00',
+    id: 5,
+    name: '咖啡時光',
+    startTime: '2025-11-20T15:00:00+08:00',
+    endTime: '2025-11-20T17:00:00+08:00',
     status: 'ended',
     memberCount: 3,
     myStatus: 'late',
@@ -351,17 +337,21 @@ export const mockJoinEventResponse: JoinEventResponse = {
 
 /**
  * 根據 eventId 取得 mock event
+ * @param eventId - 可以是 number 或 string（從 URL params 來的）
  */
-export function getMockEventById(eventId: string): Event | undefined {
+export function getMockEventById(eventId: string | number): Event | undefined {
   const events = [mockEvent1, mockEvent2, mockEvent3];
-  return events.find((e) => e.id === eventId);
+  const numId = typeof eventId === 'string' ? parseInt(eventId, 10) : eventId;
+  return events.find((e) => e.id === numId);
 }
 
 /**
  * 根據 eventId 取得 mock members
+ * @param eventId - 可以是 number 或 string（從 URL params 來的）
  */
-export function getMockMembersByEventId(eventId: string): EventMember[] {
-  return mockMembers.filter((m) => m.eventId === eventId);
+export function getMockMembersByEventId(eventId: string | number): EventMember[] {
+  const numId = typeof eventId === 'string' ? parseInt(eventId, 10) : eventId;
+  return mockMembers.filter((m) => m.eventId === numId);
 }
 
 /**
@@ -416,8 +406,10 @@ export function generateRandomLocation(): { lat: number; lng: number } {
 
 /**
  * 生成多個測試成員
+ * @param count - 要生成的成員數量
+ * @param eventId - 可以是 number 或 string（從 URL params 來的）
  */
-export function generateMockMembers(count: number, eventId: string): EventMember[] {
+export function generateMockMembers(count: number, eventId: string | number): EventMember[] {
   const names = ['小明', '小華', '小美', '小王', '小李', '小陳', '小張', '小林'];
   const travelModes: Array<'driving' | 'transit' | 'walking' | 'bicycling'> = [
     'driving',
@@ -426,27 +418,24 @@ export function generateMockMembers(count: number, eventId: string): EventMember
     'bicycling',
   ];
 
+  const numEventId = typeof eventId === 'string' ? parseInt(eventId, 10) : eventId;
+
   return Array.from({ length: count }, (_, index) => {
     const isGuest = index % 2 === 0;
     const hasLocation = Math.random() > 0.2; // 80% 有位置
     const hasArrived = Math.random() > 0.4; // 60% 已到達
+    const location = hasLocation ? generateRandomLocation() : { lat: undefined, lng: undefined };
 
     return {
-      id: `mem_${isGuest ? 'guest' : 'user'}_${index + 1}`,
-      eventId,
-      ...(isGuest ? { guestId: `guest_${index + 1}` } : { userId: index + 1 }),
+      id: index + 1,
+      eventId: numEventId,
+      userId: isGuest ? `guest_${index + 1}` : `${index + 1}`,
       nickname: isGuest ? `訪客${names[index % names.length]}` : names[index % names.length],
-      isGuest,
       shareLocation: hasLocation,
-      ...(hasLocation && {
-        currentLocation: {
-          ...generateRandomLocation(),
-          updatedAt: new Date(Date.now() - Math.random() * 600000).toISOString(),
-        },
-      }),
-      ...(hasArrived && {
-        arrivalTime: new Date(Date.now() - Math.random() * 1800000).toISOString(),
-      }),
+      lat: location.lat,
+      lng: location.lng,
+      address: undefined,
+      arrivalTime: hasArrived ? new Date(Date.now() - Math.random() * 1800000).toISOString() : undefined,
       travelMode: travelModes[index % travelModes.length],
       createdAt: new Date(Date.now() - 86400000).toISOString(),
       updatedAt: new Date().toISOString(),
