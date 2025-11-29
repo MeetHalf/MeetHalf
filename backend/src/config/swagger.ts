@@ -12,14 +12,24 @@ const options: swaggerJsdoc.Options = {
       },
     },
     servers: [
-      {
-        url: 'http://localhost:3000',
-        description: 'Development server',
-      },
-      {
-        url: 'http://127.0.0.1:3000',
-        description: 'Development server (alternative)',
-      },
+      // Production/Preview server (Vercel automatically provides VERCEL_URL)
+      ...(process.env.VERCEL_URL ? [{
+        url: process.env.VERCEL_URL.startsWith('http') 
+          ? process.env.VERCEL_URL 
+          : `https://${process.env.VERCEL_URL}`,
+        description: 'Production server',
+      }] : []),
+      // Development servers
+      ...(process.env.NODE_ENV === 'development' || !process.env.VERCEL_URL ? [
+        {
+          url: 'http://localhost:3000',
+          description: 'Local development',
+        },
+        {
+          url: 'http://127.0.0.1:3000',
+          description: 'Local development (alternative)',
+        },
+      ] : []),
     ],
     components: {
       securitySchemes: {

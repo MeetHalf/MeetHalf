@@ -3,7 +3,6 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
-import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import authRouter from './routes/auth';
 import groupsRouter from './routes/groups';
@@ -71,11 +70,69 @@ app.get('/healthz', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'MeetHalf API Documentation',
-}));
+// Swagger UI - Use CDN resources to avoid static file serving issues on Vercel
+// Serve JSON spec at /api-docs.json
+app.get('/api-docs.json', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
+// Serve Swagger UI HTML page with CDN resources
+app.get('/api-docs', (req: Request, res: Response) => {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MeetHalf API Documentation</title>
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css" />
+  <style>
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    body {
+      margin:0;
+      background: #fafafa;
+    }
+    .swagger-ui .topbar {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      // Use window.location.origin to get the current base URL dynamically
+      const specUrl = window.location.origin + '/api-docs.json';
+      const ui = SwaggerUIBundle({
+        url: specUrl,
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        persistAuthorization: true,
+        displayRequestDuration: true
+      });
+    };
+  </script>
+</body>
+</html>`;
+  
+  res.send(html);
+});
 
 // Routes
 app.use('/auth', authRouter);
