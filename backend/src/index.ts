@@ -25,13 +25,41 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
-  // Add container frontend origin if needed
+  // Production frontend origins (Vercel, etc.)
   process.env.FRONTEND_ORIGIN,
-].filter(Boolean) as string[];
+  // Support Vercel preview deployments (wildcard pattern)
+  process.env.FRONTEND_ORIGIN?.includes('vercel.app') 
+    ? new RegExp(`^https://.*\\.vercel\\.app$`)
+    : null,
+].filter(Boolean) as (string | RegExp)[];
 
 app.use(
   cors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : true, // Fallback to allow all in dev
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      // In development, allow all origins
+      if (process.env.NODE_ENV === 'development') {
+        return callback(null, true);
+      }
+      
+      // In production, check against allowed origins
+      const isAllowed = allowedOrigins.some(allowed => {
+        if (typeof allowed === 'string') {
+          return origin === allowed;
+        } else if (allowed instanceof RegExp) {
+          return allowed.test(origin);
+        }
+        return false;
+      });
+      
+      if (isAllowed || allowedOrigins.length === 0) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   })
 );

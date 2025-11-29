@@ -6,6 +6,9 @@ declare global {
       JWT_SECRET: string;
       FRONTEND_ORIGIN?: string;
       NODE_ENV?: 'development' | 'production' | 'test';
+      // Turso (libSQL) specific
+      TURSO_DATABASE_URL?: string;
+      TURSO_AUTH_TOKEN?: string;
     }
   }
 }
