@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Card,
-  CardContent,
   TextField,
   Button,
   Typography,
@@ -34,7 +32,7 @@ type AuthFormData = z.infer<typeof authSchema>;
 export default function Login() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [error, setError] = useState<string | null>(null);
-  const { login, register, refreshMe } = useAuth();
+  const { login, register } = useAuth();
   const navigate = useNavigate();
 
   const {
@@ -50,13 +48,17 @@ export default function Login() {
     try {
       if (mode === 'login') {
         await login(data.email, data.password);
+        // No need to call refreshMe() - login() already sets the user
+        // Cookie is set by backend, but we already have user data from login response
       } else {
         await register(data.email, data.password);
+        // No need to call refreshMe() - register() already logs in and sets the user
       }
-      await refreshMe();
+      // Navigate after successful login/register
       navigate('/groups');
     } catch (err: any) {
-      const message = err.response?.data?.message || '發生錯誤，請稍後再試';
+      // Extract error message from backend response
+      const message = err.response?.data?.message || err.response?.data?.code || '發生錯誤，請稍後再試';
       setError(message);
     }
   };

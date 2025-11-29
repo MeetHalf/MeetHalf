@@ -27,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.get('/auth/me');
       setUser(response.data.user);
     } catch (error) {
+      // Silently fail - user is not authenticated
       setUser(null);
     } finally {
       setLoading(false);
@@ -34,14 +35,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password });
-    setUser(response.data.user);
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      // Backend returns: { message: 'Login successful', user: {...} }
+      setUser(response.data.user);
+      // Set loading to false since we have user data now
+      setLoading(false);
+    } catch (error: any) {
+      // Re-throw error so Login page can handle it
+      setLoading(false);
+      throw error;
+    }
   }, []);
 
   const register = useCallback(async (email: string, password: string) => {
-    await api.post('/auth/register', { email, password });
-    await login(email, password);
-  }, [login]);
+    try {
+      // Backend returns: { message: 'User registered successfully', user: {...} }
+      const response = await api.post('/auth/register', { email, password });
+      // After registration, automatically login
+      // Backend login returns: { message: 'Login successful', user: {...} }
+      const loginResponse = await api.post('/auth/login', { email, password });
+      setUser(loginResponse.data.user);
+      setLoading(false);
+    } catch (error: any) {
+      setLoading(false);
+      throw error;
+    }
+  }, []);
 
   const logout = useCallback(async () => {
     await api.post('/auth/logout');
