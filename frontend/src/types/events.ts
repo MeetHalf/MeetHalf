@@ -35,8 +35,7 @@ export interface Event {
 export interface EventMember {
   id: string;
   eventId: string;
-  userId?: number;  // 登入使用者 (nullable)
-  guestId?: string; // Guest 臨時 ID (nullable)
+  userId?: string | null;  // 使用者 ID（登入用戶: "123", Guest: "guest_abc123"）
   nickname: string;
   isGuest: boolean;
   shareLocation: boolean;

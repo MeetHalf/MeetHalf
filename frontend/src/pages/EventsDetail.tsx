@@ -47,7 +47,7 @@ import {
 } from '@mui/icons-material';
 import MapContainer from '../components/MapContainer';
 import RouteInfoPanel from '../components/RouteInfoPanel';
-import { eventsApi, membersApi, offlineMembersApi, Event, TimeMidpointResponse, RoutesResponse, Member, eventUtils } from '../api/events';
+import { eventsApi, membersApi, offlineMembersApi, Event, TimeMidpointResponse, RoutesResponse, Member } from '../api/events';
 import api from '../api/axios';
 import { useAuth } from '../hooks/useAuth';
 
@@ -110,8 +110,9 @@ export default function GroupDetail() {
   
   // Current user's member record - get user's name for matching
   const userName = user?.name || null;
-  const currentUserMember = event ? eventUtils.getCurrentUserMember(event, userName) : undefined;
-  const isOwner = event ? eventUtils.isOwner(event, userName) : false;
+  // Check if current user is owner or member
+  const currentUserMember = event ? event.members.find(m => m.username === user?.email) : undefined;
+  const isOwner = event ? event.ownerName === user?.email : false;
 
 
   useEffect(() => {
@@ -145,7 +146,7 @@ export default function GroupDetail() {
       
       // Only fetch midpoint if explicitly requested or on initial load
       if (autoCalculateMidpoint) {
-        const membersWithLocation = eventResponse.event.members.filter(m => m.lat && m.lng);
+        const membersWithLocation = eventResponse.event.members.filter((m: Member) => m.lat && m.lng);
         if (membersWithLocation.length >= 2) {
           try {
             // Use time-based midpoint
@@ -181,13 +182,13 @@ export default function GroupDetail() {
       setActionLoading(true);
       
       // If user is not a member, add themselves to the event
-      if (!currentUserMember && userName) {
+      if (!currentUserMember && user?.email) {
         await membersApi.addMember({
+          username: user.email,
           eventId: event.id,
-          username: userName,
         });
         setSnackbar({ open: true, message: '成功加入活動！', severity: 'success' });
-      } else if (!userName) {
+      } else if (!user?.id) {
         // Anonymous user - show message to login
         setSnackbar({ 
           open: true, 
@@ -197,17 +198,13 @@ export default function GroupDetail() {
         setAddMemberDialogOpen(false);
         return;
       } else {
-        // If user is already a member and wants to add someone else by username
-        if (!newMemberUsername.trim()) {
-          setSnackbar({ open: true, message: '請輸入成員的使用者名稱', severity: 'error' });
-          return;
-        }
-        
-        await membersApi.addMember({
-          eventId: event.id,
-          username: newMemberUsername.trim(),
+        // Adding other members by username is not supported in current API
+        // TODO: Implement user lookup by username/email or update backend API
+        setSnackbar({ 
+          open: true, 
+          message: '目前不支援通過使用者名稱添加成員，請使用其他方式', 
+          severity: 'info' 
         });
-        setSnackbar({ open: true, message: '成功添加成員！', severity: 'success' });
         setNewMemberUsername('');
       }
       
@@ -740,10 +737,10 @@ export default function GroupDetail() {
       id: m.id,
       lat: m.lat!,
       lng: m.lng!,
-      title: m.isOffline ? `👤 ${m.nickname}` : m.username || m.nickname || 'Unknown',
+      title: m.isOffline ? `👤 ${m.nickname}` : (m.username || m.nickname || 'Unknown'),
       label: m.isOffline 
         ? m.nickname || 'Friend' 
-        : m.username?.split('@')[0] || m.nickname || 'User',
+        : (m.username?.split('@')[0] || m.nickname || 'User'),
       draggable: true, // All member markers are draggable
     })) : [];
 
@@ -994,9 +991,9 @@ export default function GroupDetail() {
                                 color: '#111827'
                               }}
                             >
-                              {member.isOffline ? member.nickname : member.username || member.nickname || 'Unknown'}
+                              {member.isOffline ? member.nickname : (member.username || member.nickname || 'Unknown')}
                               {userName && member.username === userName && ' (You)'}
-                              {userName && event.ownerName === member.username && ' (Owner)'}
+                              {event.ownerName === member.username && ' (Owner)'}
                             </Typography>
                             {member.isOffline && (
                               <Chip 

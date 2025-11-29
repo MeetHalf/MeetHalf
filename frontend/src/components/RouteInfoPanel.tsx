@@ -213,7 +213,7 @@ export default function RouteInfoPanel({
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'
                       }}>
-                        {member.username || memberData?.nickname || 'Unknown'}
+                        {member.username?.split('@')[0] || memberData?.nickname || 'Unknown'}
                       </Typography>
                       <Typography variant="caption" sx={{ color: '#9333EA', fontSize: '0.7rem' }}>
                         {(member.distance / 1000).toFixed(1)} 公里
@@ -231,7 +231,7 @@ export default function RouteInfoPanel({
                     </Box>
                     
                     {memberData?.lat && memberData?.lng && (
-                      <Tooltip title={`為 ${member.username || memberData?.nickname || 'Unknown'} 開啟導航`}>
+                      <Tooltip title={`為 ${member.username?.split('@')[0] || memberData?.nickname || 'Unknown'} 開啟導航`}>
                         <IconButton
                           size="small"
                           onClick={(e) => {

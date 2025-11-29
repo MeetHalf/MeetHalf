@@ -89,7 +89,7 @@ export const mockMembers: EventMember[] = [
   {
     id: 'mem_user_1',
     eventId: 'evt_hotpot_friday',
-    userId: 1,
+    userId: '1',
     nickname: '小明',
     isGuest: false,
     shareLocation: true,
@@ -106,7 +106,7 @@ export const mockMembers: EventMember[] = [
   {
     id: 'mem_user_2',
     eventId: 'evt_hotpot_friday',
-    userId: 2,
+    userId: '2',
     nickname: '小華',
     isGuest: false,
     shareLocation: true,
@@ -123,7 +123,7 @@ export const mockMembers: EventMember[] = [
   {
     id: 'mem_guest_3',
     eventId: 'evt_hotpot_friday',
-    guestId: 'guest_abc123',
+    userId: 'guest_abc123',
     nickname: '訪客小美',
     isGuest: true,
     shareLocation: true,
@@ -140,7 +140,7 @@ export const mockMembers: EventMember[] = [
   {
     id: 'mem_user_4',
     eventId: 'evt_hotpot_friday',
-    userId: 4,
+    userId: '4',
     nickname: '小王',
     isGuest: false,
     shareLocation: true,
@@ -156,7 +156,7 @@ export const mockMembers: EventMember[] = [
   {
     id: 'mem_guest_5',
     eventId: 'evt_hotpot_friday',
-    guestId: 'guest_xyz789',
+    userId: 'guest_xyz789',
     nickname: '訪客小李',
     isGuest: true,
     shareLocation: false,
@@ -434,7 +434,7 @@ export function generateMockMembers(count: number, eventId: string): EventMember
     return {
       id: `mem_${isGuest ? 'guest' : 'user'}_${index + 1}`,
       eventId,
-      ...(isGuest ? { guestId: `guest_${index + 1}` } : { userId: index + 1 }),
+      userId: isGuest ? `guest_${index + 1}` : `${index + 1}`,
       nickname: isGuest ? `訪客${names[index % names.length]}` : names[index % names.length],
       isGuest,
       shareLocation: hasLocation,
