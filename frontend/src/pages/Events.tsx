@@ -119,7 +119,7 @@ export default function Events() {
                 variant="contained"
                 size="large"
                 startIcon={<AddIcon />}
-                onClick={() => setCreateDialogOpen(true)}
+                onClick={() => navigate('/events/new')}
                 sx={{
                   px: 3,
                   py: 1.5,
