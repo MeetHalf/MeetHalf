@@ -85,13 +85,20 @@ closes #16, closes #17, closes #18"
 
 ### ⚠️ 重要說明
 
-**Issue 只會在 merge 到 main 時自動關閉**
+**Issue 只會在 merge 到 default branch (main) 時自動關閉**
 
-流程：
+我們的流程：
 1. Feature branch commit 寫 `closes #15`
 2. Push 到 GitHub
-3. 創建 PR merge 到 `main`（或設定的 default branch）
-4. **PR merge 後，#15 自動關閉**
+3. Merge 到 `frontend-dev` 或 `backend-dev`（issue 仍保持開啟）
+4. 定期將 dev branch merge 到 `main`
+5. **Merge 到 main 後，#15 自動關閉**
+
+範例：
+```
+feature/#15 → frontend-dev → main
+            (issue 仍開啟)   (issue 自動關閉✅)
+```
 
 ## 🔄 完整工作流程
 
