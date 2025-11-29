@@ -959,13 +959,16 @@ export default function GroupDetail() {
                     <Box key={member.id}>
                       <Box sx={{ 
                         display: 'flex', 
-                        alignItems: 'center', 
+                        alignItems: 'flex-start', 
                         gap: 2,
                         p: 2,
                         borderRadius: 2,
                         bgcolor: '#FAFAFA',
                         border: '1px solid #F3F4F6',
                         transition: 'all 0.2s ease',
+                        width: '100%',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
                         '&:hover': {
                           bgcolor: '#F9FAFB',
                           borderColor: '#E5E7EB',
@@ -982,13 +985,16 @@ export default function GroupDetail() {
                         }}>
                           {member.isOffline ? '👤' : <PersonIcon />}
                         </Avatar>
-                        <Box sx={{ flex: 1 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                             <Typography 
                               variant="body1" 
                               sx={{ 
                                 fontWeight: 'medium',
-                                color: '#111827'
+                                color: '#111827',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
                               }}
                             >
                               {member.isOffline ? member.nickname : (member.username || member.nickname || 'Unknown')}
@@ -1011,7 +1017,8 @@ export default function GroupDetail() {
                             display: 'flex', 
                             alignItems: 'center', 
                             gap: 1,
-                            mt: 0.5
+                            mt: 0.5,
+                            flexWrap: 'wrap'
                           }}>
                             <LocationIcon sx={{ 
                               fontSize: 16, 
@@ -1035,13 +1042,14 @@ export default function GroupDetail() {
                                 onClick={() => handleQuickSetLocation(member.id)}
                                 disabled={actionLoading}
                                 sx={{
-                                  ml: 1,
                                   minWidth: 'auto',
                                   px: 1.5,
                                   py: 0.5,
                                   fontSize: '0.75rem',
                                   borderColor: '#3B82F6',
                                   color: '#3B82F6',
+                                  flexShrink: 0,
+                                  whiteSpace: 'nowrap',
                                   '&:hover': {
                                     borderColor: '#2563EB',
                                     bgcolor: '#EBF5FF'
@@ -1053,13 +1061,14 @@ export default function GroupDetail() {
                             )}
                           </Box>
                           {/* ✅ NEW: Individual travel mode selector for each member */}
-                          <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                             <Typography 
                               variant="body2" 
                               sx={{ 
                                 color: '#6B7280',
                                 fontSize: '0.75rem',
-                                minWidth: '60px'
+                                minWidth: '60px',
+                                flexShrink: 0
                               }}
                             >
                               交通方式:
@@ -1070,6 +1079,7 @@ export default function GroupDetail() {
                               onChange={(e: any) => handleUpdateMemberTravelMode(member.id, e.target.value)}
                               sx={{ 
                                 minWidth: 120,
+                                maxWidth: 200,
                                 height: 28,
                                 fontSize: '0.75rem',
                                 '& .MuiSelect-select': {
@@ -1098,7 +1108,7 @@ export default function GroupDetail() {
                         
                         {/* ✅ NEW: Edit/Delete buttons for offline members */}
                         {member.isOffline && (
-                          <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
                             <IconButton 
                               size="small" 
                               onClick={() => {
