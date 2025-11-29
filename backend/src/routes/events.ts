@@ -63,9 +63,18 @@ const routesCache = createCache<any>(5 * 60 * 1000);
  */
 // GET /events - List all events for current user (supports anonymous)
 router.get('/', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  console.log('[EVENTS] GET /events - Request received', {
+    path: req.path,
+    url: req.url,
+    originalUrl: req.originalUrl,
+    hasUser: !!req.user,
+    userType: req.user ? (typeof req.user === 'object' && 'userId' in req.user ? 'authenticated' : 'unknown') : 'anonymous',
+  });
+  
   try {
     // If user is authenticated, filter by userId
     if (req.user && 'userId' in req.user) {
+      console.log('[EVENTS] User is authenticated, fetching events for user');
       const jwtPayload = req.user as { userId: number };
       const userUserId = await getUserUserId(jwtPayload.userId);
       
@@ -97,13 +106,15 @@ router.get('/', optionalAuthMiddleware, async (req: Request, res: Response): Pro
         }
       });
 
+      console.log('[EVENTS] Found events for authenticated user:', events.length);
       res.json({ events });
     } else {
       // Anonymous user - return empty array (events are separate for anonymous users)
+      console.log('[EVENTS] Anonymous user, returning empty array');
       res.json({ events: [] });
     }
   } catch (error) {
-    console.error('Error fetching events:', error);
+    console.error('[EVENTS] Error fetching events:', error);
     res.status(500).json({ 
       code: 'INTERNAL_ERROR',
       message: 'Failed to fetch events' 
@@ -2186,6 +2197,7 @@ router.get('/my-events', optionalAuthMiddleware, async (req: Request, res: Respo
   }
 });
 
+console.log('[EVENTS_ROUTER] Events router initialized and exported');
 export default router;
 
 
