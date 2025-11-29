@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Events from './pages/Events';
 import GroupDetail from './pages/EventsDetail';
+import EventRoom from './pages/EventRoom';
 import { Box, CircularProgress } from '@mui/material';
 
 // Loading Route wrapper
@@ -45,6 +46,14 @@ export const router = createBrowserRouter([
     element: (
       <LoadingRoute>
         <GroupDetail />
+      </LoadingRoute>
+    ),
+  },
+  {
+    path: '/gatherings/:id',
+    element: (
+      <LoadingRoute>
+        <EventRoom />
       </LoadingRoute>
     ),
   },
