@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -15,16 +15,21 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
+  Checkbox,
+  FormControlLabel,
+  InputAdornment,
 } from '@mui/material';
 import {
   ContentCopy as CopyIcon,
   Share as ShareIcon,
   Close as CloseIcon,
+  LocationOn as LocationIcon,
 } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { zhTW } from 'date-fns/locale';
+import axios from 'axios';
 
 export default function CreateEvent() {
   const navigate = useNavigate();
@@ -34,12 +39,18 @@ export default function CreateEvent() {
     name: '',
     startTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 明天
     endTime: new Date(Date.now() + 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000), // 明天 + 2小時
+    useMeetHalf: false,
+    meetingPointName: '',
+    meetingPointAddress: '',
+    meetingPointLat: null as number | null,
+    meetingPointLng: null as number | null,
   });
   
   const [submitting, setSubmitting] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [eventId, setEventId] = useState<number | null>(null);
+  const autocompleteInputRef = useRef<HTMLInputElement>(null);
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -62,24 +73,39 @@ export default function CreateEvent() {
       return;
     }
     
+    // 如果沒有使用 MeetHalf，則必須選擇地點
+    if (!formData.useMeetHalf && !formData.meetingPointName) {
+      setSnackbar({ open: true, message: '請選擇集合地點或使用 MeetHalf', severity: 'error' });
+      return;
+    }
+    
     setSubmitting(true);
     
     try {
-      // TODO: 改用真實 API
-      // const response = await eventsApi.createEvent(formData);
+      // 調用真實 API
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      const response = await axios.post(`${backendUrl}/events`, {
+        name: formData.name.trim(),
+        startTime: formData.startTime.toISOString(),
+        endTime: formData.endTime.toISOString(),
+        useMeetHalf: formData.useMeetHalf,
+        meetingPointName: formData.useMeetHalf ? null : formData.meetingPointName,
+        meetingPointAddress: formData.useMeetHalf ? null : formData.meetingPointAddress,
+        meetingPointLat: formData.useMeetHalf ? null : formData.meetingPointLat,
+        meetingPointLng: formData.useMeetHalf ? null : formData.meetingPointLng,
+      }, {
+        withCredentials: true,
+      });
       
-      // 模擬 API 延遲
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const createdEventId = response.data.event.id;
+      const createdShareUrl = `${window.location.origin}/events/${createdEventId}`;
       
-      // Mock response
-      const mockEventId = Math.floor(Math.random() * 10000);
-      const mockShareUrl = `${window.location.origin}/events/${mockEventId}`;
-      
-      setEventId(mockEventId);
-      setShareUrl(mockShareUrl);
+      setEventId(createdEventId);
+      setShareUrl(createdShareUrl);
       setShareDialogOpen(true);
       setSnackbar({ open: true, message: '聚會創建成功！', severity: 'success' });
     } catch (err) {
+      console.error('創建聚會失敗:', err);
       setSnackbar({ 
         open: true, 
         message: err instanceof Error ? err.message : '創建失敗，請稍後再試', 
@@ -203,6 +229,73 @@ export default function CreateEvent() {
                   },
                 }}
               />
+
+              {/* 使用 MeetHalf 選項 */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: formData.useMeetHalf ? '#e3f2fd' : '#f5f5f5',
+                  border: '1px solid',
+                  borderColor: formData.useMeetHalf ? '#2196f3' : '#e0e0e0',
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.useMeetHalf}
+                      onChange={(e) => {
+                        setFormData({
+                          ...formData,
+                          useMeetHalf: e.target.checked,
+                          // 如果選擇 MeetHalf，清空地點信息
+                          ...(e.target.checked
+                            ? {
+                                meetingPointName: '',
+                                meetingPointAddress: '',
+                                meetingPointLat: null,
+                                meetingPointLng: null,
+                              }
+                            : {}),
+                        });
+                      }}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        使用 MeetHalf 計算中間點
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        讓系統根據所有人的位置自動計算最佳集合地點
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
+
+              {/* 地點選擇（如果沒有選擇 MeetHalf） */}
+              {!formData.useMeetHalf && (
+                <TextField
+                  label="集合地點"
+                  placeholder="搜尋地點..."
+                  value={formData.meetingPointName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, meetingPointName: e.target.value })
+                  }
+                  inputRef={autocompleteInputRef}
+                  fullWidth
+                  required={!formData.useMeetHalf}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LocationIcon sx={{ color: 'text.secondary' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                  helperText="輸入地點名稱或地址（未來將支援 Google Places 自動完成）"
+                />
+              )}
 
               {/* 提交按鈕 */}
               <Button
