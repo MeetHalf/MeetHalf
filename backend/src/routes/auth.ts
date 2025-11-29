@@ -211,11 +211,15 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     const token = signToken(user.id);
 
     // Set cookie
+    // In production (Vercel), use 'none' for cross-site cookies
+    // In development, use 'lax' for same-site cookies
+    const isProduction = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction, // Must be true when sameSite is 'none'
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      domain: process.env.COOKIE_DOMAIN, // Optional: set cookie domain if needed
     });
 
     res.json({
@@ -326,7 +330,13 @@ router.get('/me', authMiddleware, async (req: Request, res: Response): Promise<v
  */
 // POST /auth/logout
 router.post('/logout', (req: Request, res: Response): void => {
-  res.clearCookie('token');
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.clearCookie('token', {
+    httpOnly: true,
+    sameSite: isProduction ? 'none' : 'lax',
+    secure: isProduction,
+    domain: process.env.COOKIE_DOMAIN,
+  });
   res.json({ message: 'Logout successful' });
 });
 

@@ -18,6 +18,7 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Security middlewares
 app.use(helmet());
+
 // CORS configuration - allow frontend origins
 const allowedOrigins = [
   'http://localhost:5173',
@@ -26,11 +27,12 @@ const allowedOrigins = [
   'http://127.0.0.1:5174',
   // Production frontend origins (Vercel, etc.)
   process.env.FRONTEND_ORIGIN,
-  // Support Vercel preview deployments (wildcard pattern)
-  process.env.FRONTEND_ORIGIN?.includes('vercel.app') 
-    ? new RegExp(`^https://.*\\.vercel\\.app$`)
-    : null,
-].filter(Boolean) as (string | RegExp)[];
+].filter(Boolean) as string[];
+
+// Helper to check if origin is a Vercel deployment
+const isVercelOrigin = (origin: string): boolean => {
+  return /^https:\/\/.*\.vercel\.app$/.test(origin);
+};
 
 app.use(
   cors({
@@ -43,19 +45,34 @@ app.use(
         return callback(null, true);
       }
       
-      // In production, check against allowed origins
-      const isAllowed = allowedOrigins.some(allowed => {
-        if (typeof allowed === 'string') {
-          return origin === allowed;
-        } else if (allowed instanceof RegExp) {
-          return allowed.test(origin);
+      // If FRONTEND_ORIGIN is explicitly set, check it first (more secure)
+      if (process.env.FRONTEND_ORIGIN) {
+        const isAllowed = allowedOrigins.some(allowed => origin === allowed);
+        if (isAllowed) {
+          return callback(null, true);
         }
-        return false;
-      });
+        // If FRONTEND_ORIGIN is set but doesn't match, check if it's a Vercel origin
+        // (useful for preview deployments that match the pattern)
+        if (isVercelOrigin(origin)) {
+          return callback(null, true);
+        }
+        console.warn(`CORS blocked origin: ${origin} (FRONTEND_ORIGIN is set to: ${process.env.FRONTEND_ORIGIN})`);
+        return callback(new Error('Not allowed by CORS'));
+      }
       
-      if (isAllowed || allowedOrigins.length === 0) {
+      // If FRONTEND_ORIGIN is not set, allow all Vercel preview deployments
+      // (fallback for convenience when FRONTEND_ORIGIN is not configured)
+      if (isVercelOrigin(origin)) {
+        return callback(null, true);
+      }
+      
+      // Check against explicitly allowed origins (localhost, etc.)
+      const isAllowed = allowedOrigins.some(allowed => origin === allowed);
+      
+      if (isAllowed) {
         callback(null, true);
       } else {
+        console.warn(`CORS blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
