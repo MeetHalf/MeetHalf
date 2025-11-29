@@ -84,14 +84,14 @@ export class EventRepository {
    */
   async create(data: {
     name: string;
-    ownerName: string;
+    ownerId: string;
     startTime: Date;
     endTime: Date;
     meetingPointLat?: number | null;
     meetingPointLng?: number | null;
     meetingPointName?: string | null;
     meetingPointAddress?: string | null;
-    status?: string;
+    status?: 'upcoming' | 'ongoing' | 'ended';
     useMeetHalf?: boolean;
     groupId?: number | null;
     memberUserId?: string | null;
@@ -99,7 +99,7 @@ export class EventRepository {
     return prisma.event.create({
       data: {
         name: data.name,
-        ownerName: data.ownerName,
+        ownerId: data.ownerId,
         startTime: data.startTime,
         endTime: data.endTime,
         meetingPointLat: data.meetingPointLat,
@@ -139,7 +139,7 @@ export class EventRepository {
     meetingPointAddress: string | null;
     startTime: Date;
     endTime: Date;
-    status: string;
+    status: 'upcoming' | 'ongoing' | 'ended';
     useMeetHalf: boolean;
     groupId: number | null;
   }>) {

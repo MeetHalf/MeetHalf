@@ -136,10 +136,49 @@ router.get('/', optionalAuthMiddleware, async (req: Request, res: Response): Pro
  *             type: object
  *             required:
  *               - name
+ *               - startTime
+ *               - endTime
+ *               - ownerId
+ *               - useMeetHalf
  *             properties:
  *               name:
  *                 type: string
  *                 example: "Weekend Meetup"
+ *               startTime:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2025-12-01T19:00:00Z"
+ *               endTime:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2025-12-01T21:00:00Z"
+ *               ownerId:
+ *                 type: string
+ *                 example: "user_abc123"
+ *               useMeetHalf:
+ *                 type: boolean
+ *                 default: false
+ *               status:
+ *                 type: string
+ *                 enum: [upcoming, ongoing, ended]
+ *                 default: upcoming
+ *               meetingPointLat:
+ *                 type: number
+ *                 format: float
+ *                 nullable: true
+ *               meetingPointLng:
+ *                 type: number
+ *                 format: float
+ *                 nullable: true
+ *               meetingPointName:
+ *                 type: string
+ *                 nullable: true
+ *               meetingPointAddress:
+ *                 type: string
+ *                 nullable: true
+ *               groupId:
+ *                 type: integer
+ *                 nullable: true
  *     responses:
  *       201:
  *         description: Event created successfully
@@ -170,47 +209,59 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       return;
     }
 
-    const { 
-      name, 
-      startTime, 
-      endTime,
-      useMeetHalf = false,
-      meetingPointLat,
-      meetingPointLng,
-      meetingPointName,
-      meetingPointAddress,
-    } = validation.data as CreateEventRequest;
+    const { name, startTime, endTime, ownerId, useMeetHalf, status, meetingPointLat, meetingPointLng, meetingPointName, meetingPointAddress, groupId } = validation.data as CreateEventRequest;
     
-    // Determine owner name - use authenticated user's name or anonymous identifier
-    let ownerName: string;
+    // Validate groupId if provided
+    let validGroupId: number | null = null;
+    if (groupId !== null && groupId !== undefined) {
+      const group = await prisma.group.findUnique({
+        where: { id: groupId }
+      });
+      
+      if (!group) {
+        res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid groupId: Group not found',
+          errors: [{
+            code: 'invalid_group_id',
+            path: ['groupId'],
+            message: `Group with id ${groupId} does not exist`
+          }]
+        });
+        return;
+      }
+      
+      validGroupId = groupId;
+    }
+    
+    // Determine memberUserId from ownerId or authenticated user
     let memberUserId: string | null = null;
     if (req.user && 'userId' in req.user) {
       const jwtPayload = req.user as { userId: number };
-      ownerName = await getUserName(jwtPayload.userId);
       memberUserId = await getUserUserId(jwtPayload.userId);
     } else {
-      // Anonymous user - generate a session-based identifier
-      const sessionId = req.headers['x-session-id'] as string || req.cookies.sessionId || '';
-      ownerName = getAnonymousUserId(sessionId);
-      memberUserId = ownerName; // For anonymous, use the same identifier
+      // Anonymous user - use ownerId as memberUserId
+      memberUserId = ownerId;
     }
 
     const event = await prisma.event.create({
       data: {
         name,
-        ownerName,
+        ownerId,
         startTime,
         endTime,
-        useMeetHalf,
-        meetingPointLat: meetingPointLat ?? undefined,
-        meetingPointLng: meetingPointLng ?? undefined,
-        meetingPointName: meetingPointName ?? undefined,
-        meetingPointAddress: meetingPointAddress ?? undefined,
-        members: {
+        status: status || 'upcoming',
+        useMeetHalf: useMeetHalf ?? false,
+        meetingPointLat,
+        meetingPointLng,
+        meetingPointName,
+        meetingPointAddress,
+        groupId: validGroupId,
+        members: memberUserId ? {
           create: {
             userId: memberUserId
           }
-        }
+        } : undefined
       },
       include: {
         members: {
@@ -225,8 +276,26 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
     });
 
     res.status(201).json({ event });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating event:', error);
+    
+    // Handle Prisma foreign key constraint errors
+    if (error.code === 'P2003') {
+      const fieldName = error.meta?.field_name || 'unknown';
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: `Foreign key constraint violation: ${fieldName}`,
+        errors: [{
+          code: 'foreign_key_constraint',
+          path: fieldName.includes('groupId') ? ['groupId'] : [],
+          message: fieldName.includes('groupId') 
+            ? 'Invalid groupId: Group does not exist'
+            : 'Foreign key constraint violation'
+        }]
+      });
+      return;
+    }
+    
     res.status(500).json({
       code: 'INTERNAL_ERROR',
       message: 'Failed to create event'
@@ -431,8 +500,8 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
       return;
     }
 
-    // Check if user is the owner (by ownerName match) or a member (by userId match)
-    if (userName && userUserId && (event.ownerName === userName || event.members.some(m => m.userId === userUserId))) {
+    // Check if user is the owner (by ownerId match) or a member (by userId match)
+    if (userUserId && (event.ownerId === userUserId || event.members.some(m => m.userId === userUserId))) {
       const updatedEvent = await prisma.event.update({
         where: { id },
         data: { name },
@@ -539,7 +608,15 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
     }
     
     const jwtPayload = req.user as { userId: number };
-    const userName = await getUserName(jwtPayload.userId);
+    const userUserId = await getUserUserId(jwtPayload.userId);
+
+    if (!userUserId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'User not found'
+      });
+      return;
+    }
 
     // Check if event exists and user is the owner
     const event = await prisma.event.findUnique({
@@ -554,7 +631,7 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
       return;
     }
 
-    if (event.ownerName !== userName) {
+    if (event.ownerId !== userUserId) {
       res.status(403).json({
         code: 'FORBIDDEN',
         message: 'Only event owner can delete the event'
