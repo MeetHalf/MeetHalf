@@ -27,7 +27,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
-import { getMockEventById, getMockMembersByEventId } from '../mocks/eventData';
+import { eventsApi } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
 import MapContainer from '../components/MapContainer';
 import type { Event, EventMember, TravelMode } from '../types/events';
@@ -90,58 +90,66 @@ export default function EventRoom() {
       }
     }
 
-    // 模擬 API 載入延遲
-    setTimeout(() => {
-      const mockEvent = getMockEventById(id);
-      let mockMembers = getMockMembersByEventId(id);
+    // 呼叫真實 API
+    const fetchEvent = async () => {
+      try {
+        const response = await eventsApi.getEvent(parseInt(id));
 
-      if (!mockEvent) {
-        setError('找不到此聚會');
-        setLoading(false);
-        return;
-      }
+        if (!response || !response.event) {
+          setError('找不到此聚會');
+          setLoading(false);
+          return;
+        }
 
-      setEvent(mockEvent);
-      
-      // 如果 localStorage 有成員數據，將其恢復到成員列表中
-      if (savedMemberData) {
-        // 檢查成員列表中是否已存在該成員
-        const memberExists = mockMembers.some(m => m.id === savedMemberData.memberId);
+        setEvent(response.event);
+        let apiMembers = response.event.members || [];
         
-        if (!memberExists) {
-          // 從 localStorage 恢復成員信息
-          const restoredMember: EventMember = {
-            id: savedMemberData.memberId,
-            eventId: Number(id),
-            userId: savedMemberData.userId || `guest_${savedMemberData.memberId}`,
-            nickname: savedMemberData.nickname || '我',
-            shareLocation: savedMemberData.shareLocation !== false,
-            travelMode: savedMemberData.travelMode || 'transit',
-            lat: savedMemberData.lat,
-            lng: savedMemberData.lng,
-            address: savedMemberData.address,
-            arrivalTime: savedMemberData.arrivalTime,
-            createdAt: savedMemberData.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
+        // 如果 localStorage 有成員數據，將其恢復到成員列表中
+        if (savedMemberData) {
+          // 檢查成員列表中是否已存在該成員
+          const memberExists = apiMembers.some(m => m.id === savedMemberData.memberId);
           
-          mockMembers = [...mockMembers, restoredMember];
+          if (!memberExists) {
+            // 從 localStorage 恢復成員信息
+            const restoredMember: EventMember = {
+              id: savedMemberData.memberId,
+              eventId: Number(id),
+              userId: savedMemberData.userId || `guest_${savedMemberData.memberId}`,
+              nickname: savedMemberData.nickname || '我',
+              shareLocation: savedMemberData.shareLocation !== false,
+              travelMode: savedMemberData.travelMode || 'transit',
+              lat: savedMemberData.lat,
+              lng: savedMemberData.lng,
+              address: savedMemberData.address,
+              arrivalTime: savedMemberData.arrivalTime,
+              createdAt: savedMemberData.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            
+            apiMembers = [...apiMembers, restoredMember];
+          }
         }
+        
+        // 排序成員：已到達 → 分享位置中 → 前往中
+        const sortedMembers = [...apiMembers].sort((a, b) => {
+          if (a.arrivalTime && !b.arrivalTime) return -1;
+          if (!a.arrivalTime && b.arrivalTime) return 1;
+          if (!a.arrivalTime && !b.arrivalTime) {
+            if (a.shareLocation && !b.shareLocation) return -1;
+            if (!a.shareLocation && b.shareLocation) return 1;
+          }
+          return 0;
+        });
+        setMembers(sortedMembers);
+        setLoading(false);
+      } catch (err: any) {
+        console.error('載入聚會失敗:', err);
+        setError(err.response?.data?.message || '載入聚會失敗');
+        setLoading(false);
       }
-      
-      // 排序成員：已到達 → 分享位置中 → 前往中
-      const sortedMembers = [...mockMembers].sort((a, b) => {
-        if (a.arrivalTime && !b.arrivalTime) return -1;
-        if (!a.arrivalTime && b.arrivalTime) return 1;
-        if (!a.arrivalTime && !b.arrivalTime) {
-          if (a.shareLocation && !b.shareLocation) return -1;
-          if (!a.shareLocation && b.shareLocation) return 1;
-        }
-        return 0;
-      });
-      setMembers(sortedMembers);
-      setLoading(false);
-    }, 500);
+    };
+
+    fetchEvent();
   }, [id]);
 
   // 加入聚會

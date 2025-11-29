@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Box, CircularProgress, Alert, Typography, Container } from '@mui/material';
 import EventRoom from './EventRoom';
 import EventsDetail from './EventsDetail';
-import { getMockEventById } from '../mocks/eventData';
+import { eventsApi } from '../api/events';
 
 /**
  * EventDetail - 統一的聚會詳情頁面
@@ -25,19 +25,27 @@ export default function EventDetail() {
       return;
     }
 
-    // 模擬 API 載入延遲
-    setTimeout(() => {
-      const event = getMockEventById(id);
-      
-      if (!event) {
-        setError('找不到此聚會');
+    // 呼叫真實 API
+    const fetchEvent = async () => {
+      try {
+        const response = await eventsApi.getEvent(parseInt(id));
+        
+        if (!response || !response.event) {
+          setError('找不到此聚會');
+          setLoading(false);
+          return;
+        }
+        
+        setUseMeetHalf(response.event.useMeetHalf);
         setLoading(false);
-        return;
+      } catch (err: any) {
+        console.error('載入聚會失敗:', err);
+        setError(err.response?.data?.message || '載入聚會失敗');
+        setLoading(false);
       }
-      
-      setUseMeetHalf(event.useMeetHalf);
-      setLoading(false);
-    }, 300);
+    };
+
+    fetchEvent();
   }, [id]);
 
   // Loading 狀態
