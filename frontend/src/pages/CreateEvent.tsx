@@ -51,6 +51,7 @@ export default function CreateEvent() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [eventId, setEventId] = useState<number | null>(null);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   
@@ -63,21 +64,32 @@ export default function CreateEvent() {
 
   // Load Google Maps API on mount
   useEffect(() => {
-    loadGoogleMaps().catch((err) => {
-      console.error('Failed to load Google Maps:', err);
-      setSnackbar({ open: true, message: 'Google Maps 載入失敗', severity: 'error' });
-    });
+    loadGoogleMaps()
+      .then(() => {
+        setMapsLoaded(true);
+      })
+      .catch((err) => {
+        console.error('Failed to load Google Maps:', err);
+        setSnackbar({ open: true, message: 'Google Maps 載入失敗', severity: 'error' });
+      });
   }, []);
 
   // Initialize Google Places Autocomplete
   useEffect(() => {
-    if (!formData.useMeetHalf && autocompleteInputRef.current && !autocompleteRef.current) {
-      // Check if Google Maps API is loaded
-      if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
-        console.error('Google Maps API not loaded');
-        return;
-      }
-
+    // Only initialize if:
+    // 1. Not using MeetHalf
+    // 2. Input ref is available
+    // 3. Google Maps API is loaded
+    // 4. Autocomplete not already initialized
+    if (
+      !formData.useMeetHalf &&
+      mapsLoaded &&
+      autocompleteInputRef.current &&
+      !autocompleteRef.current &&
+      typeof google !== 'undefined' &&
+      google.maps &&
+      google.maps.places
+    ) {
       // Initialize Autocomplete
       const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
         types: ['establishment', 'geocode'],
@@ -108,14 +120,12 @@ export default function CreateEvent() {
       autocompleteRef.current = autocomplete;
     }
 
-    // Cleanup
-    return () => {
-      if (autocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
-        autocompleteRef.current = null;
-      }
-    };
-  }, [formData.useMeetHalf]);
+    // Cleanup when switching to MeetHalf mode
+    if (formData.useMeetHalf && autocompleteRef.current) {
+      google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      autocompleteRef.current = null;
+    }
+  }, [formData.useMeetHalf, mapsLoaded]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
