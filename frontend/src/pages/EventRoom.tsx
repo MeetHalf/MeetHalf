@@ -8,12 +8,14 @@ import {
   Container,
   Chip,
   Paper,
-  LinearProgress,
+  Collapse,
+  IconButton,
 } from '@mui/material';
 import {
   AccessTime as TimeIcon,
   LocationOn as LocationIcon,
   People as PeopleIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { getMockEventById, getMockMembersByEventId } from '../mocks/eventData';
 import { useEventProgress } from '../hooks/useEventProgress';
@@ -27,6 +29,7 @@ export default function EventRoom() {
   const [members, setMembers] = useState<EventMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [memberListExpanded, setMemberListExpanded] = useState(true);
 
   // 使用進度條 hook（始終調用，內部處理 null）
   const progress = useEventProgress(event);
@@ -277,43 +280,106 @@ export default function EventRoom() {
           </Box>
         </Paper>
 
-        {/* 成員預覽 - 極簡風格 */}
+        {/* 地圖 Placeholder */}
         <Paper
           elevation={0}
           sx={{
-            p: 4,
+            mt: 3,
+            borderRadius: 3,
+            bgcolor: 'white',
+            border: '1px solid',
+            borderColor: 'divider',
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            sx={{
+              width: '100%',
+              height: 300,
+              bgcolor: '#e8f4f8',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+            }}
+          >
+            <Box sx={{ textAlign: 'center' }}>
+              <LocationIcon sx={{ fontSize: 48, color: '#90caf9', mb: 1 }} />
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                地圖載入中...
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.75rem' }}>
+                即將顯示集合地點與成員位置
+              </Typography>
+            </Box>
+          </Box>
+        </Paper>
+
+        {/* 成員預覽 - 極簡風格（可收合） */}
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 3,
             borderRadius: 3,
             bgcolor: 'white',
             border: '1px solid',
             borderColor: 'divider',
           }}
         >
-          <Typography
-            variant="h5"
+          {/* 標題列 - 可點擊收合 */}
+          <Box
             sx={{
-              mb: 0.5,
-              fontWeight: 600,
-              color: '#1a1a1a',
-              letterSpacing: '-0.01em',
+              px: 4,
+              pt: 4,
+              pb: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
             }}
+            onClick={() => setMemberListExpanded(!memberListExpanded)}
           >
-            參加成員
-          </Typography>
+            <Box>
+              <Typography
+                variant="h5"
+                sx={{
+                  mb: 0.5,
+                  fontWeight: 600,
+                  color: '#1a1a1a',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                參加成員
+              </Typography>
+              
+              {/* 排序說明 */}
+              <Typography
+                variant="caption"
+                sx={{
+                  display: 'block',
+                  color: 'text.secondary',
+                  fontSize: '0.75rem',
+                }}
+              >
+                依到達狀態排序：已到達 → 分享位置中 → 前往中
+              </Typography>
+            </Box>
 
-          {/* 排序說明 */}
-          <Typography
-            variant="caption"
-            sx={{
-              display: 'block',
-              color: 'text.secondary',
-              mb: 3,
-              fontSize: '0.75rem',
-            }}
-          >
-            依到達狀態排序：已到達 → 分享位置中 → 前往中
-          </Typography>
-          
-          {members.length === 0 ? (
+            {/* 展開/收合按鈕 */}
+            <IconButton
+              sx={{
+                transform: memberListExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.3s',
+              }}
+            >
+              <ExpandMoreIcon />
+            </IconButton>
+          </Box>
+
+          {/* 可收合的成員列表 */}
+          <Collapse in={memberListExpanded}>
+            <Box sx={{ px: 4, pb: 4 }}>
+              {members.length === 0 ? (
             <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
               目前還沒有成員加入
             </Typography>
@@ -402,6 +468,8 @@ export default function EventRoom() {
               })}
             </Box>
           )}
+            </Box>
+          </Collapse>
         </Paper>
 
         {/* 底部提示 - 卡片樣式 */}
