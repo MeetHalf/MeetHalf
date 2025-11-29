@@ -277,7 +277,13 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
 
     res.status(201).json({ event });
   } catch (error: any) {
-    console.error('Error creating event:', error);
+    console.error('============================================');
+    console.error('[CREATE EVENT ERROR] Full error details:');
+    console.error('Message:', error.message);
+    console.error('Code:', error.code);
+    console.error('Meta:', JSON.stringify(error.meta, null, 2));
+    console.error('Stack:', error.stack);
+    console.error('============================================');
     
     // Handle Prisma foreign key constraint errors
     if (error.code === 'P2003') {
@@ -298,7 +304,12 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
     
     res.status(500).json({
       code: 'INTERNAL_ERROR',
-      message: 'Failed to create event'
+      message: 'Failed to create event',
+      debug: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      } : undefined
     });
   }
 });
