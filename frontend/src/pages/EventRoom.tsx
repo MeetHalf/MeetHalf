@@ -26,18 +26,18 @@ import {
   People as PeopleIcon,
   ExpandMore as ExpandMoreIcon,
   Check as CheckIcon,
+  TouchApp as PokeIcon,
 } from '@mui/icons-material';
-import { eventsApi } from '../api/events';
+import { eventsApi, type Event as ApiEvent, type Member, type TravelMode } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
 import MapContainer from '../components/MapContainer';
-import type { Event, EventMember, TravelMode } from '../types/events';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
-  const [event, setEvent] = useState<Event | null>(null);
-  const [members, setMembers] = useState<EventMember[]>([]);
+  const [event, setEvent] = useState<ApiEvent | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [memberListExpanded, setMemberListExpanded] = useState(true);
@@ -56,6 +56,9 @@ export default function EventRoom() {
   const [hasArrived, setHasArrived] = useState(false);
   const [marking, setMarking] = useState(false);
   
+  // 戳人相關狀態
+  const [pokingMemberId, setPokingMemberId] = useState<number | null>(null);
+  
   // Snackbar
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -66,7 +69,7 @@ export default function EventRoom() {
   // 使用進度條 hook（始終調用，內部處理 null）
   const progress = useEventProgress(event);
 
-  // 載入 Mock Data
+  // 載入 Event 數據
   useEffect(() => {
     if (!id) {
       setError('找不到聚會 ID');
@@ -77,7 +80,7 @@ export default function EventRoom() {
     // 檢查 localStorage 是否已加入此聚會
     const storageKey = `event_${id}_member`;
     const storedMember = localStorage.getItem(storageKey);
-    let savedMemberData = null;
+    let savedMemberData: any = null;
     
     if (storedMember) {
       try {
@@ -102,36 +105,36 @@ export default function EventRoom() {
         }
 
         setEvent(response.event);
-        let apiMembers = response.event.members || [];
         
-        // 如果 localStorage 有成員數據，將其恢復到成員列表中
-        if (savedMemberData) {
-          // 檢查成員列表中是否已存在該成員
-          const memberExists = apiMembers.some(m => m.id === savedMemberData.memberId);
-          
-          if (!memberExists) {
-            // 從 localStorage 恢復成員信息
-            const restoredMember: EventMember = {
-              id: savedMemberData.memberId,
-              eventId: Number(id),
-              userId: savedMemberData.userId || `guest_${savedMemberData.memberId}`,
-              nickname: savedMemberData.nickname || '我',
-              shareLocation: savedMemberData.shareLocation !== false,
-              travelMode: savedMemberData.travelMode || 'transit',
-              lat: savedMemberData.lat,
-              lng: savedMemberData.lng,
-              address: savedMemberData.address,
-              arrivalTime: savedMemberData.arrivalTime,
-              createdAt: savedMemberData.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
+        // 檢查當前用戶是否是成員
+        if (savedMemberData && savedMemberData.memberId) {
+          const currentMember = response.event.members.find(m => m.id === savedMemberData.memberId);
+          if (currentMember) {
+            setHasJoined(true);
+            setCurrentMemberId(currentMember.id);
+            setHasArrived(!!currentMember.arrivalTime);
             
-            apiMembers = [...apiMembers, restoredMember];
+            // 更新 localStorage 中的數據（確保與 API 同步）
+            localStorage.setItem(storageKey, JSON.stringify({
+              ...savedMemberData,
+              arrivalTime: currentMember.arrivalTime,
+              lat: currentMember.lat,
+              lng: currentMember.lng,
+              address: currentMember.address,
+              shareLocation: currentMember.shareLocation,
+              travelMode: currentMember.travelMode,
+            }));
+          } else {
+            // 如果成員不存在，清除 localStorage
+            localStorage.removeItem(storageKey);
+            setHasJoined(false);
+            setCurrentMemberId(null);
+            setHasArrived(false);
           }
         }
         
         // 排序成員：已到達 → 分享位置中 → 前往中
-        const sortedMembers = [...apiMembers].sort((a, b) => {
+        const sortedMembers = (response.event.members || []).sort((a, b) => {
           if (a.arrivalTime && !b.arrivalTime) return -1;
           if (!a.arrivalTime && b.arrivalTime) return 1;
           if (!a.arrivalTime && !b.arrivalTime) {
@@ -164,47 +167,35 @@ export default function EventRoom() {
     setJoining(true);
     
     try {
-      // TODO: 改用真實 API
-      // const response = await eventsApi.joinEvent(Number(id), joinForm);
-      
-      // 模擬 API 延遲
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Mock response
-      const newMemberId = members.length + 1;
-      const newMember: EventMember = {
-        id: newMemberId,
-        eventId: Number(id),
-        userId: `guest_${Date.now()}`,
-        nickname: joinForm.nickname,
+      // 使用真實 API
+      const response = await eventsApi.joinEvent(Number(id), {
+        nickname: joinForm.nickname.trim(),
         shareLocation: joinForm.shareLocation,
         travelMode: joinForm.travelMode,
-        lat: undefined,
-        lng: undefined,
-        address: undefined,
-        arrivalTime: undefined,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      });
       
-      // 儲存到 localStorage（完整成員信息）
+      const { member, guestToken } = response;
+      
+      // 儲存到 localStorage（完整成員信息 + guest token）
       const storageKey = `event_${id}_member`;
       localStorage.setItem(storageKey, JSON.stringify({
-        memberId: newMemberId,
-        userId: `guest_${Date.now()}`,
-        nickname: joinForm.nickname,
-        shareLocation: joinForm.shareLocation,
-        travelMode: joinForm.travelMode,
-        guestToken: `mock_guest_token_${Date.now()}`,
-        arrivalTime: null,
-        createdAt: new Date().toISOString(),
+        memberId: member.id,
+        userId: member.userId,
+        nickname: member.nickname || joinForm.nickname,
+        shareLocation: member.shareLocation,
+        travelMode: member.travelMode || joinForm.travelMode,
+        guestToken: guestToken, // 保存真實的 guest token
+        arrivalTime: member.arrivalTime,
+        createdAt: member.createdAt,
+        updatedAt: member.updatedAt,
       }));
       
       setHasJoined(true);
-      setCurrentMemberId(newMemberId);
+      setCurrentMemberId(member.id);
       
-      // 添加新成員並重新排序
-      const updatedMembers = [...members, newMember].sort((a, b) => {
+      // 重新獲取 event 以獲取最新成員列表（包含新加入的成員）
+      const eventResponse = await eventsApi.getEvent(Number(id));
+      const updatedMembers = (eventResponse.event.members || []).sort((a, b) => {
         if (a.arrivalTime && !b.arrivalTime) return -1;
         if (!a.arrivalTime && b.arrivalTime) return 1;
         if (!a.arrivalTime && !b.arrivalTime) {
@@ -215,11 +206,15 @@ export default function EventRoom() {
       });
       
       setMembers(updatedMembers);
+      setEvent(eventResponse.event);
+      
       setSnackbar({ open: true, message: '成功加入聚會！', severity: 'success' });
-    } catch (err) {
+    } catch (err: any) {
+      console.error('加入聚會失敗:', err);
+      const errorMessage = err.response?.data?.message || err.message || '加入失敗，請稍後再試';
       setSnackbar({ 
         open: true, 
-        message: err instanceof Error ? err.message : '加入失敗，請稍後再試', 
+        message: errorMessage, 
         severity: 'error' 
       });
     } finally {
@@ -234,31 +229,24 @@ export default function EventRoom() {
     setMarking(true);
     
     try {
-      // TODO: 改用真實 API
-      // const response = await eventsApi.markArrival(Number(id));
-      
-      // 模擬 API 延遲
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // 使用真實 API
+      const response = await eventsApi.markArrival(Number(id));
       
       // 更新本地狀態
       setHasArrived(true);
-      const arrivalTime = new Date().toISOString();
       
       // 更新 localStorage
       const storageKey = `event_${id}_member`;
       const storedMember = localStorage.getItem(storageKey);
       if (storedMember) {
         const memberData = JSON.parse(storedMember);
-        memberData.arrivalTime = arrivalTime;
+        memberData.arrivalTime = response.arrivalTime;
         localStorage.setItem(storageKey, JSON.stringify(memberData));
       }
       
-      // 更新成員列表並重新排序
-      const updatedMembers = members.map(m => 
-        m.id === currentMemberId 
-          ? { ...m, arrivalTime } 
-          : m
-      ).sort((a, b) => {
+      // 重新獲取 event 以獲取最新成員列表
+      const eventResponse = await eventsApi.getEvent(Number(id));
+      const updatedMembers = (eventResponse.event.members || []).sort((a, b) => {
         if (a.arrivalTime && !b.arrivalTime) return -1;
         if (!a.arrivalTime && b.arrivalTime) return 1;
         if (!a.arrivalTime && !b.arrivalTime) {
@@ -269,16 +257,53 @@ export default function EventRoom() {
       });
       
       setMembers(updatedMembers);
+      setEvent(eventResponse.event);
       
-      setSnackbar({ open: true, message: '✅ 已標記到達！', severity: 'success' });
-    } catch (err) {
+      const statusEmoji = response.status === 'early' ? '⚡' : response.status === 'ontime' ? '✅' : '⏰';
       setSnackbar({ 
         open: true, 
-        message: err instanceof Error ? err.message : '標記失敗，請稍後再試', 
+        message: `${statusEmoji} 已標記到達！${response.status === 'late' ? ` (遲到 ${response.lateMinutes} 分鐘)` : ''}`, 
+        severity: 'success' 
+      });
+    } catch (err: any) {
+      console.error('標記到達失敗:', err);
+      const errorMessage = err.response?.data?.message || err.message || '標記失敗，請稍後再試';
+      setSnackbar({ 
+        open: true, 
+        message: errorMessage, 
         severity: 'error' 
       });
     } finally {
       setMarking(false);
+    }
+  };
+
+  // 戳人
+  const handlePokeMember = async (targetMemberId: number) => {
+    if (!event || !id || !currentMemberId || targetMemberId === currentMemberId) return;
+    
+    setPokingMemberId(targetMemberId);
+    
+    try {
+      const response = await eventsApi.pokeMember(Number(id), targetMemberId);
+      
+      const targetMember = members.find(m => m.id === targetMemberId);
+      const targetNickname = targetMember?.nickname || '成員';
+      
+      setSnackbar({ 
+        open: true, 
+        message: `👆 已戳 ${targetNickname}！(${response.pokeCount}/3 次)`, 
+        severity: 'success' 
+      });
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || err.message || '戳人失敗，請稍後再試';
+      setSnackbar({ 
+        open: true, 
+        message: errorMessage, 
+        severity: 'error' 
+      });
+    } finally {
+      setPokingMemberId(null);
     }
   };
 
@@ -860,6 +885,26 @@ export default function EventRoom() {
                         flexShrink: 0,
                       }}
                     />
+
+                    {/* 戳人按鈕（不能戳自己） */}
+                    {!isCurrentUser && hasJoined && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handlePokeMember(member.id)}
+                        disabled={pokingMemberId === member.id}
+                        sx={{
+                          color: '#ff6b6b',
+                          '&:hover': {
+                            bgcolor: '#ffe0e0',
+                            transform: 'scale(1.1)',
+                          },
+                          transition: 'all 0.2s',
+                        }}
+                        title="戳一下"
+                      >
+                        <PokeIcon />
+                      </IconButton>
+                    )}
                   </Box>
                 );
               })}

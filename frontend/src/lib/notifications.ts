@@ -14,6 +14,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
 
   if (Notification.permission === 'granted') {
+    console.log('[Notifications] Notification permission granted');
     return 'granted';
   }
 

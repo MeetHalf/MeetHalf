@@ -45,6 +45,22 @@ function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
   const cookieOptions = getCookieOptions(req);
   cookieOptions.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+  console.log('[AUTH] Setting auth cookie:', {
+    userId: user.id,
+    tokenLength: token.length,
+    cookieOptions: {
+      httpOnly: cookieOptions.httpOnly,
+      sameSite: cookieOptions.sameSite,
+      secure: cookieOptions.secure,
+      path: cookieOptions.path,
+      domain: cookieOptions.domain || 'not set',
+      maxAge: cookieOptions.maxAge,
+    },
+    protocol: req.protocol,
+    host: req.headers.host,
+    origin: req.headers.origin,
+  });
+
   res.cookie('token', token, cookieOptions);
 
   // Redirect to frontend
@@ -217,14 +233,27 @@ router.get(
 // GET /auth/me - Optional authentication (returns user or null)
 router.get('/me', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log('[AUTH] /auth/me request received', {
+      hasUser: !!req.user,
+      userType: req.user ? (typeof req.user === 'object' && 'userId' in req.user ? 'JWT' : 'guest') : 'none',
+      hasCookies: Object.keys(req.cookies).length > 0,
+      cookieKeys: Object.keys(req.cookies),
+      hasAuthHeader: !!req.headers.authorization,
+      origin: req.headers.origin,
+      host: req.headers.host,
+    });
+
     if (!req.user || !('userId' in req.user)) {
       // Not authenticated - return null user (anonymous mode)
+      console.log('[AUTH] /auth/me: No user or not JWT user, returning null');
       res.json({ user: null });
       return;
     }
 
     const jwtPayload = req.user as { userId: number };
     const userId = jwtPayload.userId;
+    console.log('[AUTH] /auth/me: Looking up user with id:', userId);
+    
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -239,6 +268,7 @@ router.get('/me', optionalAuthMiddleware, async (req: Request, res: Response): P
     });
 
     if (!user) {
+      console.error('[AUTH] /auth/me: User not found in database, id:', userId);
       res.status(404).json({
         code: 'USER_NOT_FOUND',
         message: 'User not found',
@@ -246,9 +276,10 @@ router.get('/me', optionalAuthMiddleware, async (req: Request, res: Response): P
       return;
     }
 
+    console.log('[AUTH] /auth/me: User found:', { id: user.id, email: user.email, userId: user.userId });
     res.json({ user });
   } catch (error) {
-    console.error('Get user error:', error);
+    console.error('[AUTH] /auth/me: Error:', error);
     res.status(500).json({
       code: 'INTERNAL_ERROR',
       message: 'An error occurred while fetching user',

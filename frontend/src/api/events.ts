@@ -11,7 +11,7 @@ export interface User {
 export interface Event {
   id: number;
   name: string;
-  ownerName: string;
+  ownerId: string; // Owner's userId (not foreign key - allows anonymous users)
   meetingPointLat?: number | null;
   meetingPointLng?: number | null;
   meetingPointName?: string | null;
@@ -184,6 +184,38 @@ export const eventsApi = {
     const response = await api.post(`/events/${eventId}/poke`, { targetMemberId });
     return response.data;
   },
+
+  // Join event as guest
+  async joinEvent(eventId: number, data: {
+    nickname: string;
+    shareLocation: boolean;
+    travelMode?: TravelMode;
+  }): Promise<{ member: Member; guestToken: string }> {
+    const response = await api.post(`/events/${eventId}/join`, data);
+    return response.data;
+  },
+
+  // Mark arrival
+  async markArrival(eventId: number): Promise<{
+    success: boolean;
+    arrivalTime: string;
+    status: 'early' | 'ontime' | 'late';
+    lateMinutes?: number;
+  }> {
+    const response = await api.post(`/events/${eventId}/arrival`);
+    return response.data;
+  },
+
+  // Update location
+  async updateLocation(eventId: number, data: {
+    lat: number;
+    lng: number;
+    address?: string;
+    travelMode?: TravelMode;
+  }): Promise<{ member: Member }> {
+    const response = await api.post(`/events/${eventId}/location`, data);
+    return response.data;
+  },
 };
 
 // Members API
@@ -209,9 +241,9 @@ export const membersApi = {
 
 // Utility functions
 export const eventUtils = {
-  // Check if user is event owner (by name)
-  isOwner: (event: Event, userName: string | null): boolean => {
-    return event.ownerName === userName;
+  // Check if user is event owner (by userId)
+  isOwner: (event: Event, userUserId: string | null): boolean => {
+    return userUserId ? event.ownerId === userUserId : false;
   },
 
   // Get current user's membership in event
