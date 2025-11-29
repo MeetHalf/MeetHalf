@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -10,8 +10,16 @@ import {
   Paper,
   Collapse,
   IconButton,
-  Snackbar,
   Tooltip,
+  TextField,
+  Button,
+  FormControlLabel,
+  Checkbox,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Snackbar,
 } from '@mui/material';
 import {
   AccessTime as TimeIcon,
@@ -19,6 +27,7 @@ import {
   People as PeopleIcon,
   ExpandMore as ExpandMoreIcon,
   TouchApp as PokeIcon,
+  Check as CheckIcon,
 } from '@mui/icons-material';
 import { eventsApi, type Event, type Member } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
@@ -26,6 +35,8 @@ import { usePusher } from '../hooks/usePusher';
 import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
 import { useAuth } from '../hooks/useAuth';
 import type { PokeEvent } from '../types/events';
+import MapContainer from '../components/MapContainer';
+import type { Event, EventMember, TravelMode } from '../types/events';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +50,27 @@ export default function EventRoom() {
   const [memberListExpanded, setMemberListExpanded] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'info' });
   const [pokingMemberId, setPokingMemberId] = useState<number | null>(null);
+
+  // 加入聚會相關狀態
+  const [hasJoined, setHasJoined] = useState(false);
+  const [currentMemberId, setCurrentMemberId] = useState<number | null>(null);
+  const [joinForm, setJoinForm] = useState({
+    nickname: '',
+    shareLocation: true,
+    travelMode: 'transit' as TravelMode,
+  });
+  const [joining, setJoining] = useState(false);
+
+  // 「我到了」相關狀態
+  const [hasArrived, setHasArrived] = useState(false);
+  const [marking, setMarking] = useState(false);
+  
+  // Snackbar
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success' as 'success' | 'error' | 'info',
+  });
 
   // 使用進度條 hook（始終調用，內部處理 null）
   const progress = useEventProgress(event);
@@ -67,6 +99,26 @@ export default function EventRoom() {
           setLoading(false);
           return;
         }
+    // 檢查 localStorage 是否已加入此聚會
+    const storageKey = `event_${id}_member`;
+    const storedMember = localStorage.getItem(storageKey);
+    let savedMemberData = null;
+    
+    if (storedMember) {
+      try {
+        savedMemberData = JSON.parse(storedMember);
+        setHasJoined(true);
+        setCurrentMemberId(savedMemberData.memberId);
+        setHasArrived(!!savedMemberData.arrivalTime);
+      } catch (e) {
+        console.error('Failed to parse stored member data:', e);
+      }
+    }
+
+    // 模擬 API 載入延遲
+    setTimeout(() => {
+      const mockEvent = getMockEventById(id);
+      let mockMembers = getMockMembersByEventId(id);
 
         const response = await eventsApi.getEvent(eventId);
         const eventData = response.event;
@@ -159,6 +211,43 @@ export default function EventRoom() {
     }
   };
 
+  // Memoize 地圖中心點，避免重新渲染
+  const mapCenter = useMemo(() => {
+    if (event?.meetingPointLat && event?.meetingPointLng) {
+      return { lat: event.meetingPointLat, lng: event.meetingPointLng };
+    }
+    return undefined;
+  }, [event?.meetingPointLat, event?.meetingPointLng]);
+
+  // Memoize 地圖標記，避免重新渲染
+  const mapMarkers = useMemo(() => {
+    const markers = [];
+
+    // 集合地點標記
+    if (event?.meetingPointLat && event?.meetingPointLng) {
+      markers.push({
+        lat: event.meetingPointLat,
+        lng: event.meetingPointLng,
+        title: event.meetingPointName || '集合地點',
+        label: '📍',
+      });
+    }
+
+    // 成員位置標記
+    members
+      .filter((m) => m.lat && m.lng && m.shareLocation)
+      .forEach((m) => {
+        markers.push({
+          lat: m.lat!,
+          lng: m.lng!,
+          title: m.nickname || '成員',
+          label: m.arrivalTime ? '✅' : (m.nickname?.charAt(0) || '?'),
+        });
+      });
+
+    return markers;
+  }, [event?.meetingPointLat, event?.meetingPointLng, event?.meetingPointName, members]);
+
   // Loading 狀態
   if (loading) {
     return (
@@ -193,8 +282,171 @@ export default function EventRoom() {
     );
   }
 
+  // 未加入狀態 - 顯示聚會預覽和加入表單
+  if (!hasJoined) {
+    return (
+      <Box sx={{ bgcolor: '#fafafa', minHeight: 'calc(100vh - 64px)', py: 4 }}>
+        <Container maxWidth="md">
+          {/* 聚會預覽卡片 */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 4,
+              mb: 3,
+              borderRadius: 3,
+              bgcolor: 'white',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <Chip
+              label={getStatusText(event.status)}
+              size="small"
+              sx={{
+                mb: 3,
+                bgcolor: event.status === 'ongoing' ? '#e8f5e9' : '#f5f5f5',
+                color: event.status === 'ongoing' ? '#2e7d32' : 'text.secondary',
+                fontWeight: 500,
+              }}
+            />
+            
+            <Typography variant="h4" sx={{ fontWeight: 600, mb: 3, color: '#1a1a1a' }}>
+              你被邀請參加：{event.name}
+            </Typography>
+
+            {/* 聚會詳情 */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <TimeIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+                <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
+                  {new Date(event.startTime).toLocaleString('zh-TW', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    weekday: 'short',
+                  })}
+                </Typography>
+              </Box>
+
+              {event.meetingPointName && (
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                  <LocationIcon sx={{ color: 'text.secondary', fontSize: 18, mt: 0.25 }} />
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
+                      {event.meetingPointName}
+                    </Typography>
+                    {event.meetingPointAddress && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+                        {event.meetingPointAddress}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              )}
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <PeopleIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+                <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
+                  {members.length} 位成員已加入
+                </Typography>
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* 加入表單 */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 4,
+              borderRadius: 3,
+              bgcolor: 'white',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, color: '#1a1a1a' }}>
+              加入聚會
+            </Typography>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <TextField
+                label="你的暱稱"
+                placeholder="例如：小明"
+                value={joinForm.nickname}
+                onChange={(e) => setJoinForm({ ...joinForm, nickname: e.target.value })}
+                fullWidth
+                required
+              />
+
+              <FormControl fullWidth>
+                <InputLabel>交通方式</InputLabel>
+                <Select
+                  value={joinForm.travelMode}
+                  onChange={(e) => setJoinForm({ ...joinForm, travelMode: e.target.value as TravelMode })}
+                  label="交通方式"
+                >
+                  <MenuItem value="driving">🚗 開車</MenuItem>
+                  <MenuItem value="transit">🚇 大眾運輸</MenuItem>
+                  <MenuItem value="walking">🚶 步行</MenuItem>
+                  <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={joinForm.shareLocation}
+                    onChange={(e) => setJoinForm({ ...joinForm, shareLocation: e.target.checked })}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      分享我的位置
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      我們會在聚會前後 30 分鐘內追蹤你的位置
+                    </Typography>
+                  </Box>
+                }
+              />
+
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                onClick={handleJoinEvent}
+                disabled={joining}
+                sx={{
+                  py: 1.5,
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                }}
+              >
+                {joining ? <CircularProgress size={24} /> : '加入聚會'}
+              </Button>
+            </Box>
+          </Paper>
+
+          {/* Snackbar */}
+          <Snackbar
+            open={snackbar.open}
+            autoHideDuration={3000}
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+            message={snackbar.message}
+          />
+        </Container>
+      </Box>
+    );
+  }
+
+  // 已加入狀態 - 顯示完整 EventRoom
   return (
-    <Box sx={{ bgcolor: '#fafafa', minHeight: 'calc(100vh - 64px)', py: 4 }}>
+    <Box sx={{ bgcolor: '#fafafa', minHeight: 'calc(100vh - 64px)', py: 4, pb: 10 }}>
       <Container maxWidth="md">
         {/* 聚會資訊卡片 - 極簡風格 */}
         <Paper
@@ -342,7 +594,7 @@ export default function EventRoom() {
           </Box>
         </Paper>
 
-        {/* 地圖 Placeholder */}
+        {/* 地圖區塊 */}
         <Paper
           elevation={0}
           sx={{
@@ -354,27 +606,7 @@ export default function EventRoom() {
             overflow: 'hidden',
           }}
         >
-          <Box
-            sx={{
-              width: '100%',
-              height: 300,
-              bgcolor: '#e8f4f8',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-            }}
-          >
-            <Box sx={{ textAlign: 'center' }}>
-              <LocationIcon sx={{ fontSize: 48, color: '#90caf9', mb: 1 }} />
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                地圖載入中...
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.75rem' }}>
-                即將顯示集合地點與成員位置
-              </Typography>
-            </Box>
-          </Box>
+          <MapContainer center={mapCenter} markers={mapMarkers} />
         </Paper>
 
         {/* 成員預覽 - 極簡風格（可收合） */}
@@ -459,6 +691,7 @@ export default function EventRoom() {
                   return { text: '前往中', color: '#bdbdbd' };
                 };
                 const status = getMemberStatus();
+                const isCurrentUser = member.id === currentMemberId;
 
                 return (
                   <Box
@@ -468,8 +701,12 @@ export default function EventRoom() {
                       alignItems: 'center',
                       gap: 2,
                       py: 2.5,
+                      px: 2,
+                      mx: -2,
                       borderTop: index === 0 ? 'none' : '1px solid',
                       borderColor: 'divider',
+                      bgcolor: isCurrentUser ? '#e3f2fd' : 'transparent',
+                      borderRadius: isCurrentUser ? 2 : 0,
                     }}
                   >
                     {/* Avatar */}
@@ -478,14 +715,14 @@ export default function EventRoom() {
                         width: 48,
                         height: 48,
                         borderRadius: '50%',
-                        bgcolor: '#f5f5f5',
+                        bgcolor: isCurrentUser ? status.color : '#f5f5f5',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: '#666',
+                        color: isCurrentUser ? 'white' : '#666',
                         fontWeight: 600,
                         fontSize: '1.1rem',
-                        border: '2px solid white',
+                        border: `2px solid ${isCurrentUser ? 'white' : '#e0e0e0'}`,
                         flexShrink: 0,
                       }}
                     >
@@ -503,6 +740,19 @@ export default function EventRoom() {
                         }}
                       >
                         {member.nickname}
+                        {isCurrentUser && (
+                          <Chip
+                            label="你"
+                            size="small"
+                            sx={{
+                              ml: 1,
+                              height: 20,
+                              fontSize: '0.7rem',
+                              bgcolor: '#1976d2',
+                              color: 'white',
+                            }}
+                          />
+                        )}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -569,6 +819,43 @@ export default function EventRoom() {
             {snackbar.message}
           </Alert>
         </Snackbar>
+        {/* 「我到了」按鈕 - 成員列表下方 */}
+        {!hasArrived && (
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 3,
+              p: 3,
+              borderRadius: 3,
+              bgcolor: 'white',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <Button
+              variant="contained"
+              size="large"
+              fullWidth
+              onClick={handleMarkArrival}
+              disabled={marking}
+              startIcon={marking ? <CircularProgress size={20} sx={{ color: 'white' }} /> : <CheckIcon />}
+              sx={{
+                py: 2,
+                borderRadius: 2,
+                textTransform: 'none',
+                fontSize: '1.125rem',
+                fontWeight: 600,
+                bgcolor: '#4caf50',
+                '&:hover': {
+                  bgcolor: '#45a049',
+                },
+                boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
+              }}
+            >
+              {marking ? '標記中...' : '我到了！'}
+            </Button>
+          </Paper>
+        )}
 
         {/* 底部提示 - 卡片樣式 */}
         <Paper
@@ -592,9 +879,17 @@ export default function EventRoom() {
               fontWeight: 500,
             }}
           >
-            📍 Phase 1 基本版本 • 地圖與即時功能開發中
+            📍 EventRoom 完整版 • Guest 加入 + 地圖顯示 + 到達標記
           </Typography>
         </Paper>
+
+        {/* Snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={3000}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          message={snackbar.message}
+        />
       </Container>
     </Box>
   );

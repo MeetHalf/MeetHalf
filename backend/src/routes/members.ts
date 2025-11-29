@@ -441,9 +441,9 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
     
     // Check if user can remove this member:
     // 1. User is removing themselves (userId matches), OR
-    // 2. User is the event owner (ownerName matches)
+    // 2. User is the event owner (ownerId matches)
     const canRemove = (currentUserUserId && member.userId === currentUserUserId) || 
-                      (currentUserName && member.event.ownerName === currentUserName);
+                      (currentUserUserId && member.event.ownerId === currentUserUserId);
 
     if (!canRemove) {
       res.status(403).json({
@@ -454,7 +454,7 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
     }
 
     // Check if this is the event owner trying to leave their own event
-    if (currentUserUserId && member.userId === currentUserUserId && member.event.ownerName === currentUserName) {
+    if (currentUserUserId && member.userId === currentUserUserId && member.event.ownerId === currentUserUserId) {
       // Count other members
       const memberCount = await prisma.member.count({
         where: {
