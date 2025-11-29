@@ -1,66 +1,31 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
-  TextField,
   Button,
   Typography,
   Alert,
-  Tabs,
-  Tab,
   Container,
   Paper,
   Fade,
+  Divider,
 } from '@mui/material';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useAuth } from '../hooks/useAuth';
 import { 
-  Login as LoginIcon, 
-  PersonAdd as RegisterIcon,
+  Google as GoogleIcon,
+  GitHub as GitHubIcon,
   LocationOn as LocationIcon 
 } from '@mui/icons-material';
-
-const authSchema = z.object({
-  email: z.string().email('請輸入有效的 email 格式'),
-  password: z.string().min(8, '密碼至少需要 8 個字元'),
-});
-
-type AuthFormData = z.infer<typeof authSchema>;
+import api from '../api/axios';
 
 export default function Login() {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [error, setError] = useState<string | null>(null);
-  const { login, register } = useAuth();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const error = searchParams.get('error');
 
-  const {
-    register: registerField,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<AuthFormData>({
-    resolver: zodResolver(authSchema),
-  });
+  const handleGoogleLogin = () => {
+    window.location.href = `${api.defaults.baseURL}/auth/google`;
+  };
 
-  const onSubmit = async (data: AuthFormData) => {
-    setError(null);
-    try {
-      if (mode === 'login') {
-        await login(data.email, data.password);
-        // No need to call refreshMe() - login() already sets the user
-        // Cookie is set by backend, but we already have user data from login response
-      } else {
-        await register(data.email, data.password);
-        // No need to call refreshMe() - register() already logs in and sets the user
-      }
-      // Navigate after successful login/register
-      navigate('/groups');
-    } catch (err: any) {
-      // Extract error message from backend response
-      const message = err.response?.data?.message || err.response?.data?.code || '發生錯誤，請稍後再試';
-      setError(message);
-    }
+  const handleGitHubLogin = () => {
+    window.location.href = `${api.defaults.baseURL}/auth/github`;
   };
 
   return (
@@ -146,122 +111,79 @@ export default function Login() {
               </Typography>
             </Box>
 
-            {/* Tabs */}
-            <Tabs
-              value={mode}
-              onChange={(_, newValue) => {
-                setMode(newValue);
-                setError(null);
-              }}
-              variant="fullWidth"
-              sx={{
-                mb: 3,
-                '& .MuiTab-root': {
-                  fontWeight: 600,
-                  fontSize: '1rem',
-                },
-              }}
-            >
-              <Tab 
-                label="登入" 
-                value="login" 
-                icon={<LoginIcon />} 
-                iconPosition="start"
-              />
-              <Tab 
-                label="註冊" 
-                value="register" 
-                icon={<RegisterIcon />} 
-                iconPosition="start"
-              />
-            </Tabs>
-
             {/* Error Alert */}
             {error && (
               <Fade in={!!error}>
                 <Alert 
                   severity="error" 
                   sx={{ mb: 3 }}
-                  onClose={() => setError(null)}
                 >
-                  {error}
+                  登入失敗，請稍後再試
                 </Alert>
               </Fade>
             )}
 
-            {/* Form */}
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <TextField
-                {...registerField('email')}
-                label="Email 帳號"
-                type="email"
-                fullWidth
-                margin="normal"
-                error={!!errors.email}
-                helperText={errors.email?.message}
-                autoComplete="email"
-                sx={{ mb: 2 }}
-              />
-
-              <TextField
-                {...registerField('password')}
-                label="密碼"
-                type="password"
-                fullWidth
-                margin="normal"
-                error={!!errors.password}
-                helperText={errors.password?.message || '密碼需至少 8 個字元'}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                sx={{ mb: 3 }}
-              />
-
+            {/* OAuth Buttons */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Button
-                type="submit"
                 variant="contained"
                 fullWidth
                 size="large"
-                disabled={isSubmitting}
+                onClick={handleGoogleLogin}
+                startIcon={<GoogleIcon />}
                 sx={{
                   py: 1.5,
                   fontSize: '1rem',
                   fontWeight: 'bold',
-                  boxShadow: 2,
+                  bgcolor: '#4285F4',
+                  color: 'white',
                   '&:hover': {
+                    bgcolor: '#357AE8',
                     transform: 'translateY(-2px)',
                     boxShadow: 4,
                   },
                   transition: 'all 0.2s ease',
                 }}
               >
-                {isSubmitting ? '處理中...' : mode === 'login' ? '登入' : '註冊新帳號'}
+                使用 Google 登入
               </Button>
-            </form>
 
-            {/* Info Text */}
-            {mode === 'register' && (
-              <Box
+              <Button
+                variant="contained"
+                fullWidth
+                size="large"
+                onClick={handleGitHubLogin}
+                startIcon={<GitHubIcon />}
                 sx={{
-                  mt: 3,
-                  p: 2,
-                  bgcolor: 'info.50',
-                  borderRadius: 2,
-                  border: '1px solid',
-                  borderColor: 'info.200',
+                  py: 1.5,
+                  fontSize: '1rem',
+                  fontWeight: 'bold',
+                  bgcolor: '#24292e',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: '#1a1e22',
+                    transform: 'translateY(-2px)',
+                    boxShadow: 4,
+                  },
+                  transition: 'all 0.2s ease',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" align="center">
-                  💡 註冊後將自動登入並導向群組頁面
-                </Typography>
-              </Box>
-            )}
+                使用 GitHub 登入
+              </Button>
+            </Box>
 
-            {mode === 'login' && (
-              <Box sx={{ mt: 3 }}>
-                <Typography variant="body2" color="text.secondary" align="center">
-                  還沒有帳號？點擊上方「註冊」分頁建立新帳號
-                </Typography>
-              </Box>
-            )}
+            <Divider sx={{ my: 3 }}>
+              <Typography variant="body2" color="text.secondary">
+                或
+              </Typography>
+            </Divider>
+
+            {/* Info Text */}
+            <Box sx={{ mt: 3, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                💡 未登入也可以使用！直接前往活動頁面即可開始使用
+              </Typography>
+            </Box>
           </Paper>
         </Fade>
       </Container>

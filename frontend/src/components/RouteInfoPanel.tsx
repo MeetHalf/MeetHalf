@@ -21,7 +21,7 @@ import {
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon
 } from '@mui/icons-material';
-import { TimeMidpointResponse, RoutesResponse, TravelMode, Group } from '../api/groups';
+import { TimeMidpointResponse, RoutesResponse, TravelMode, Event } from '../api/events';
 
 interface RouteInfoPanelProps {
   timeMidpoint: TimeMidpointResponse | null;
@@ -31,7 +31,7 @@ interface RouteInfoPanelProps {
   calcObjective: 'minimize_total' | 'minimize_max';
   onCalcObjectiveChange: (objective: 'minimize_total' | 'minimize_max') => void;
   onToggleRoutes: () => void;
-  group?: Group;
+  event?: Event;
 }
 
 export default function RouteInfoPanel({
@@ -42,7 +42,7 @@ export default function RouteInfoPanel({
   calcObjective,
   onCalcObjectiveChange,
   onToggleRoutes,
-  group
+  event
 }: RouteInfoPanelProps) {
   const [highlightedMember, setHighlightedMember] = useState<number | null>(null);
 
@@ -170,18 +170,16 @@ export default function RouteInfoPanel({
             
             <Stack spacing={1}>
               {timeMidpoint.members.map((member) => {
-                // Find the actual member object
+                // Find the actual member object by memberId
                 let memberData: any = undefined;
-                if (group && member.userId !== 0) {
-                  memberData = group.members.find(m => m.userId === member.userId);
-                } else if (group) {
-                  memberData = group.members.find(m => m.userId === null && m.lat && m.lng);
+                if (event && member.memberId) {
+                  memberData = event.members.find(m => m.id === member.memberId);
                 }
 
                 const isHighlighted = memberData ? highlightedMember === memberData.id : false;
                 
                 return (
-                  <Box key={member.userId} sx={{ 
+                  <Box key={member.memberId} sx={{ 
                     display: 'flex', 
                     alignItems: 'center',
                     p: 1.5,
@@ -215,7 +213,7 @@ export default function RouteInfoPanel({
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'
                       }}>
-                        {member.userEmail}
+                        {member.username || memberData?.nickname || 'Unknown'}
                       </Typography>
                       <Typography variant="caption" sx={{ color: '#9333EA', fontSize: '0.7rem' }}>
                         {(member.distance / 1000).toFixed(1)} 公里
@@ -233,7 +231,7 @@ export default function RouteInfoPanel({
                     </Box>
                     
                     {memberData?.lat && memberData?.lng && (
-                      <Tooltip title={`為 ${member.userEmail} 開啟導航`}>
+                      <Tooltip title={`為 ${member.username || memberData?.nickname || 'Unknown'} 開啟導航`}>
                         <IconButton
                           size="small"
                           onClick={(e) => {

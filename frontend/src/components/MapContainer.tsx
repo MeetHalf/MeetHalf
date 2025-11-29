@@ -15,7 +15,7 @@ interface MapContainerProps {
   routes?: Array<{
     polyline: string;
     color: string;
-    memberEmail: string;
+    username: string;
   }>;
   showRoutes?: boolean;
   onMarkerDragEnd?: (id: number, lat: number, lng: number) => void;

@@ -4,14 +4,15 @@ import api from '../api/axios';
 interface User {
   id: number;
   email: string;
+  name: string;
+  avatar?: string | null;
+  provider?: string | null;
   createdAt: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
 }
@@ -34,34 +35,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    try {
-      const response = await api.post('/auth/login', { email, password });
-      // Backend returns: { message: 'Login successful', user: {...} }
-      setUser(response.data.user);
-      // Set loading to false since we have user data now
-      setLoading(false);
-    } catch (error: any) {
-      // Re-throw error so Login page can handle it
-      setLoading(false);
-      throw error;
-    }
-  }, []);
-
-  const register = useCallback(async (email: string, password: string) => {
-    try {
-      // Backend returns: { message: 'User registered successfully', user: {...} }
-      const response = await api.post('/auth/register', { email, password });
-      // After registration, automatically login
-      // Backend login returns: { message: 'Login successful', user: {...} }
-      const loginResponse = await api.post('/auth/login', { email, password });
-      setUser(loginResponse.data.user);
-      setLoading(false);
-    } catch (error: any) {
-      setLoading(false);
-      throw error;
-    }
-  }, []);
 
   const logout = useCallback(async () => {
     await api.post('/auth/logout');
@@ -74,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     AuthContext.Provider,
-    { value: { user, loading, login, register, logout, refreshMe } },
+    { value: { user, loading, logout, refreshMe } },
     children
   );
 }

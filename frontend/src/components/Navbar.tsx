@@ -90,7 +90,7 @@ export default function Navbar() {
               </Typography>
             </Box>
 
-            {/* Groups Button */}
+            {/* Events Button */}
             {location.pathname !== '/groups' && (
               <Button 
                 variant="outlined" 

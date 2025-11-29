@@ -14,7 +14,17 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: `${process.env.BACKEND_URL || 'http://localhost:3000'}/auth/google/callback`,
+        callbackURL: (() => {
+          // Priority: BACKEND_URL > VERCEL_URL > localhost
+          if (process.env.BACKEND_URL) {
+            console.log(`${process.env.BACKEND_URL}/api/auth/google/callback`);
+            return `${process.env.BACKEND_URL}/auth/google/callback`;
+          }
+          if (process.env.VERCEL_URL) {
+            return `https://${process.env.VERCEL_URL}/auth/google/callback`;
+          }
+          return 'http://localhost:3000/api/auth/google/callback';
+        })(),
       },
       async (accessToken: any, refreshToken: any, profile: any, done: any) => {
         try {
@@ -78,7 +88,16 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
       {
         clientID: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
-        callbackURL: `${process.env.BACKEND_URL || 'http://localhost:3000'}/auth/github/callback`,
+        callbackURL: (() => {
+          // Priority: BACKEND_URL > VERCEL_URL > localhost
+          if (process.env.BACKEND_URL) {
+            return `${process.env.BACKEND_URL}/auth/github/callback`;
+          }
+          if (process.env.VERCEL_URL) {
+            return `https://${process.env.VERCEL_URL}/auth/github/callback`;
+          }
+          return 'http://localhost:3000/auth/github/callback';
+        })(),
       },
       async (accessToken: any, refreshToken: any, profile: any, done: any) => {
         try {

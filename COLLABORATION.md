@@ -49,7 +49,7 @@ main
 - [ ] 改善空狀態（無群組時）的提示
 - [ ] 加入骨架屏（Skeleton）載入效果
 - [ ] 優化手機版 RWD 排版
-- **檔案**: `frontend/src/pages/Groups.tsx`
+- **檔案**: `frontend/src/pages/Events.tsx`
 - **預估時間**: 4-6 小時
 
 #### Issue #8: 地圖互動優化
@@ -90,7 +90,7 @@ main
 - [ ] 實作群組名稱搜尋功能
 - [ ] 加入「我的群組」/「所有群組」篩選
 - [ ] 加入排序功能（最新/成員數）
-- **檔案**: `frontend/src/pages/Groups.tsx`
+- **檔案**: `frontend/src/pages/Events.tsx`
 - **預估時間**: 5-6 小時
 
 #### Issue #12: 成員頭像與個人資訊
@@ -361,7 +361,7 @@ npm run test
 ```
 frontend/src/
 ├── pages/              # 頁面元件
-│   ├── Groups.tsx      # 群組列表（優先優化）
+│   ├── Events.tsx      # 群組列表（優先優化）
 │   ├── GroupDetail.tsx # 群組詳情頁（互動最複雜）
 │   └── Login.tsx       # 登入頁
 ├── components/         # 共用元件

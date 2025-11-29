@@ -221,7 +221,7 @@ MeetHalf/
 │   ├── src/
 │   │   ├── pages/
 │   │   │   ├── EventRoom.tsx    # 聚會頁面 (新)
-│   │   │   ├── Groups.tsx       # MeetHalf 群組列表
+│   │   │   ├── Events.tsx       # MeetHalf 群組列表
 │   │   │   └── Login.tsx
 │   │   ├── components/
 │   │   │   ├── EventResultPopup.tsx   # 排行榜 (新)

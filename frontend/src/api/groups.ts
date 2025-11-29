@@ -121,7 +121,7 @@ export interface RoutesResponse {
   cached: boolean;
 }
 
-// Groups API
+// Events API
 export const groupsApi = {
   // Get all groups for current user
   async getGroups(): Promise<{ groups: Group[] }> {

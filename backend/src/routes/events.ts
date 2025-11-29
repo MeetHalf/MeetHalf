@@ -190,10 +190,10 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
 
 /**
  * @swagger
- * /groups/{id}:
+ * /events/{id}:
  *   get:
  *     summary: Get group details with members
- *     tags: [Groups]
+ *     tags: [Events]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -278,10 +278,10 @@ router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response): 
 
 /**
  * @swagger
- * /groups/{id}:
+ * /events/{id}:
  *   patch:
  *     summary: Update group name (members can update)
- *     tags: [Groups]
+ *     tags: [Events]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -417,10 +417,10 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
 
 /**
  * @swagger
- * /groups/{id}:
+ * /events/{id}:
  *   delete:
  *     summary: Delete group (owner only)
- *     tags: [Groups]
+ *     tags: [Events]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -465,7 +465,7 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// DELETE /groups/:id - Delete group (owner only)
+// DELETE /events/:id - Delete group (owner only)
 router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const validation = eventParamsSchema.safeParse(req.params);
@@ -531,10 +531,10 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
 
 /**
  * @swagger
- * /groups/{id}/midpoint:
+ * /events/{id}/midpoint:
  *   get:
  *     summary: Calculate geometric midpoint and nearby places
- *     tags: [Groups]
+ *     tags: [Events]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -770,10 +770,10 @@ router.get('/:id/midpoint', optionalAuthMiddleware, async (req: Request, res: Re
 
 /**
  * @swagger
- * /groups/{id}/midpoint_by_time:
+ * /events/{id}/midpoint_by_time:
  *   get:
  *     summary: Calculate time-based optimal midpoint (minimize total or maximum travel time)
- *     tags: [Groups]
+ *     tags: [Events]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -1279,10 +1279,10 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
 
 /**
  * @swagger
- * /groups/{id}/routes_to_midpoint:
+ * /events/{id}/routes_to_midpoint:
  *   get:
  *     summary: Get routes from all members to the midpoint
- *     tags: [Groups]
+ *     tags: [Events]
  *     security:
  *       - cookieAuth: []
  *     parameters:

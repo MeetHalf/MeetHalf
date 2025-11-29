@@ -168,7 +168,7 @@ const options: swaggerJsdoc.Options = {
         description: 'Authentication endpoints',
       },
       {
-        name: 'Groups',
+        name: 'Events',
         description: 'Group management endpoints',
       },
       {

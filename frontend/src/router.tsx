@@ -2,13 +2,13 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import Groups from './pages/Groups';
-import GroupDetail from './pages/GroupDetail';
+import Events from './pages/Events';
+import GroupDetail from './pages/EventsDetail';
 import { Box, CircularProgress } from '@mui/material';
 
-// Protected Route wrapper
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+// Loading Route wrapper
+function LoadingRoute({ children }: { children: React.ReactNode }) {
+  const { loading } = useAuth();
 
   if (loading) {
     return (
@@ -18,31 +18,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
         </Box>
       </Layout>
     );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return <Layout>{children}</Layout>;
-}
-
-// Public Route wrapper (redirect to groups if already logged in)
-function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <Layout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-          <CircularProgress />
-        </Box>
-      </Layout>
-    );
-  }
-
-  if (user) {
-    return <Navigate to="/groups" replace />;
   }
 
   return <Layout>{children}</Layout>;
@@ -51,31 +26,32 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Navigate to="/groups" replace />,
+    element: <Navigate to="/events" replace />,
   },
   {
     path: '/login',
+    element: <Login />,
+  },
+  {
+    path: '/events',
     element: (
-      <PublicRoute>
-        <Login />
-      </PublicRoute>
+      <LoadingRoute>
+        <Events />
+      </LoadingRoute>
     ),
   },
+  {
+    path: '/events/:id',
+    element: (
+      <LoadingRoute>
+        <GroupDetail />
+      </LoadingRoute>
+    ),
+  },
+  // Legacy routes - redirect to events
   {
     path: '/groups',
-    element: (
-      <ProtectedRoute>
-        <Groups />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: '/groups/:id',
-    element: (
-      <ProtectedRoute>
-        <GroupDetail />
-      </ProtectedRoute>
-    ),
+    element: <Navigate to="/events" replace />,
   },
   {
     path: '*',
