@@ -54,7 +54,7 @@ model Event {
 ```prisma
 model Member {
   id              Int      @id @default(autoincrement())
-  username        String?
+  userId        String?
   eventId         Int
   lat             Float?
   lng             Float?
@@ -71,14 +71,14 @@ model Member {
   updatedAt       DateTime @updatedAt
   
   @@index([eventId])
-  @@index([username])
+  @@index([userId])
 }
 ```
 
 **注意**：
 - 位置資訊使用現有的 `lat` 和 `lng` 欄位（不需要額外的 `currentLat/currentLng`）
 - 位置更新時直接更新 `lat` 和 `lng`，並更新 `updatedAt`
-- 移除了 `guestId`（Guest 功能可能用其他方式實作，或使用 `username` 欄位）
+- 移除了 `guestId`（Guest 功能可能用其他方式實作，或使用 `userId` 欄位）
 
 ### 3. 新增 Group 表（朋友群組）
 
@@ -105,7 +105,7 @@ model Group {
 **注意**：
 - `ownerId` 為 String 類型，需要與後端確認：
   - 是否為 `User.id.toString()`？
-  - 或使用 `User.name` / `username` 作為識別？
+  - 或使用 `User.name` / `userId` 作為識別？
 - `members User[]` 需要 User model 也有對應的關聯：
   ```prisma
   model User {
@@ -290,7 +290,7 @@ ALTER TABLE "PokeRecord" ADD CONSTRAINT "PokeRecord_eventId_fkey"
   "member": {
     "id": "mem_guest_123",
     "nickname": "訪客小美",
-    "username": "guest_abc123",  // Guest identifier 存在 username 欄位
+    "userId": "guest_abc123",  // Guest identifier 存在 userId 欄位
     "shareLocation": true,
     ...
   },
@@ -302,7 +302,7 @@ ALTER TABLE "PokeRecord" ADD CONSTRAINT "PokeRecord_eventId_fkey"
 - 不需要認證
 - 回傳 `guestToken` 用於後續 API 呼叫
 - `guestToken` 存於 localStorage
-- Guest 的 identifier 存在 `username` 欄位（例如：`guest_abc123`）
+- Guest 的 identifier 存在 `nickname` 欄位（例如：`guest_abc123`）
 
 ---
 
@@ -629,7 +629,7 @@ Guest Token 應該：
 - 在 `POST /events/:id/join` 時發放
 
 **注意**：由於 Member 表沒有 `guestId` 欄位，Guest 身份可以：
-- 使用 `username` 欄位儲存 guest identifier（例如：`guest_abc123`）
+- 使用 `nickname` 欄位儲存 guest identifier（例如：`guest_abc123`）
 - 或使用 JWT token 中的 `memberId` 來識別
 
 ### 戳人限制
@@ -666,7 +666,7 @@ if (pokeCount >= 3) {
    - 允許建立聚會時不設定地點（例如：使用 MeetHalf 計算）
 
 2. **Member 表簡化**
-   - 移除了 `guestId` 欄位（Guest 身份可用 `username` 欄位或 JWT token 識別）
+   - 移除了 `guestId` 欄位（Guest 身份可用 `nickname` 欄位或 JWT token 識別）
    - 移除了 `currentLat`, `currentLng`, `locationUpdatedAt`
    - 位置資訊直接使用現有的 `lat` 和 `lng` 欄位
    - 移除了 `isOffline` 欄位
