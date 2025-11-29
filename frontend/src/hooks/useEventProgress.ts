@@ -15,7 +15,7 @@ interface EventProgress {
  * - ongoing: 從開始到結束的進度
  * - ended: 已結束
  */
-export function useEventProgress(event: Event): EventProgress {
+export function useEventProgress(event: Event | null): EventProgress | null {
   const [now, setNow] = useState(new Date());
 
   // 每秒更新時間
@@ -28,6 +28,9 @@ export function useEventProgress(event: Event): EventProgress {
   }, []);
 
   return useMemo(() => {
+    // 如果 event 為 null，返回 null
+    if (!event) return null;
+
     const startTime = new Date(event.startTime);
     const endTime = new Date(event.endTime);
     const currentTime = now.getTime();
@@ -111,6 +114,6 @@ export function useEventProgress(event: Event): EventProgress {
       description,
       color: '#2196f3', // Blue
     };
-  }, [event.startTime, event.endTime, now]);
+  }, [event, now]);
 }
 

@@ -28,8 +28,8 @@ export default function EventRoom() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 使用進度條 hook
-  const progress = event ? useEventProgress(event) : null;
+  // 使用進度條 hook（始終調用，內部處理 null）
+  const progress = useEventProgress(event);
 
   // 載入 Mock Data
   useEffect(() => {
