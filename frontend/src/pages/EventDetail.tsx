@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Box, CircularProgress } from '@mui/material';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Box, CircularProgress, Alert, Typography, Container } from '@mui/material';
 import EventRoom from './EventRoom';
 import EventsDetail from './EventsDetail';
 import { getMockEventById } from '../mocks/eventData';
@@ -13,11 +13,14 @@ import { getMockEventById } from '../mocks/eventData';
  */
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [useMeetHalf, setUseMeetHalf] = useState<boolean>(false);
 
   useEffect(() => {
     if (!id) {
+      setError('找不到聚會 ID');
       setLoading(false);
       return;
     }
@@ -26,10 +29,13 @@ export default function EventDetail() {
     setTimeout(() => {
       const event = getMockEventById(id);
       
-      if (event) {
-        setUseMeetHalf(event.useMeetHalf);
+      if (!event) {
+        setError('找不到此聚會');
+        setLoading(false);
+        return;
       }
       
+      setUseMeetHalf(event.useMeetHalf);
       setLoading(false);
     }, 300);
   }, [id]);
@@ -47,6 +53,24 @@ export default function EventDetail() {
       >
         <CircularProgress size={60} />
       </Box>
+    );
+  }
+
+  // Error 狀態
+  if (error) {
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Typography
+          variant="body2"
+          sx={{ cursor: 'pointer', color: 'primary.main' }}
+          onClick={() => navigate('/events')}
+        >
+          ← 返回聚會列表
+        </Typography>
+      </Container>
     );
   }
 

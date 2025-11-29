@@ -100,9 +100,9 @@ export function useEventProgress(event: Event | null): EventProgress | null {
     }
 
     // 進度：以 7 天前為起點，開始時間為終點
-    // 如果超過 7 天，progress = 0
+    // 如果聚會超過 7 天後，進度從 0 開始慢慢增長
     const sevenDaysAgo = startTime.getTime() - 7 * 86400000;
-    const progressStart = Math.max(sevenDaysAgo, currentTime - remaining);
+    const progressStart = Math.min(sevenDaysAgo, currentTime);
     const progressTotal = startTime.getTime() - progressStart;
     const progressElapsed = currentTime - progressStart;
     const progress = progressTotal > 0 ? Math.min(progressElapsed / progressTotal, 1) : 0;
