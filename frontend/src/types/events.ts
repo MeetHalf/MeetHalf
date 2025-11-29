@@ -9,43 +9,37 @@ export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
  * 聚會活動
  */
 export interface Event {
-  id: string;
-  title: string;
-  datetime: string; // ISO 8601
-  meetingPoint: {
-    lat: number;
-    lng: number;
-    name: string;
-    address?: string;
-  };
-  timeWindow: {
-    before: number; // 分鐘
-    after: number;  // 分鐘
-  };
-  ownerId: number;
+  id: number;
+  name: string;
+  ownerName: string;
+  startTime: string; // ISO 8601 - 聚會開始時間
+  endTime: string;   // ISO 8601 - 聚會結束時間
+  meetingPointLat?: number;
+  meetingPointLng?: number;
+  meetingPointName?: string;
+  meetingPointAddress?: string;
   status: EventStatus;
   useMeetHalf: boolean;
+  groupId?: number;
   createdAt: string;
   updatedAt: string;
+  members?: EventMember[];
 }
 
 /**
  * 聚會成員
  */
 export interface EventMember {
-  id: string;
-  eventId: string;
-  userId?: string | null;  // 使用者 ID（登入用戶: "123", Guest: "guest_abc123"）
-  nickname: string;
-  isGuest: boolean;
+  id: number;
+  userId?: string | null;  // User.userId 或 "guest_abc123"
+  eventId: number;
+  nickname?: string;
+  lat?: number;
+  lng?: number;
+  address?: string;
+  travelMode?: TravelMode;
   shareLocation: boolean;
-  currentLocation?: {
-    lat: number;
-    lng: number;
-    updatedAt: string;
-  };
   arrivalTime?: string; // ISO 8601
-  travelMode: TravelMode;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,9 +49,9 @@ export interface EventMember {
  */
 export interface PokeRecord {
   id: string;
-  eventId: string;
-  fromMemberId: string;
-  toMemberId: string;
+  eventId: number;
+  fromMemberId: number;
+  toMemberId: number;
   createdAt: string;
 }
 
@@ -65,7 +59,7 @@ export interface PokeRecord {
  * 排行榜項目
  */
 export interface RankingItem {
-  memberId: string;
+  memberId: number;
   nickname: string;
   arrivalTime?: string;
   status: MemberStatus;
@@ -112,7 +106,7 @@ export interface PokeStats {
  * 聚會結果（排行榜）
  */
 export interface EventResult {
-  eventId: string;
+  eventId: number;
   rankings: RankingItem[];
   stats: EventStats;
   pokes: PokeStats;
@@ -122,9 +116,10 @@ export interface EventResult {
  * 我的聚會列表項目
  */
 export interface MyEventItem {
-  id: string;
-  title: string;
-  datetime: string;
+  id: number;
+  name: string;
+  startTime: string;
+  endTime: string;
   status: EventStatus;
   memberCount: number;
   myStatus?: MemberStatus;
@@ -151,7 +146,7 @@ export interface UserStats {
  * Pusher 事件: 位置更新
  */
 export interface LocationUpdateEvent {
-  memberId: string;
+  memberId: number;
   nickname: string;
   lat: number;
   lng: number;
@@ -162,7 +157,7 @@ export interface LocationUpdateEvent {
  * Pusher 事件: 成員到達
  */
 export interface MemberArrivedEvent {
-  memberId: string;
+  memberId: number;
   nickname: string;
   arrivalTime: string;
   status: MemberStatus;
@@ -172,9 +167,9 @@ export interface MemberArrivedEvent {
  * Pusher 事件: 戳人
  */
 export interface PokeEvent {
-  fromMemberId: string;
+  fromMemberId: number;
   fromNickname: string;
-  toMemberId: string;
+  toMemberId: number;
   toNickname: string;
   count: number;
 }
@@ -183,7 +178,7 @@ export interface PokeEvent {
  * Pusher 事件: 聚會結束
  */
 export interface EventEndedEvent {
-  eventId: string;
+  eventId: number;
   endedAt: string;
 }
 
@@ -193,19 +188,16 @@ export interface EventEndedEvent {
  * 建立聚會請求
  */
 export interface CreateEventRequest {
-  title: string;
-  datetime: string;
-  meetingPoint: {
-    lat: number;
-    lng: number;
-    name: string;
-    address?: string;
-  };
-  timeWindow?: {
-    before: number;
-    after: number;
-  };
+  name: string;
+  ownerName: string;
+  startTime: string;
+  endTime: string;
+  meetingPointLat?: number;
+  meetingPointLng?: number;
+  meetingPointName?: string;
+  meetingPointAddress?: string;
   useMeetHalf?: boolean;
+  groupId?: number;
 }
 
 /**
@@ -267,7 +259,7 @@ export interface MarkArrivalResponse {
  * 戳人請求
  */
 export interface PokeRequest {
-  targetMemberId: string;
+  targetMemberId: number;
 }
 
 /**
