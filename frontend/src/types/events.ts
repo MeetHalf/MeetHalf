@@ -1,0 +1,325 @@
+// Events API TypeScript Definitions
+// 對應 EVENTS_API_SPEC.md
+
+export type EventStatus = 'upcoming' | 'ongoing' | 'ended';
+export type MemberStatus = 'early' | 'ontime' | 'late' | 'absent';
+export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
+
+/**
+ * 聚會活動
+ */
+export interface Event {
+  id: string;
+  title: string;
+  datetime: string; // ISO 8601
+  meetingPoint: {
+    lat: number;
+    lng: number;
+    name: string;
+    address?: string;
+  };
+  timeWindow: {
+    before: number; // 分鐘
+    after: number;  // 分鐘
+  };
+  ownerId: number;
+  status: EventStatus;
+  useMeetHalf: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 聚會成員
+ */
+export interface EventMember {
+  id: string;
+  eventId: string;
+  userId?: number;  // 登入使用者 (nullable)
+  guestId?: string; // Guest 臨時 ID (nullable)
+  nickname: string;
+  isGuest: boolean;
+  shareLocation: boolean;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    updatedAt: string;
+  };
+  arrivalTime?: string; // ISO 8601
+  travelMode: TravelMode;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 戳人記錄
+ */
+export interface PokeRecord {
+  id: string;
+  eventId: string;
+  fromMemberId: string;
+  toMemberId: string;
+  createdAt: string;
+}
+
+/**
+ * 排行榜項目
+ */
+export interface RankingItem {
+  memberId: string;
+  nickname: string;
+  arrivalTime?: string;
+  status: MemberStatus;
+  lateMinutes?: number;
+  rank: number;
+  pokeCount: number;
+}
+
+/**
+ * 聚會統計
+ */
+export interface EventStats {
+  totalMembers: number;
+  arrivedCount: number;
+  lateCount: number;
+  absentCount: number;
+  avgArrivalTime?: string;
+  earliestArrival?: {
+    nickname: string;
+    time: string;
+  };
+  latestArrival?: {
+    nickname: string;
+    time: string;
+  };
+  totalPokes: number;
+}
+
+/**
+ * 戳人統計
+ */
+export interface PokeStats {
+  mostPoked: {
+    nickname: string;
+    count: number;
+  };
+  mostPoker: {
+    nickname: string;
+    count: number;
+  };
+}
+
+/**
+ * 聚會結果（排行榜）
+ */
+export interface EventResult {
+  eventId: string;
+  rankings: RankingItem[];
+  stats: EventStats;
+  pokes: PokeStats;
+}
+
+/**
+ * 我的聚會列表項目
+ */
+export interface MyEventItem {
+  id: string;
+  title: string;
+  datetime: string;
+  status: EventStatus;
+  memberCount: number;
+  myStatus?: MemberStatus;
+  myRank?: number;
+}
+
+/**
+ * 個人統計
+ */
+export interface UserStats {
+  totalEvents: number;
+  ontimeCount: number;
+  lateCount: number;
+  absentCount: number;
+  avgLateMinutes: number;
+  totalPokeReceived: number;
+  totalPokeSent: number;
+  ontimeRate: number; // 0-1
+  bestRank: number;
+  worstRank: number;
+}
+
+/**
+ * Pusher 事件: 位置更新
+ */
+export interface LocationUpdateEvent {
+  memberId: string;
+  nickname: string;
+  lat: number;
+  lng: number;
+  timestamp: string;
+}
+
+/**
+ * Pusher 事件: 成員到達
+ */
+export interface MemberArrivedEvent {
+  memberId: string;
+  nickname: string;
+  arrivalTime: string;
+  status: MemberStatus;
+}
+
+/**
+ * Pusher 事件: 戳人
+ */
+export interface PokeEvent {
+  fromMemberId: string;
+  fromNickname: string;
+  toMemberId: string;
+  toNickname: string;
+  count: number;
+}
+
+/**
+ * Pusher 事件: 聚會結束
+ */
+export interface EventEndedEvent {
+  eventId: string;
+  endedAt: string;
+}
+
+// API Request/Response Types
+
+/**
+ * 建立聚會請求
+ */
+export interface CreateEventRequest {
+  title: string;
+  datetime: string;
+  meetingPoint: {
+    lat: number;
+    lng: number;
+    name: string;
+    address?: string;
+  };
+  timeWindow?: {
+    before: number;
+    after: number;
+  };
+  useMeetHalf?: boolean;
+}
+
+/**
+ * 建立聚會回應
+ */
+export interface CreateEventResponse {
+  event: Event;
+  shareUrl: string;
+}
+
+/**
+ * 加入聚會請求 (Guest)
+ */
+export interface JoinEventRequest {
+  nickname: string;
+  shareLocation: boolean;
+  travelMode?: TravelMode;
+}
+
+/**
+ * 加入聚會回應 (Guest)
+ */
+export interface JoinEventResponse {
+  member: EventMember;
+  guestToken: string;
+}
+
+/**
+ * 更新位置請求
+ */
+export interface UpdateLocationRequest {
+  lat: number;
+  lng: number;
+}
+
+/**
+ * 更新位置回應
+ */
+export interface UpdateLocationResponse {
+  success: boolean;
+  location: {
+    lat: number;
+    lng: number;
+    updatedAt: string;
+  };
+}
+
+/**
+ * 標記到達回應
+ */
+export interface MarkArrivalResponse {
+  success: boolean;
+  arrivalTime: string;
+  status: MemberStatus;
+  lateMinutes: number;
+}
+
+/**
+ * 戳人請求
+ */
+export interface PokeRequest {
+  targetMemberId: string;
+}
+
+/**
+ * 戳人回應
+ */
+export interface PokeResponse {
+  success: boolean;
+  pokeCount: number;    // 我戳此人的次數
+  totalPokes: number;   // 此人被戳的總次數
+}
+
+/**
+ * 取得聚會資訊回應
+ */
+export interface GetEventResponse {
+  event: Event & {
+    members: EventMember[];
+  };
+}
+
+/**
+ * 取得聚會結果回應
+ */
+export interface GetEventResultResponse {
+  result: EventResult;
+}
+
+/**
+ * 取得我的聚會列表回應
+ */
+export interface GetMyEventsResponse {
+  events: MyEventItem[];
+  total: number;
+  hasMore: boolean;
+}
+
+/**
+ * 取得個人統計回應
+ */
+export interface GetUserStatsResponse {
+  stats: UserStats;
+}
+
+/**
+ * API 錯誤回應
+ */
+export interface ApiError {
+  error: {
+    code: string;
+    message: string;
+    details?: Record<string, any>;
+  };
+}
+
