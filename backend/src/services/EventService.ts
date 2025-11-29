@@ -50,7 +50,16 @@ export class EventService {
     const members = await memberRepository.findByEventId(eventId);
 
     // Calculate rankings
-    const rankings = members
+    const rankings: Array<{
+      memberId: number;
+      nickname: string;
+      userId: string | null;
+      arrivalTime: Date | null;
+      status: 'early' | 'ontime' | 'late' | 'absent';
+      lateMinutes: number | null;
+      rank: number | null;
+      pokeCount: number;
+    }> = members
       .map((member) => {
         if (!member.arrivalTime) {
           return {
@@ -60,7 +69,7 @@ export class EventService {
             arrivalTime: null,
             status: 'absent' as const,
             lateMinutes: null,
-            rank: null,
+            rank: null as number | null,
             pokeCount: 0,
           };
         }
@@ -73,7 +82,7 @@ export class EventService {
           arrivalTime: member.arrivalTime,
           status: arrivalStatus.status,
           lateMinutes: arrivalStatus.lateMinutes,
-          rank: null, // Will be calculated below
+          rank: null as number | null, // Will be calculated below
           pokeCount: 0, // Will be calculated below
         };
       })
