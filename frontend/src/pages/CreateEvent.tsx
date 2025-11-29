@@ -105,14 +105,14 @@ export default function CreateEvent() {
           return;
         }
 
-        // Update form data with selected place
-        setFormData({
-          ...formData,
+        // Update form data with selected place (使用函數式更新避免閉包問題)
+        setFormData((prev) => ({
+          ...prev,
           meetingPointName: place.name || place.formatted_address || '',
           meetingPointAddress: place.formatted_address || '',
-          meetingPointLat: place.geometry.location.lat(),
-          meetingPointLng: place.geometry.location.lng(),
-        });
+          meetingPointLat: place.geometry!.location!.lat(),
+          meetingPointLng: place.geometry!.location!.lng(),
+        }));
 
         setSnackbar({ open: true, message: '地點已選擇', severity: 'success' });
       });
@@ -178,11 +178,14 @@ export default function CreateEvent() {
       setShareUrl(createdShareUrl);
       setShareDialogOpen(true);
       setSnackbar({ open: true, message: '聚會創建成功！', severity: 'success' });
-    } catch (err) {
+    } catch (err: any) {
       console.error('創建聚會失敗:', err);
+      console.error('錯誤詳情:', err.response?.data);
+      
+      const errorMessage = err.response?.data?.message || err.message || '創建失敗，請稍後再試';
       setSnackbar({ 
         open: true, 
-        message: err instanceof Error ? err.message : '創建失敗，請稍後再試', 
+        message: errorMessage, 
         severity: 'error' 
       });
     } finally {
