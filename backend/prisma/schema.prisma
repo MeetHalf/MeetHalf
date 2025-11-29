@@ -26,14 +26,14 @@ model User {
 model Event {
   id                  Int      @id @default(autoincrement())
   name                String
-  ownerName           String   // Owner's name (not foreign key - allows anonymous users)
+  ownerId             String   // Owner's userId (not foreign key - allows anonymous users)
   meetingPointLat     Float?   // 集合點緯度（可選）
   meetingPointLng     Float?   // 集合點經度（可選）
   meetingPointName    String?  // 地點名稱（可選）
   meetingPointAddress String?  // 地址（可選）
   startTime           DateTime
   endTime             DateTime
-  status              String   @default("upcoming") // upcoming, ongoing, ended
+  status              EventStatus @default(upcoming)
   useMeetHalf         Boolean  @default(false) // 是否使用 MeetHalf
   groupId             Int?     // 關聯到朋友群組（可選）
   createdAt           DateTime @default(now())
@@ -43,9 +43,15 @@ model Event {
   pokeRecords         PokeRecord[]
   group               Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
   
-  @@index([ownerName])
+  @@index([ownerId])
   @@index([groupId])
   @@index([status])
+}
+
+enum EventStatus {
+  upcoming
+  ongoing
+  ended
 }
 
 model Member {
