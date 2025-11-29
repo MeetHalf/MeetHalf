@@ -212,7 +212,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
     // Set cookie
     // Check if running on Vercel (deployed) instead of relying on NODE_ENV
-    // VERCEL_URL is automatically provided by Vercel, or we check if it's HTTPS
+    // VERCEL_URL is automatically provided by Vercel
+    // After setting trust proxy, req.protocol should correctly detect HTTPS
     const isDeployed = !!process.env.VERCEL_URL || req.protocol === 'https';
     const cookieOptions: any = {
       httpOnly: true,
@@ -227,7 +228,31 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       cookieOptions.domain = process.env.COOKIE_DOMAIN;
     }
     
+    // Log cookie settings for debugging (always log in deployment)
+    console.log('[Login] Setting cookie:', {
+      isDeployed,
+      hasVercelUrl: !!process.env.VERCEL_URL,
+      vercelUrl: process.env.VERCEL_URL,
+      protocol: req.protocol,
+      xForwardedProto: req.headers['x-forwarded-proto'],
+      sameSite: cookieOptions.sameSite,
+      secure: cookieOptions.secure,
+      origin: req.headers.origin,
+      host: req.headers.host,
+      cookieDomain: cookieOptions.domain || 'not set',
+    });
+    
     res.cookie('token', token, cookieOptions);
+    
+    // Log response headers to verify Set-Cookie is sent
+    const setCookieHeader = res.getHeader('Set-Cookie');
+    console.log('[Login] Set-Cookie header:', setCookieHeader ? 'sent' : 'missing');
+
+    // Ensure CORS headers are set for cookie to work
+    if (req.headers.origin) {
+      res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
 
     res.json({
       message: 'Login successful',

@@ -16,6 +16,10 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
+// Trust proxy - Required for Vercel to correctly detect HTTPS
+// This allows Express to trust X-Forwarded-* headers from Vercel's proxy
+app.set('trust proxy', true);
+
 // Security middlewares
 // Configure Helmet with CSP that allows Swagger UI CDN resources
 app.use(
