@@ -53,7 +53,23 @@ router.get('/google', passport.authenticate('google', { scope: ['profile', 'emai
  */
 router.get(
   '/google/callback',
-  passport.authenticate('google', { failureRedirect: '/', session: false }),
+  (req: Request, res: Response, next: any) => {
+    passport.authenticate('google', { session: false }, (err: any, user: any, info: any) => {
+      if (err) {
+        console.error('Google OAuth error:', err);
+        const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+        return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+      }
+      if (!user) {
+        console.error('Google OAuth: No user returned', info);
+        const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+        return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+      }
+      // Attach user to request
+      (req as any).user = user;
+      next();
+    })(req, res, next);
+  },
   (req: Request, res: Response) => {
     // @ts-ignore - passport adds user to request
     const user = (req as any).user;
