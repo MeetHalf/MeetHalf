@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Box, CircularProgress, Alert, Typography, Container } from '@mui/material';
 import EventRoom from './EventRoom';
-import EventsDetail from './EventsDetail';
+//import EventsDetail from './EventsDetail';
 import { eventsApi } from '../api/events';
 
 /**
@@ -83,6 +83,7 @@ export default function EventDetail() {
   }
 
   // 根據 useMeetHalf flag 決定顯示哪個組件
-  return useMeetHalf ? <EventsDetail /> : <EventRoom />;
+  //return useMeetHalf ? <EventsDetail /> : <EventRoom />;
+  return <EventRoom />; // 暫時先顯示 EventRoom
 }
 

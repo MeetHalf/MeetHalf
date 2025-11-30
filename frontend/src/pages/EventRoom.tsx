@@ -30,11 +30,16 @@ import {
 } from '@mui/icons-material';
 import { eventsApi, type Event as ApiEvent, type Member, type TravelMode } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
+import { usePusher } from '../hooks/usePusher';
+import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
+import { useAuth } from '../hooks/useAuth';
+import type { PokeEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [event, setEvent] = useState<ApiEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -64,6 +69,48 @@ export default function EventRoom() {
     open: false,
     message: '',
     severity: 'success' as 'success' | 'error' | 'info',
+  });
+
+  // 請求通知權限
+  useEffect(() => {
+    requestNotificationPermission().catch((err) => {
+      console.warn('[EventRoom] Failed to request notification permission:', err);
+    });
+  }, []);
+
+  // 整合 Pusher - 監聽 poke 事件
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'poke',
+    onEvent: (data: PokeEvent) => {
+      console.log('[EventRoom] Received poke event:', {
+        data,
+        currentMemberId,
+        toMemberId: data.toMemberId,
+        matches: currentMemberId === data.toMemberId,
+      });
+      
+      // 僅在收到 poke 事件且 toMemberId 匹配當前用戶的 memberId 時顯示通知
+      if (currentMemberId && data.toMemberId === currentMemberId) {
+        console.log('[EventRoom] Showing poke notification:', {
+          fromNickname: data.fromNickname,
+          count: data.count,
+        });
+        showPokeNotification(data.fromNickname, data.count);
+      } else {
+        console.log('[EventRoom] Poke event ignored (not for current user):', {
+          currentMemberId,
+          toMemberId: data.toMemberId,
+        });
+      }
+    },
+    onConnected: () => {
+      console.log('[EventRoom] Pusher connected successfully');
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher error:', error);
+    },
+    debug: true, // Enable debug logging
   });
 
   // 使用進度條 hook（始終調用，內部處理 null）
@@ -280,12 +327,30 @@ export default function EventRoom() {
 
   // 戳人
   const handlePokeMember = async (targetMemberId: number) => {
-    if (!event || !id || !currentMemberId || targetMemberId === currentMemberId) return;
+    if (!event || !id || !currentMemberId || targetMemberId === currentMemberId) {
+      console.log('[EventRoom] Cannot poke:', {
+        hasEvent: !!event,
+        eventId: id,
+        currentMemberId,
+        targetMemberId,
+        reason: !event ? 'no event' : !id ? 'no id' : !currentMemberId ? 'no currentMemberId' : 'self poke',
+      });
+      return;
+    }
+    
+    console.log('[EventRoom] Poking member:', {
+      eventId: id,
+      currentMemberId,
+      targetMemberId,
+      timestamp: new Date().toISOString(),
+    });
     
     setPokingMemberId(targetMemberId);
     
     try {
       const response = await eventsApi.pokeMember(Number(id), targetMemberId);
+      
+      console.log('[EventRoom] ✓ Poke API response:', response);
       
       const targetMember = members.find(m => m.id === targetMemberId);
       const targetNickname = targetMember?.nickname || '成員';
@@ -296,6 +361,13 @@ export default function EventRoom() {
         severity: 'success' 
       });
     } catch (err: any) {
+      console.error('[EventRoom] ✗ Poke API error:', {
+        error: err,
+        message: err?.message,
+        response: err?.response?.data,
+        eventId: id,
+        targetMemberId,
+      });
       const errorMessage = err.response?.data?.message || err.message || '戳人失敗，請稍後再試';
       setSnackbar({ 
         open: true, 

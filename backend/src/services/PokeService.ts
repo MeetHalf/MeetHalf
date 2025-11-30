@@ -42,13 +42,28 @@ export class PokeService {
     // Get total pokes for the target member
     const totalPokes = await pokeRecordRepository.countPokes(eventId, fromMemberId, toMemberId);
 
-    // Trigger Pusher event
-    triggerEventChannel(eventId, 'poke', {
+    const pokeData = {
       fromMemberId,
       fromNickname: fromMember.nickname || fromMember.userId || 'Unknown',
       toMemberId,
       toNickname: toMember.nickname || toMember.userId || 'Unknown',
       count: totalPokes,
+    };
+
+    console.log('[PokeService] Poke record created, triggering Pusher event:', {
+      eventId,
+      pokeData,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Trigger Pusher event
+    triggerEventChannel(eventId, 'poke', pokeData);
+
+    console.log('[PokeService] Poke completed:', {
+      eventId,
+      fromMemberId,
+      toMemberId,
+      totalPokes,
     });
 
     return {

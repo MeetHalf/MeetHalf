@@ -2071,23 +2071,35 @@ router.post('/:id/poke', optionalAuthMiddleware, async (req: Request, res: Respo
     const { id } = paramsValidation.data as EventParams;
     const { targetMemberId } = bodyValidation.data;
 
+    console.log('[EVENTS] POST /events/:id/poke - Request received:', {
+      eventId: id,
+      targetMemberId,
+      hasUser: !!req.user,
+      userType: req.user ? (typeof req.user === 'object' && 'userId' in req.user ? 'JWT' : 'guest') : 'none',
+    });
+
     // Get current member ID from auth
     let fromMemberId: number | null = null;
     if (req.user && 'userId' in req.user) {
       const jwtPayload = req.user as { userId: number };
+      console.log('[EVENTS] Authenticated user, looking up userId:', { userId: jwtPayload.userId });
       const userUserId = await getUserUserId(jwtPayload.userId);
+      console.log('[EVENTS] User userId:', userUserId);
       if (userUserId) {
         const { memberRepository } = await import('../repositories/MemberRepository');
         const member = await memberRepository.findByEventIdAndUserId(id, userUserId);
+        console.log('[EVENTS] Found member:', { memberId: member?.id, userId: member?.userId });
         if (member) {
           fromMemberId = member.id;
         }
       }
     } else if (req.user && 'memberId' in req.user) {
       fromMemberId = (req.user as { memberId: number }).memberId;
+      console.log('[EVENTS] Guest user, using memberId from token:', fromMemberId);
     }
 
     if (!fromMemberId) {
+      console.error('[EVENTS] No fromMemberId found, unauthorized');
       res.status(401).json({
         code: 'UNAUTHORIZED',
         message: 'Authentication required',
@@ -2095,7 +2107,15 @@ router.post('/:id/poke', optionalAuthMiddleware, async (req: Request, res: Respo
       return;
     }
 
+    console.log('[EVENTS] Calling pokeService.pokeMember:', {
+      eventId: id,
+      fromMemberId,
+      targetMemberId,
+    });
+
     const result = await pokeService.pokeMember(id, fromMemberId, targetMemberId);
+
+    console.log('[EVENTS] Poke service returned:', result);
 
     res.json(result);
   } catch (error: any) {
