@@ -73,9 +73,29 @@ export default function EventRoom() {
 
   // 請求通知權限
   useEffect(() => {
-    requestNotificationPermission().catch((err) => {
-      console.warn('[EventRoom] Failed to request notification permission:', err);
-    });
+    const requestPermission = async () => {
+      try {
+        const permission = await requestNotificationPermission();
+        console.log('[EventRoom] Notification permission status:', {
+          permission,
+          granted: permission === 'granted',
+          denied: permission === 'denied',
+          default: permission === 'default',
+        });
+        
+        if (permission === 'granted') {
+          console.log('[EventRoom] ✓ Notification permission granted');
+        } else if (permission === 'denied') {
+          console.warn('[EventRoom] ⚠️ Notification permission denied by user');
+        } else {
+          console.log('[EventRoom] Notification permission is default (not yet requested)');
+        }
+      } catch (err) {
+        console.error('[EventRoom] Failed to request notification permission:', err);
+      }
+    };
+    
+    requestPermission();
   }, []);
 
   // 整合 Pusher - 監聽 poke 事件
