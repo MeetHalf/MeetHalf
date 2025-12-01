@@ -35,7 +35,7 @@ import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
 import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
 import { initializeBeamsClient, subscribeToInterest, unsubscribeFromInterest } from '../lib/pusherBeams';
-import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, LocationUpdateEvent } from '../types/events';
+import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, MemberJoinedEvent, LocationUpdateEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
 import EventResultPopup from '../components/EventResultPopup';
 
@@ -210,6 +210,78 @@ export default function EventRoom() {
       console.error('[EventRoom] Pusher error:', error);
     },
     debug: true, // Enable debug logging
+  });
+
+  // 整合 Pusher - 監聽 member-joined 事件（成員加入）
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'member-joined',
+    onEvent: (data: MemberJoinedEvent) => {
+      console.log('[EventRoom] Received member-joined event:', data);
+      
+      // 檢查成員是否已經存在（避免重複添加）
+      const memberExists = members.some(m => m.id === data.memberId);
+      if (memberExists) {
+        console.log('[EventRoom] Member already exists, skipping:', data.memberId);
+        return;
+      }
+      
+      // 添加新成員到列表
+      const newMember: Member = {
+        id: data.memberId,
+        userId: data.userId || null,
+        eventId: event!.id,
+        nickname: data.nickname,
+        shareLocation: data.shareLocation,
+        travelMode: data.travelMode || 'driving',
+        lat: null,
+        lng: null,
+        address: null,
+        arrivalTime: null,
+        createdAt: data.createdAt,
+        updatedAt: data.createdAt,
+      };
+      
+      setMembers((prevMembers) => {
+        const updatedMembers = [...prevMembers, newMember];
+        
+        // 重新排序：已到達的成員排在前面，然後是分享位置的，最後是其他
+        return updatedMembers.sort((a, b) => {
+          if (a.arrivalTime && !b.arrivalTime) return -1;
+          if (!a.arrivalTime && b.arrivalTime) return 1;
+          if (!a.arrivalTime && !b.arrivalTime) {
+            if (a.shareLocation && !b.shareLocation) return -1;
+            if (!a.shareLocation && b.shareLocation) return 1;
+          }
+          return 0;
+        });
+      });
+      
+      // 更新 event 中的成員資訊
+      setEvent((prevEvent) => {
+        if (!prevEvent) return null;
+        return {
+          ...prevEvent,
+          members: [...(prevEvent.members || []), newMember],
+        };
+      });
+      
+      // 顯示通知（如果不是當前用戶）
+      if (currentMemberId !== data.memberId) {
+        setSnackbar({
+          open: true,
+          message: `👋 ${data.nickname} 加入了聚會！`,
+          severity: 'info',
+        });
+      }
+    },
+    onConnected: () => {
+      console.log('[EventRoom] Pusher connected for member-joined');
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher error for member-joined:', error);
+    },
+    debug: true,
   });
 
   // 整合 Pusher - 監聽 member-arrived 事件（成員到達）

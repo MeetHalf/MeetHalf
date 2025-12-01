@@ -154,6 +154,18 @@ export interface LocationUpdateEvent {
 }
 
 /**
+ * Pusher 事件: 成員加入
+ */
+export interface MemberJoinedEvent {
+  memberId: number;
+  nickname: string;
+  userId?: string | null;
+  shareLocation: boolean;
+  travelMode?: TravelMode;
+  createdAt: string;
+}
+
+/**
  * Pusher 事件: 成員到達
  */
 export interface MemberArrivedEvent {

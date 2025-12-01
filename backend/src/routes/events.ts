@@ -1763,6 +1763,17 @@ router.post('/:id/join', optionalAuthMiddleware, async (req: Request, res: Respo
       travelMode: bodyValidation.data.travelMode || 'driving',
     });
 
+    // Trigger Pusher event for member joined
+    const { triggerEventChannel } = await import('../lib/pusher');
+    triggerEventChannel(id, 'member-joined', {
+      memberId: member.id,
+      nickname: member.nickname || member.userId || 'Unknown',
+      userId: member.userId,
+      shareLocation: member.shareLocation,
+      travelMode: member.travelMode,
+      createdAt: member.createdAt.toISOString(),
+    });
+
     // Generate guest token only for anonymous users
     const guestToken = req.user && 'userId' in req.user 
       ? null 
