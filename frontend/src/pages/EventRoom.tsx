@@ -1086,33 +1086,37 @@ export default function EventRoom() {
             elevation={0}
             sx={{
               mt: 3,
-              p: 3,
-              borderRadius: 3,
-              bgcolor: 'primary.light',
+              p: 2.5,
+              borderRadius: 2,
+              bgcolor: 'white',
               border: '1px solid',
-              borderColor: 'primary.main',
+              borderColor: '#E5E9F0',
             }}
           >
             <Button
-              variant="contained"
+              variant="outlined"
               size="large"
               fullWidth
               onClick={() => setShowResultPopup(true)}
-              startIcon={<TrophyIcon />}
+              startIcon={<TrophyIcon sx={{ fontSize: 20 }} />}
               sx={{
-                py: 2,
+                py: 1.5,
                 borderRadius: 2,
                 textTransform: 'none',
-                fontSize: '1.125rem',
+                fontSize: '1rem',
                 fontWeight: 600,
-                bgcolor: 'primary.main',
+                borderColor: 'primary.main',
+                color: 'primary.main',
+                borderWidth: 2,
                 '&:hover': {
-                  bgcolor: 'primary.dark',
+                  borderWidth: 2,
+                  borderColor: 'primary.dark',
+                  bgcolor: 'primary.light',
+                  color: 'primary.dark',
                 },
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
               }}
             >
-              🏆 查看排行榜結果
+              查看排行榜結果
             </Button>
           </Paper>
         )}
