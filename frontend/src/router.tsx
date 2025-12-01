@@ -1,5 +1,4 @@
-import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -25,29 +24,8 @@ function LoadingRoute({ children }: { children: React.ReactNode }) {
   return <Layout>{children}</Layout>;
 }
 
-// 404 Page with auto-redirect for valid SPA routes
+// 404 Page - only shows for truly invalid routes
 function NotFoundPage() {
-  const location = useLocation();
-
-  useEffect(() => {
-    // If we hit 404 on a route that should be handled by SPA routing,
-    // redirect to root and let the router handle it
-    const currentPath = location.pathname;
-    
-    // Check if current path matches any valid route pattern
-    // Valid routes: /, /login, /events, /events/new, /events/:id
-    const isValidRoute = 
-      currentPath === '/' ||
-      currentPath === '/login' ||
-      currentPath.startsWith('/events');
-
-    if (isValidRoute) {
-      // Redirect to root, router will handle navigation
-      // Use replace to avoid adding to history
-      window.location.replace('/');
-    }
-  }, [location.pathname]);
-
   return (
     <Layout>
       <Box sx={{ textAlign: 'center', py: 8 }}>
