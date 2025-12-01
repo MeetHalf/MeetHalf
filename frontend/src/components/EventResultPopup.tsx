@@ -524,49 +524,30 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
               </Box>
             )}
 
-            {/* 5. Poke stats (optional, if available) */}
+            {/* 5. Poke stats footer (small text line) */}
             {result.pokes && result.pokes.mostPoked && result.pokes.mostPoker && (
               (result.pokes.mostPoked.count > 0 || result.pokes.mostPoker.count > 0) && (
-                <Paper
-                  elevation={0}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
                   sx={{
-                    p: 2,
+                    display: 'block',
                     mt: 3,
-                    bgcolor: '#F5F7FA',
-                    borderRadius: 2,
-                    border: '1px solid',
-                    borderColor: '#E5E9F0',
+                    fontSize: '0.75rem',
+                    textAlign: 'center',
+                    lineHeight: 1.5,
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                    <PokeIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      戳人統計
-                    </Typography>
+                  戳人統計：最常被戳{' '}
+                  <Box component="span" sx={{ fontWeight: 500, color: '#374151' }}>
+                    {result.pokes.mostPoked.nickname} ({result.pokes.mostPoked.count})
                   </Box>
-                  <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                    {result.pokes.mostPoked.count > 0 && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                          最常被戳
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600} sx={{ mt: 0.5 }}>
-                          {result.pokes.mostPoked.nickname} ({result.pokes.mostPoked.count})
-                        </Typography>
-                      </Box>
-                    )}
-                    {result.pokes.mostPoker.count > 0 && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                          最愛戳人
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600} sx={{ mt: 0.5 }}>
-                          {result.pokes.mostPoker.nickname} ({result.pokes.mostPoker.count})
-                        </Typography>
-                      </Box>
-                    )}
+                  {' · '}
+                  最愛戳人{' '}
+                  <Box component="span" sx={{ fontWeight: 500, color: '#374151' }}>
+                    {result.pokes.mostPoker.nickname} ({result.pokes.mostPoker.count})
                   </Box>
-                </Paper>
+                </Typography>
               )
             )}
           </Box>
