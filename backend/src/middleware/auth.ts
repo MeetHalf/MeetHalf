@@ -89,15 +89,17 @@ export async function optionalAuthMiddleware(
   try {
     const token = extractToken(req);
     
-    // Log token extraction for debugging
-    if (req.path === '/auth/me') {
+    // Log token extraction for debugging (for /auth/me and /poke endpoints)
+    if (req.path === '/auth/me' || req.path.includes('/poke')) {
       console.log('[Auth Middleware] Token extraction:', {
+        path: req.path,
         hasToken: !!token,
         tokenLength: token ? token.length : 0,
         tokenPrefix: token ? token.substring(0, 20) + '...' : 'none',
         hasCookies: Object.keys(req.cookies).length > 0,
         cookieKeys: Object.keys(req.cookies),
         hasAuthHeader: !!req.headers.authorization,
+        authHeaderPrefix: req.headers.authorization ? req.headers.authorization.substring(0, 30) + '...' : 'none',
       });
     }
 
@@ -105,7 +107,7 @@ export async function optionalAuthMiddleware(
       try {
         // Try regular JWT token first
         const payload = verifyToken(token);
-        if (req.path === '/auth/me') {
+        if (req.path === '/auth/me' || req.path.includes('/poke')) {
           console.log('[Auth Middleware] JWT token verified successfully:', { userId: payload.userId });
         }
         (req as any).user = payload;
@@ -113,24 +115,33 @@ export async function optionalAuthMiddleware(
         // If regular token fails, try guest token
         try {
           const guestPayload = verifyGuestToken(token);
-          if (req.path === '/auth/me') {
-            console.log('[Auth Middleware] Guest token verified:', { memberId: guestPayload.memberId, eventId: guestPayload.eventId });
+          if (req.path === '/auth/me' || req.path.includes('/poke')) {
+            console.log('[Auth Middleware] Guest token verified:', { 
+              memberId: guestPayload.memberId, 
+              eventId: guestPayload.eventId,
+              path: req.path,
+            });
           }
           (req as any).user = guestPayload;
         } catch (guestError) {
           // Both failed - continue as anonymous user
-          if (req.path === '/auth/me') {
+          if (req.path === '/auth/me' || req.path.includes('/poke')) {
             console.log('[Auth Middleware] Both token verifications failed:', {
+              path: req.path,
               jwtError: error instanceof Error ? error.message : 'Unknown',
               guestError: guestError instanceof Error ? guestError.message : 'Unknown',
+              tokenPrefix: token ? token.substring(0, 30) + '...' : 'none',
             });
           }
           (req as any).user = undefined;
         }
       }
     } else {
-      if (req.path === '/auth/me') {
-        console.log('[Auth Middleware] No token found, continuing as anonymous');
+      if (req.path === '/auth/me' || req.path.includes('/poke')) {
+        console.log('[Auth Middleware] No token found, continuing as anonymous:', {
+          path: req.path,
+          hasAuthHeader: !!req.headers.authorization,
+        });
       }
     }
     // No token or invalid token - continue as anonymous user

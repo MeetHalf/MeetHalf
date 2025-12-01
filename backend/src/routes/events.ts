@@ -2076,6 +2076,15 @@ router.post('/:id/poke', optionalAuthMiddleware, async (req: Request, res: Respo
       targetMemberId,
       hasUser: !!req.user,
       userType: req.user ? (typeof req.user === 'object' && 'userId' in req.user ? 'JWT' : 'guest') : 'none',
+      userDetails: req.user ? {
+        hasUserId: 'userId' in req.user,
+        hasMemberId: 'memberId' in req.user,
+        userId: 'userId' in req.user ? (req.user as any).userId : undefined,
+        memberId: 'memberId' in req.user ? (req.user as any).memberId : undefined,
+        eventId: 'eventId' in req.user ? (req.user as any).eventId : undefined,
+      } : null,
+      hasAuthHeader: !!req.headers.authorization,
+      authHeaderPrefix: req.headers.authorization ? req.headers.authorization.substring(0, 30) + '...' : 'none',
     });
 
     // Get current member ID from auth
