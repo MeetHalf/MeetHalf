@@ -226,6 +226,12 @@ export const eventsApi = {
     const response = await api.post(`/events/${eventId}/location`, data);
     return response.data;
   },
+
+  // Get event result (rankings)
+  async getEventResult(eventId: number): Promise<import('../types/events').GetEventResultResponse> {
+    const response = await api.get(`/events/${eventId}/result`);
+    return response.data;
+  },
 };
 
 // Members API
