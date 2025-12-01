@@ -17,12 +17,13 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   const googleCallbackURL = (() => {
     // Priority: BACKEND_URL > VERCEL_URL > localhost
     if (process.env.BACKEND_URL) {
+      console.log('[PASSPORT] Google callback URL (BACKEND_URL):', `${process.env.BACKEND_URL}/auth/google/callback`);
       return `${process.env.BACKEND_URL}/auth/google/callback`;
     }
     if (process.env.VERCEL_URL) {
       return `https://${process.env.VERCEL_URL}/auth/google/callback`;
     }
-    return 'http://meet-half-backend.vercel.app/auth/google/callback';
+    return 'https://meet-half-backend.vercel.app/auth/google/callback';
   })();
   
   console.log('[PASSPORT] Google callback URL:', googleCallbackURL);
