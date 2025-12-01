@@ -203,7 +203,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
               </Typography>
               
               {/* 三個主指標卡片 */}
-              <Grid container spacing={1.5} sx={{ mb: 2 }}>
+              <Grid container spacing={2} sx={{ mb: 2.5 }}>
                 <Grid item xs={4}>
                   <Box
                     sx={{
@@ -211,18 +211,19 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      py: 1.5,
-                      px: 1.5,
+                      py: 2,
+                      px: 1,
                       borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
                       borderColor: '#F3F4F6', // border-gray-100
+                      minHeight: 72,
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.75, lineHeight: 1.2 }}>
                       總參加人數
                     </Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1rem', color: 'text.primary' }}>
+                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1.125rem', color: 'text.primary', lineHeight: 1.2 }}>
                       {result.stats.totalMembers}
                     </Typography>
                   </Box>
@@ -234,18 +235,19 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      py: 1.5,
-                      px: 1.5,
+                      py: 2,
+                      px: 1,
                       borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
                       borderColor: '#F3F4F6', // border-gray-100
+                      minHeight: 72,
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.75, lineHeight: 1.2 }}>
                       已到達
                     </Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1rem', color: 'text.primary' }}>
+                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1.125rem', color: 'text.primary', lineHeight: 1.2 }}>
                       {result.stats.arrivedCount}
                     </Typography>
                   </Box>
@@ -257,18 +259,19 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      py: 1.5,
-                      px: 1.5,
+                      py: 2,
+                      px: 1,
                       borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
                       borderColor: '#F3F4F6', // border-gray-100
+                      minHeight: 72,
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.75, lineHeight: 1.2 }}>
                       準時率
                     </Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1rem', color: 'text.primary' }}>
+                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1.125rem', color: 'text.primary', lineHeight: 1.2 }}>
                       {onTimeRate}%
                     </Typography>
                   </Box>
@@ -276,7 +279,16 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
               </Grid>
 
               {/* 次指標：單行灰色文字 */}
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+              <Typography 
+                variant="caption" 
+                color="text.secondary" 
+                sx={{ 
+                  fontSize: '0.75rem',
+                  display: 'block',
+                  textAlign: 'center',
+                  lineHeight: 1.5,
+                }}
+              >
                 遲到 {result.stats.lateCount} 人 · 缺席 {result.stats.absentCount} 人 · 總戳數{' '}
                 {result.stats.totalPokes !== undefined ? result.stats.totalPokes : 0}
               </Typography>
