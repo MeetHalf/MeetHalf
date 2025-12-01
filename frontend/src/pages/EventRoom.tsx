@@ -32,14 +32,12 @@ import { eventsApi, type Event as ApiEvent, type Member, type TravelMode } from 
 import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
 import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
-import { useAuth } from '../hooks/useAuth';
-import type { PokeEvent } from '../types/events';
+import type { PokeEvent, LocationUpdateEvent, MemberArrivedEvent, EventEndedEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   
   const [event, setEvent] = useState<ApiEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -131,6 +129,138 @@ export default function EventRoom() {
       console.error('[EventRoom] Pusher error:', error);
     },
     debug: true, // Enable debug logging
+  });
+
+  // 整合 Pusher - 監聽 location-update 事件
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'location-update',
+    onEvent: (data: LocationUpdateEvent) => {
+      console.log('[EventRoom] Received location-update event:', data);
+      
+      // 更新對應成員的位置
+      setMembers((prevMembers) => {
+        const updatedMembers = prevMembers.map((member) => {
+          if (member.id === data.memberId) {
+            return {
+              ...member,
+              lat: data.lat,
+              lng: data.lng,
+            };
+          }
+          return member;
+        });
+        
+        // 重新排序（已到達 → 分享位置中 → 前往中）
+        return updatedMembers.sort((a, b) => {
+          if (a.arrivalTime && !b.arrivalTime) return -1;
+          if (!a.arrivalTime && b.arrivalTime) return 1;
+          if (!a.arrivalTime && !b.arrivalTime) {
+            if (a.shareLocation && !b.shareLocation) return -1;
+            if (!a.shareLocation && b.shareLocation) return 1;
+          }
+          return 0;
+        });
+      });
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher location-update error:', error);
+    },
+    debug: true,
+  });
+
+  // 整合 Pusher - 監聽 member-arrived 事件
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'member-arrived',
+    onEvent: (data: MemberArrivedEvent) => {
+      console.log('[EventRoom] Received member-arrived event:', data);
+      
+      // 更新對應成員的到達狀態
+      setMembers((prevMembers) => {
+        const updatedMembers = prevMembers.map((member) => {
+          if (member.id === data.memberId) {
+            return {
+              ...member,
+              arrivalTime: data.arrivalTime,
+            };
+          }
+          return member;
+        });
+        
+        // 重新排序（已到達 → 分享位置中 → 前往中）
+        return updatedMembers.sort((a, b) => {
+          if (a.arrivalTime && !b.arrivalTime) return -1;
+          if (!a.arrivalTime && b.arrivalTime) return 1;
+          if (!a.arrivalTime && !b.arrivalTime) {
+            if (a.shareLocation && !b.shareLocation) return -1;
+            if (!a.shareLocation && b.shareLocation) return 1;
+          }
+          return 0;
+        });
+      });
+      
+      // 如果當前用戶到達，更新本地狀態
+      if (currentMemberId === data.memberId) {
+        setHasArrived(true);
+        
+        // 更新 localStorage
+        if (id) {
+          const storageKey = `event_${id}_member`;
+          const storedMember = localStorage.getItem(storageKey);
+          if (storedMember) {
+            const memberData = JSON.parse(storedMember);
+            memberData.arrivalTime = data.arrivalTime;
+            localStorage.setItem(storageKey, JSON.stringify(memberData));
+          }
+        }
+      }
+      
+      // 顯示通知（如果不是當前用戶）
+      if (currentMemberId !== data.memberId) {
+        setSnackbar({
+          open: true,
+          message: `🎉 ${data.nickname} 已到達！`,
+          severity: 'success',
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher member-arrived error:', error);
+    },
+    debug: true,
+  });
+
+  // 整合 Pusher - 監聽 event-ended 事件
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'event-ended',
+    onEvent: (data: EventEndedEvent) => {
+      console.log('[EventRoom] Received event-ended event:', data);
+      
+      // 更新 event 狀態
+      if (event) {
+        setEvent({
+          ...event,
+          status: 'ended',
+        });
+      }
+      
+      // 顯示通知
+      setSnackbar({
+        open: true,
+        message: '🎊 聚會已結束！查看排行榜結果',
+        severity: 'info',
+      });
+      
+      // TODO: 觸發 EventResultPopup（待實作）
+      // 目前先顯示 Snackbar，之後可以改為打開 popup
+      // setResultPopupOpen(true);
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher event-ended error:', error);
+    },
+    debug: true,
   });
 
   // 使用進度條 hook（始終調用，內部處理 null）
