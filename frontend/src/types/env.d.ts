@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_MAPS_JS_KEY: string;
   readonly VITE_PUSHER_KEY: string;
   readonly VITE_PUSHER_CLUSTER: string;
+  readonly VITE_PUSHER_BEAMS_INSTANCE_ID: string;
 }
 
 interface ImportMeta {

@@ -2,6 +2,7 @@ import { pokeRecordRepository } from '../repositories/PokeRecordRepository';
 import { memberRepository } from '../repositories/MemberRepository';
 import { eventRepository } from '../repositories/EventRepository';
 import { triggerEventChannel } from '../lib/pusher';
+import { sendPushNotification } from '../lib/pusherBeams';
 
 const MAX_POKES_PER_PAIR = 3;
 
@@ -58,6 +59,25 @@ export class PokeService {
 
     // Trigger Pusher event
     triggerEventChannel(eventId, 'poke', pokeData);
+
+    // Send Push notification via Pusher Beams
+    // Use device interest format: event-{eventId}-member-{toMemberId}
+    const deviceInterest = `event-${eventId}-member-${toMemberId}`;
+    const notificationTitle = '有人戳了你！';
+    const notificationBody = totalPokes > 1
+      ? `${pokeData.fromNickname} 戳了你 (${totalPokes} 次)`
+      : `${pokeData.fromNickname} 戳了你`;
+
+    sendPushNotification(deviceInterest, notificationTitle, notificationBody, {
+      eventId: eventId.toString(),
+      url: `/events/${eventId}`,
+      type: 'poke',
+      fromNickname: pokeData.fromNickname,
+      count: totalPokes.toString(),
+    }).catch((error) => {
+      // Log error but don't fail the poke operation
+      console.error('[PokeService] Failed to send push notification:', error);
+    });
 
     console.log('[PokeService] Poke completed:', {
       eventId,

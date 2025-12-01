@@ -34,7 +34,8 @@ import { eventsApi, type Event as ApiEvent, type Member, type TravelMode } from 
 import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
 import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
-import type { PokeEvent, EventEndedEvent } from '../types/events';
+import { initializeBeamsClient, subscribeToInterest, unsubscribeFromInterest } from '../lib/pusherBeams';
+import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, LocationUpdateEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
 import EventResultPopup from '../components/EventResultPopup';
 
@@ -75,10 +76,11 @@ export default function EventRoom() {
     severity: 'success' as 'success' | 'error' | 'info',
   });
 
-  // 請求通知權限
+  // 請求通知權限並初始化 Pusher Beams
   useEffect(() => {
-    const requestPermission = async () => {
+    const setupNotifications = async () => {
       try {
+        // Request notification permission
         const permission = await requestNotificationPermission();
         console.log('[EventRoom] Notification permission status:', {
           permission,
@@ -89,18 +91,76 @@ export default function EventRoom() {
         
         if (permission === 'granted') {
           console.log('[EventRoom] ✓ Notification permission granted');
+          
+          // Initialize Pusher Beams client (this will also register Service Worker)
+          const client = await initializeBeamsClient();
+          if (client) {
+            console.log('[EventRoom] ✓ Pusher Beams client initialized');
+          } else {
+            console.warn('[EventRoom] ⚠️ Failed to initialize Pusher Beams client');
+          }
         } else if (permission === 'denied') {
           console.warn('[EventRoom] ⚠️ Notification permission denied by user');
         } else {
           console.log('[EventRoom] Notification permission is default (not yet requested)');
         }
       } catch (err) {
-        console.error('[EventRoom] Failed to request notification permission:', err);
+        console.error('[EventRoom] Failed to setup notifications:', err);
       }
     };
     
-    requestPermission();
+    setupNotifications();
   }, []);
+
+  // 訂閱 Pusher Beams Device Interest（當用戶已加入活動時）
+  useEffect(() => {
+    if (!event || !currentMemberId) {
+      return;
+    }
+
+    // Add a delay to ensure initialization is complete
+    const subscribeToPushNotifications = async () => {
+      try {
+        // Wait a bit to ensure Pusher Beams is fully initialized
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Subscribe to device interest: event-{eventId}-member-{memberId}
+        const interest = `event-${event.id}-member-${currentMemberId}`;
+        console.log('[EventRoom] Attempting to subscribe to interest:', interest);
+        
+        const success = await subscribeToInterest(interest);
+        
+        if (success) {
+          console.log('[EventRoom] ✓ Successfully subscribed to push notifications:', interest);
+          
+          // Verify subscription
+          const { getSubscribedInterests } = await import('../lib/pusherBeams');
+          const interests = await getSubscribedInterests();
+          console.log('[EventRoom] Current subscribed interests:', interests);
+        } else {
+          console.warn('[EventRoom] ⚠️ Failed to subscribe to push notifications');
+          console.warn('[EventRoom] Please check:');
+          console.warn('  1. Service Worker is registered');
+          console.warn('  2. Notification permission is granted');
+          console.warn('  3. Pusher Beams client is initialized');
+        }
+      } catch (error) {
+        console.error('[EventRoom] Error subscribing to push notifications:', error);
+      }
+    };
+
+    subscribeToPushNotifications();
+
+    // Cleanup: unsubscribe when component unmounts or member/event changes
+    return () => {
+      if (event && currentMemberId) {
+        const interest = `event-${event.id}-member-${currentMemberId}`;
+        unsubscribeFromInterest(interest).catch((error) => {
+          console.error('[EventRoom] Error unsubscribing from push notifications:', error);
+        });
+      }
+    };
+  }, [event, currentMemberId]);
 
   // 整合 Pusher - 監聽 poke 事件
   usePusher({
@@ -121,11 +181,26 @@ export default function EventRoom() {
           count: data.count,
         });
         showPokeNotification(data.fromNickname, data.count);
-      } else {
-        console.log('[EventRoom] Poke event ignored (not for current user):', {
-          currentMemberId,
-          toMemberId: data.toMemberId,
+        
+        // 顯示 Snackbar 提示
+        setSnackbar({
+          open: true,
+          message: `👆 ${data.fromNickname} 戳了你${data.count > 1 ? ` (${data.count} 次)` : ''}！`,
+          severity: 'info',
         });
+      } else {
+        // 即使不是戳自己，也顯示誰戳了誰（可選，讓用戶知道活動中的互動）
+        if (data.fromMemberId !== currentMemberId) {
+          // 找到被戳的成員名稱
+          const targetMember = members.find(m => m.id === data.toMemberId);
+          const targetNickname = targetMember?.nickname || '某人';
+          
+          // 只在 Console 記錄，不顯示通知（避免打擾）
+          console.log('[EventRoom] Poke event (not for you):', {
+            from: data.fromNickname,
+            to: targetNickname,
+          });
+        }
       }
     },
     onConnected: () => {
@@ -135,6 +210,124 @@ export default function EventRoom() {
       console.error('[EventRoom] Pusher error:', error);
     },
     debug: true, // Enable debug logging
+  });
+
+  // 整合 Pusher - 監聽 member-arrived 事件（成員到達）
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'member-arrived',
+    onEvent: (data: MemberArrivedEvent) => {
+      console.log('[EventRoom] Received member-arrived event:', data);
+      
+      // 更新成員列表：將到達的成員標記為已到達
+      setMembers((prevMembers) => {
+        const updatedMembers = prevMembers.map((member) => {
+          if (member.id === data.memberId) {
+            return {
+              ...member,
+              arrivalTime: data.arrivalTime,
+            };
+          }
+          return member;
+        });
+        
+        // 重新排序：已到達的成員排在前面
+        return updatedMembers.sort((a, b) => {
+          if (a.arrivalTime && !b.arrivalTime) return -1;
+          if (!a.arrivalTime && b.arrivalTime) return 1;
+          if (!a.arrivalTime && !b.arrivalTime) {
+            if (a.shareLocation && !b.shareLocation) return -1;
+            if (!a.shareLocation && b.shareLocation) return 1;
+          }
+          return 0;
+        });
+      });
+      
+      // 更新 event 中的成員資訊
+      setEvent((prevEvent) => {
+        if (!prevEvent) return null;
+        return {
+          ...prevEvent,
+          members: prevEvent.members.map((member) => {
+            if (member.id === data.memberId) {
+              return {
+                ...member,
+                arrivalTime: data.arrivalTime,
+              };
+            }
+            return member;
+          }),
+        };
+      });
+      
+      // 顯示通知（如果不是當前用戶）
+      if (currentMemberId !== data.memberId) {
+        const statusEmoji = data.status === 'early' ? '⚡' : data.status === 'ontime' ? '✅' : '⏰';
+        setSnackbar({
+          open: true,
+          message: `${statusEmoji} ${data.nickname} 已到達！`,
+          severity: 'success',
+        });
+      }
+    },
+    onConnected: () => {
+      console.log('[EventRoom] Pusher connected for member-arrived');
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher error for member-arrived:', error);
+    },
+    debug: true,
+  });
+
+  // 整合 Pusher - 監聽 location-update 事件（位置更新）
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'location-update',
+    onEvent: (data: LocationUpdateEvent) => {
+      console.log('[EventRoom] Received location-update event:', data);
+      
+      // 更新成員列表中的位置資訊
+      setMembers((prevMembers) => {
+        return prevMembers.map((member) => {
+          if (member.id === data.memberId) {
+            return {
+              ...member,
+              lat: data.lat,
+              lng: data.lng,
+            };
+          }
+          return member;
+        });
+      });
+      
+      // 更新 event 中的成員位置資訊
+      setEvent((prevEvent) => {
+        if (!prevEvent) return null;
+        return {
+          ...prevEvent,
+          members: prevEvent.members.map((member) => {
+            if (member.id === data.memberId) {
+              return {
+                ...member,
+                lat: data.lat,
+                lng: data.lng,
+              };
+            }
+            return member;
+          }),
+        };
+      });
+      
+      // 注意：地圖上的標記會自動更新，因為 MapContainer 使用 members prop
+      console.log('[EventRoom] Member location updated on map');
+    },
+    onConnected: () => {
+      console.log('[EventRoom] Pusher connected for location-update');
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher error for location-update:', error);
+    },
+    debug: true,
   });
 
   // 整合 Pusher - 監聽 event-ended 事件
