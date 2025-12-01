@@ -186,7 +186,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
 
         {result && (
           <Box>
-            {/* 1. Stats Summary - Small stat cards grid */}
+            {/* 1. Stats Summary - Clean dashboard grid */}
             <Paper
               elevation={0}
               sx={{
@@ -198,11 +198,11 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                 borderColor: '#E5E9F0',
               }}
             >
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2.5, color: 'text.primary' }}>
+              <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2, color: 'text.primary', fontSize: '0.875rem' }}>
                 統計數據
               </Typography>
               <Grid container spacing={1.5}>
-                {/* 第一列：主指標 */}
+                {/* 第一列：主指標（highlight） */}
                 <Grid item xs={4}>
                   <Box
                     sx={{
@@ -212,17 +212,16 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       justifyContent: 'center',
                       py: 1.5,
                       px: 1,
-                      borderRadius: 1.5,
+                      borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
-                      borderColor: '#E5E9F0',
-                      minHeight: 70,
+                      borderColor: '#DBEAFE', // border-blue-100
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
                       總參加人數
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.25rem' }}>
+                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1rem', color: 'text.primary' }}>
                       {result.stats.totalMembers}
                     </Typography>
                   </Box>
@@ -236,17 +235,16 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       justifyContent: 'center',
                       py: 1.5,
                       px: 1,
-                      borderRadius: 1.5,
+                      borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
-                      borderColor: '#E5E9F0',
-                      minHeight: 70,
+                      borderColor: '#DBEAFE', // border-blue-100
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
                       已到達
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.25rem' }}>
+                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1rem', color: 'text.primary' }}>
                       {result.stats.arrivedCount}
                     </Typography>
                   </Box>
@@ -260,22 +258,21 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       justifyContent: 'center',
                       py: 1.5,
                       px: 1,
-                      borderRadius: 1.5,
+                      borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
-                      borderColor: '#E5E9F0',
-                      minHeight: 70,
+                      borderColor: '#DBEAFE', // border-blue-100
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
                       準時率
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.25rem' }}>
+                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1rem', color: 'text.primary' }}>
                       {onTimeRate}%
                     </Typography>
                   </Box>
                 </Grid>
-                {/* 第二列：次指標 */}
+                {/* 第二列：次指標（neutral） */}
                 <Grid item xs={4}>
                   <Box
                     sx={{
@@ -285,17 +282,16 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       justifyContent: 'center',
                       py: 1.5,
                       px: 1,
-                      borderRadius: 1.5,
+                      borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
-                      borderColor: '#E5E9F0',
-                      minHeight: 70,
+                      borderColor: '#F3F4F6', // border-gray-100
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
                       遲到
                     </Typography>
-                    <Typography variant="h6" fontWeight={600} sx={{ fontSize: '1.1rem' }}>
+                    <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.9375rem', color: '#374151' }}>
                       {result.stats.lateCount}
                     </Typography>
                   </Box>
@@ -309,17 +305,16 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       justifyContent: 'center',
                       py: 1.5,
                       px: 1,
-                      borderRadius: 1.5,
+                      borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
-                      borderColor: '#E5E9F0',
-                      minHeight: 70,
+                      borderColor: '#F3F4F6', // border-gray-100
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
                       缺席
                     </Typography>
-                    <Typography variant="h6" fontWeight={600} sx={{ fontSize: '1.1rem' }}>
+                    <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.9375rem', color: '#374151' }}>
                       {result.stats.absentCount}
                     </Typography>
                   </Box>
@@ -333,17 +328,16 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       justifyContent: 'center',
                       py: 1.5,
                       px: 1,
-                      borderRadius: 1.5,
+                      borderRadius: 2,
                       bgcolor: 'white',
                       border: '1px solid',
-                      borderColor: '#E5E9F0',
-                      minHeight: 70,
+                      borderColor: '#F3F4F6', // border-gray-100
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.5 }}>
                       總戳數
                     </Typography>
-                    <Typography variant="h6" fontWeight={600} sx={{ fontSize: '1.1rem' }}>
+                    <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.9375rem', color: '#374151' }}>
                       {result.stats.totalPokes !== undefined ? result.stats.totalPokes : 0}
                     </Typography>
                   </Box>
