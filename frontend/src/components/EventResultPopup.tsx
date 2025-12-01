@@ -32,6 +32,8 @@ import {
 } from '@mui/icons-material';
 import { eventsApi } from '../api/events';
 import type { EventResult, RankingItem, MemberStatus } from '../types/events';
+// 測試用：取消註解下面這行來使用 mock data
+// import { mockEventResult, mockEventResultSimple, mockEventResultAllAbsent, mockEventResultAllLate } from '../mocks/eventResultMockData';
 
 interface EventResultPopupProps {
   open: boolean;
@@ -109,6 +111,19 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
     setLoading(true);
     setError(null);
     try {
+      // 測試用：取消註解下面這段來使用 mock data（記得註解掉真實 API 調用）
+      // const USE_MOCK_DATA = true;
+      // if (USE_MOCK_DATA) {
+      //   // 可以切換不同的 mock data 來測試不同場景
+      //   await new Promise((resolve) => setTimeout(resolve, 500)); // 模擬 API 延遲
+      //   setResult(mockEventResult); // 完整版：包含前三名、遲到、缺席
+      //   // setResult(mockEventResultSimple); // 簡化版：只有前三名
+      //   // setResult(mockEventResultAllAbsent); // 只有缺席
+      //   // setResult(mockEventResultAllLate); // 只有遲到
+      //   setLoading(false);
+      //   return;
+      // }
+
       const response = await eventsApi.getEventResult(eventId);
       setResult(response.result);
     } catch (err: any) {
