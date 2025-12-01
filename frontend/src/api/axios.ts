@@ -1,7 +1,26 @@
 import axios from 'axios';
 
+// Debug: Log the API base URL to help diagnose issues
+// IMPORTANT: Vite environment variables must be prefixed with VITE_ and are only available at build time
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
+// Validate that we have a proper base URL
+if (!apiBaseURL || apiBaseURL === 'undefined' || apiBaseURL.includes('undefined')) {
+  console.error('[API] ERROR: Invalid API base URL:', apiBaseURL);
+  console.error('[API] VITE_API_BASE_URL env var:', import.meta.env.VITE_API_BASE_URL);
+  throw new Error('VITE_API_BASE_URL is not properly configured. Please set it in Vercel environment variables.');
+}
+
+console.log('[API] Base URL:', apiBaseURL);
+console.log('[API] Environment variables:', {
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  MODE: import.meta.env.MODE,
+  PROD: import.meta.env.PROD,
+  DEV: import.meta.env.DEV,
+});
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  baseURL: apiBaseURL,
   withCredentials: true,
 });
 
