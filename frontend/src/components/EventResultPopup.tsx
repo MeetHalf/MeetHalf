@@ -198,12 +198,21 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                 borderColor: '#E5E9F0',
               }}
             >
-              <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2, color: 'text.primary', fontSize: '0.875rem' }}>
+              <Typography 
+                variant="subtitle2" 
+                fontWeight={600} 
+                sx={{ 
+                  mb: 2, 
+                  color: 'text.primary', 
+                  fontSize: '0.875rem',
+                  textAlign: 'center',
+                }}
+              >
                 統計數據
               </Typography>
               
               {/* 三個主指標卡片 */}
-              <Grid container spacing={2} sx={{ mb: 2.5 }}>
+              <Grid container spacing={2} sx={{ mb: 2.5, justifyContent: 'center' }}>
                 <Grid item xs={4}>
                   <Box
                     sx={{
