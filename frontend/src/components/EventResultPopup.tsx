@@ -186,11 +186,11 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
 
         {result && (
           <Box>
-            {/* 1. Stats Summary - Light, compact */}
+            {/* 1. Stats Summary - Small stat cards grid */}
             <Paper
               elevation={0}
               sx={{
-                p: 2.5,
+                p: 3,
                 mb: 3,
                 bgcolor: '#F5F7FA',
                 borderRadius: 2,
@@ -198,72 +198,156 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                 borderColor: '#E5E9F0',
               }}
             >
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2, color: 'text.primary' }}>
+              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2.5, color: 'text.primary' }}>
                 統計數據
               </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={6} sm={4}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+              <Grid container spacing={1.5}>
+                {/* 第一列：主指標 */}
+                <Grid item xs={4}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      py: 1.5,
+                      px: 1,
+                      borderRadius: 1.5,
+                      bgcolor: 'white',
+                      border: '1px solid',
+                      borderColor: '#E5E9F0',
+                      minHeight: 70,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
                       總參加人數
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
+                    <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.25rem' }}>
                       {result.stats.totalMembers}
                     </Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={6} sm={4}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                <Grid item xs={4}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      py: 1.5,
+                      px: 1,
+                      borderRadius: 1.5,
+                      bgcolor: 'white',
+                      border: '1px solid',
+                      borderColor: '#E5E9F0',
+                      minHeight: 70,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
                       已到達
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
+                    <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.25rem' }}>
                       {result.stats.arrivedCount}
                     </Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={6} sm={4}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                <Grid item xs={4}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      py: 1.5,
+                      px: 1,
+                      borderRadius: 1.5,
+                      bgcolor: 'white',
+                      border: '1px solid',
+                      borderColor: '#E5E9F0',
+                      minHeight: 70,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
                       準時率
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
+                    <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.25rem' }}>
                       {onTimeRate}%
                     </Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={6} sm={4}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                {/* 第二列：次指標 */}
+                <Grid item xs={4}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      py: 1.5,
+                      px: 1,
+                      borderRadius: 1.5,
+                      bgcolor: 'white',
+                      border: '1px solid',
+                      borderColor: '#E5E9F0',
+                      minHeight: 70,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
                       遲到
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
+                    <Typography variant="h6" fontWeight={600} sx={{ fontSize: '1.1rem' }}>
                       {result.stats.lateCount}
                     </Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={6} sm={4}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                <Grid item xs={4}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      py: 1.5,
+                      px: 1,
+                      borderRadius: 1.5,
+                      bgcolor: 'white',
+                      border: '1px solid',
+                      borderColor: '#E5E9F0',
+                      minHeight: 70,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
                       缺席
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
+                    <Typography variant="h6" fontWeight={600} sx={{ fontSize: '1.1rem' }}>
                       {result.stats.absentCount}
                     </Typography>
                   </Box>
                 </Grid>
-                {result.stats.totalPokes !== undefined && result.stats.totalPokes > 0 && (
-                  <Grid item xs={6} sm={4}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                        總戳數
-                      </Typography>
-                      <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
-                        {result.stats.totalPokes}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                )}
+                <Grid item xs={4}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      py: 1.5,
+                      px: 1,
+                      borderRadius: 1.5,
+                      bgcolor: 'white',
+                      border: '1px solid',
+                      borderColor: '#E5E9F0',
+                      minHeight: 70,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
+                      總戳數
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600} sx={{ fontSize: '1.1rem' }}>
+                      {result.stats.totalPokes !== undefined ? result.stats.totalPokes : 0}
+                    </Typography>
+                  </Box>
+                </Grid>
               </Grid>
             </Paper>
 
