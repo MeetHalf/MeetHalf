@@ -24,6 +24,7 @@ import {
   AccessTime as TimeIcon,
   LocationOn as LocationIcon,
   People as PeopleIcon,
+  Person as PersonIcon,
   ExpandMore as ExpandMoreIcon,
   Check as CheckIcon,
   TouchApp as PokeIcon,
@@ -590,6 +591,25 @@ export default function EventRoom() {
                   {members.length} 位成員已加入
                 </Typography>
               </Box>
+
+              {/* 主揪資訊 */}
+              {(() => {
+                // 嘗試從 members 中找到 owner 的 member 記錄
+                const ownerMember = event.members?.find(m => m.userId === event.ownerId);
+                const ownerDisplayName = ownerMember?.nickname || 
+                  (event.ownerId.includes('_') 
+                    ? event.ownerId.split('_')[0] 
+                    : event.ownerId);
+                
+                return (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <PersonIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+                    <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
+                      主揪：{ownerDisplayName}
+                    </Typography>
+                  </Box>
+                );
+              })()}
             </Box>
           </Paper>
 
@@ -718,7 +738,7 @@ export default function EventRoom() {
             component="h1"
             sx={{
               fontWeight: 600,
-              mb: 3,
+              mb: 1,
               fontSize: { xs: '1.75rem', sm: '2.25rem' },
               color: '#1a1a1a',
               letterSpacing: '-0.02em',
@@ -726,6 +746,30 @@ export default function EventRoom() {
           >
             {event.name}
           </Typography>
+
+          {/* 主揪資訊 */}
+          {(() => {
+            // 嘗試從 members 中找到 owner 的 member 記錄
+            const ownerMember = event.members?.find(m => m.userId === event.ownerId);
+            const ownerDisplayName = ownerMember?.nickname || 
+              (event.ownerId.includes('_') 
+                ? event.ownerId.split('_')[0] 
+                : event.ownerId);
+            
+            return (
+              <Typography
+                variant="caption"
+                sx={{
+                  display: 'block',
+                  color: 'text.secondary',
+                  mb: 3,
+                  fontSize: '0.875rem',
+                }}
+              >
+                主揪：{ownerDisplayName}
+              </Typography>
+            );
+          })()}
 
           {/* 進度條區域 */}
           {progress && (
@@ -930,6 +974,7 @@ export default function EventRoom() {
                 };
                 const status = getMemberStatus();
                 const isCurrentUser = member.id === currentMemberId;
+                const isOwner = event && member.userId === event.ownerId;
 
                 return (
                   <Box
@@ -943,8 +988,8 @@ export default function EventRoom() {
                       mx: -2,
                       borderTop: index === 0 ? 'none' : '1px solid',
                       borderColor: 'divider',
-                      bgcolor: isCurrentUser ? '#e3f2fd' : 'transparent',
-                      borderRadius: isCurrentUser ? 2 : 0,
+                      bgcolor: isOwner && isCurrentUser ? '#fff8e1' : isCurrentUser ? '#e3f2fd' : isOwner ? '#fff8e1' : 'transparent',
+                      borderRadius: isCurrentUser || isOwner ? 2 : 0,
                     }}
                   >
                     {/* Avatar */}
@@ -978,6 +1023,20 @@ export default function EventRoom() {
                         }}
                       >
                         {member.nickname}
+                        {isOwner && (
+                          <Chip
+                            label="主揪"
+                            size="small"
+                            sx={{
+                              ml: 1,
+                              height: 20,
+                              fontSize: '0.7rem',
+                              bgcolor: '#ff9800',
+                              color: 'white',
+                              fontWeight: 600,
+                            }}
+                          />
+                        )}
                         {isCurrentUser && (
                           <Chip
                             label="你"
