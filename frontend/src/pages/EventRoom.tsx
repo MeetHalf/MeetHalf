@@ -540,13 +540,57 @@ export default function EventRoom() {
         response: err?.response?.data,
         eventId: id,
         targetMemberId,
+        status: err?.response?.status,
       });
-      const errorMessage = err.response?.data?.message || err.message || '戳人失敗，請稍後再試';
-      setSnackbar({ 
-        open: true, 
-        message: errorMessage, 
-        severity: 'error' 
-      });
+      
+      // 如果是 401 錯誤，可能是 token 過期，提示重新加入
+      if (err?.response?.status === 401) {
+        const errorData = err.response?.data;
+        if (errorData?.code === 'UNAUTHORIZED') {
+          // 清除過期的 token
+          if (id) {
+            const storageKey = `event_${id}_member`;
+            const storedMember = localStorage.getItem(storageKey);
+            if (storedMember) {
+              try {
+                const memberData = JSON.parse(storedMember);
+                console.warn('[EventRoom] Token expired, clearing localStorage:', {
+                  memberId: memberData.memberId,
+                  hadToken: !!memberData.guestToken,
+                });
+                // 保留 memberId 和其他資訊，但清除過期的 token
+                memberData.guestToken = null;
+                localStorage.setItem(storageKey, JSON.stringify(memberData));
+              } catch (e) {
+                console.error('[EventRoom] Failed to update localStorage:', e);
+              }
+            }
+          }
+          
+          setSnackbar({ 
+            open: true, 
+            message: '認證已過期，請重新加入聚會', 
+            severity: 'error' 
+          });
+          
+          // 可選：自動重置加入狀態，讓用戶重新加入
+          // setHasJoined(false);
+          // setCurrentMemberId(null);
+        } else {
+          setSnackbar({ 
+            open: true, 
+            message: errorData?.message || '認證失敗，請重新加入聚會', 
+            severity: 'error' 
+          });
+        }
+      } else {
+        const errorMessage = err.response?.data?.message || err.message || '戳人失敗，請稍後再試';
+        setSnackbar({ 
+          open: true, 
+          message: errorMessage, 
+          severity: 'error' 
+        });
+      }
     } finally {
       setPokingMemberId(null);
     }

@@ -129,8 +129,13 @@ export async function optionalAuthMiddleware(
             console.log('[Auth Middleware] Both token verifications failed:', {
               path: req.path,
               jwtError: error instanceof Error ? error.message : 'Unknown',
+              jwtErrorName: error instanceof Error ? error.name : 'Unknown',
               guestError: guestError instanceof Error ? guestError.message : 'Unknown',
+              guestErrorName: guestError instanceof Error ? guestError.name : 'Unknown',
               tokenPrefix: token ? token.substring(0, 30) + '...' : 'none',
+              tokenLength: token ? token.length : 0,
+              hasJWTSecret: !!process.env.JWT_SECRET,
+              jwtSecretLength: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
             });
           }
           (req as any).user = undefined;

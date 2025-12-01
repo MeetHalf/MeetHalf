@@ -53,8 +53,16 @@ export function verifyGuestToken(token: string): GuestTokenPayload {
       throw new Error('Invalid guest token format');
     }
     return decoded;
-  } catch (error) {
-    throw new Error('Invalid or expired guest token');
+  } catch (error: any) {
+    // 提供更詳細的錯誤訊息
+    if (error.name === 'TokenExpiredError') {
+      throw new Error(`Guest token expired at ${error.expiredAt}`);
+    } else if (error.name === 'JsonWebTokenError') {
+      throw new Error(`Invalid guest token: ${error.message}`);
+    } else if (error.message === 'Invalid guest token format') {
+      throw error;
+    }
+    throw new Error(`Invalid or expired guest token: ${error.message || 'Unknown error'}`);
   }
 }
 
