@@ -63,10 +63,10 @@ function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
 
   res.cookie('token', token, cookieOptions);
 
-  // Redirect to frontend
+  // Redirect to frontend root - let frontend router handle navigation to /events
   const frontendOrigin = getFrontendOrigin();
-  console.log('[AUTH] Redirecting to frontend:', `${frontendOrigin}/events`);
-  res.redirect(`${frontendOrigin}/events`);
+  console.log('[AUTH] Redirecting to frontend:', `${frontendOrigin}/`);
+  res.redirect(`${frontendOrigin}/`);
 }
 
 /**
@@ -104,13 +104,13 @@ router.get(
         console.error('[AUTH] Stack:', err.stack);
         console.error('[AUTH] Full error:', JSON.stringify(err, null, 2));
         const frontendOrigin = getFrontendOrigin();
-        return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+        return res.redirect(`${frontendOrigin}/login?error=auth_failed`);
       }
       if (!user) {
         console.error('[AUTH] ❌ Google OAuth: No user returned');
         console.error('[AUTH] Info:', info);
         const frontendOrigin = getFrontendOrigin();
-        return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+        return res.redirect(`${frontendOrigin}/login?error=auth_failed`);
       }
       
       console.log('[AUTH] ✓ Google OAuth success, user:', {
@@ -129,7 +129,7 @@ router.get(
     const user = (req as any).user;
     if (!user) {
       const frontendOrigin = getFrontendOrigin();
-      return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+      return res.redirect(`${frontendOrigin}/login?error=auth_failed`);
     }
     setAuthCookieAndRedirect(req, res, user);
   }
@@ -181,12 +181,12 @@ router.get(
       if (err) {
         console.error('[AUTH] GitHub OAuth error:', err);
         const frontendOrigin = getFrontendOrigin();
-        return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+        return res.redirect(`${frontendOrigin}/login?error=auth_failed`);
       }
       if (!user) {
         console.error('[AUTH] GitHub OAuth: No user returned', info);
         const frontendOrigin = getFrontendOrigin();
-        return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+        return res.redirect(`${frontendOrigin}/login?error=auth_failed`);
       }
       console.log('[AUTH] GitHub OAuth success, user:', { id: user.id, email: user.email });
       // Attach user to request
@@ -200,7 +200,7 @@ router.get(
     if (!user) {
       console.error('[AUTH] GitHub callback: No user in request');
       const frontendOrigin = getFrontendOrigin();
-      return res.redirect(`${frontendOrigin}/events?error=auth_failed`);
+      return res.redirect(`${frontendOrigin}/login?error=auth_failed`);
     }
     setAuthCookieAndRedirect(req, res, user);
   }
