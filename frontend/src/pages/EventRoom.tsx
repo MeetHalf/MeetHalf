@@ -27,19 +27,19 @@ import {
   ExpandMore as ExpandMoreIcon,
   Check as CheckIcon,
   TouchApp as PokeIcon,
+  EmojiEvents as TrophyIcon,
 } from '@mui/icons-material';
 import { eventsApi, type Event as ApiEvent, type Member, type TravelMode } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
 import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
-import { useAuth } from '../hooks/useAuth';
-import type { PokeEvent } from '../types/events';
+import type { PokeEvent, EventEndedEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
+import EventResultPopup from '../components/EventResultPopup';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   
   const [event, setEvent] = useState<ApiEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -63,6 +63,9 @@ export default function EventRoom() {
   
   // 戳人相關狀態
   const [pokingMemberId, setPokingMemberId] = useState<number | null>(null);
+  
+  // 結果彈出視窗
+  const [showResultPopup, setShowResultPopup] = useState(false);
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -133,8 +136,41 @@ export default function EventRoom() {
     debug: true, // Enable debug logging
   });
 
+  // 整合 Pusher - 監聽 event-ended 事件
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'event-ended',
+    onEvent: (data: EventEndedEvent) => {
+      console.log('[EventRoom] Received event-ended event:', data);
+      setEvent((prevEvent) => (prevEvent ? { ...prevEvent, status: 'ended' } : null));
+      setSnackbar({ 
+        open: true, 
+        message: '🎊 聚會已結束！查看排行榜結果', 
+        severity: 'info' 
+      });
+      // 5 秒後自動顯示結果彈出視窗
+      setTimeout(() => {
+        setShowResultPopup(true);
+      }, 5000);
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher event-ended error:', error);
+    },
+    debug: true,
+  });
+
   // 使用進度條 hook（始終調用，內部處理 null）
   const progress = useEventProgress(event);
+
+  // 檢查 event 是否已結束（用於顯示「查看結果」按鈕）
+  const isEventEnded = useMemo(() => {
+    if (!event) return false;
+    if (event.status === 'ended') return true;
+    // 如果現在時間超過 endTime，也視為已結束
+    const now = new Date();
+    const endTime = new Date(event.endTime);
+    return now > endTime;
+  }, [event]);
 
   // 載入 Event 數據
   useEffect(() => {
@@ -1007,7 +1043,7 @@ export default function EventRoom() {
         </Paper>
 
         {/* 「我到了」按鈕 - 成員列表下方 */}
-        {!hasArrived && (
+        {!hasArrived && !isEventEnded && (
           <Paper
             elevation={0}
             sx={{
@@ -1040,6 +1076,43 @@ export default function EventRoom() {
               }}
             >
               {marking ? '標記中...' : '我到了！'}
+            </Button>
+          </Paper>
+        )}
+
+        {/* 「查看結果」按鈕 - 聚會結束後顯示 */}
+        {isEventEnded && (
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 3,
+              p: 3,
+              borderRadius: 3,
+              bgcolor: 'primary.light',
+              border: '1px solid',
+              borderColor: 'primary.main',
+            }}
+          >
+            <Button
+              variant="contained"
+              size="large"
+              fullWidth
+              onClick={() => setShowResultPopup(true)}
+              startIcon={<TrophyIcon />}
+              sx={{
+                py: 2,
+                borderRadius: 2,
+                textTransform: 'none',
+                fontSize: '1.125rem',
+                fontWeight: 600,
+                bgcolor: 'primary.main',
+                '&:hover': {
+                  bgcolor: 'primary.dark',
+                },
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+              }}
+            >
+              🏆 查看排行榜結果
             </Button>
           </Paper>
         )}
@@ -1077,6 +1150,15 @@ export default function EventRoom() {
           onClose={() => setSnackbar({ ...snackbar, open: false })}
           message={snackbar.message}
         />
+
+        {/* EventResultPopup */}
+        {id && (
+          <EventResultPopup
+            open={showResultPopup}
+            onClose={() => setShowResultPopup(false)}
+            eventId={Number(id)}
+          />
+        )}
       </Container>
     </Box>
   );
