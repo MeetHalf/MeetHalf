@@ -41,11 +41,28 @@ api.interceptors.request.use(
     if (eventId) {
       const guestToken = getGuestTokenForEvent(eventId);
       
+      // Debug logging for poke endpoint
+      if (url.includes('/poke')) {
+        console.log('[axios] Poke request - Token check:', {
+          eventId,
+          hasGuestToken: !!guestToken,
+          tokenLength: guestToken ? guestToken.length : 0,
+          tokenPrefix: guestToken ? guestToken.substring(0, 20) + '...' : 'none',
+          hasExistingAuth: !!config.headers['Authorization'],
+          url,
+        });
+      }
+      
       // Only add guest token if:
       // 1. We have a guest token
       // 2. No Authorization header is already set (don't override existing auth)
       if (guestToken && !config.headers['Authorization']) {
         config.headers['Authorization'] = `Bearer ${guestToken}`;
+        if (url.includes('/poke')) {
+          console.log('[axios] ✓ Added Authorization header with guest token');
+        }
+      } else if (url.includes('/poke') && !guestToken) {
+        console.warn('[axios] ⚠️ No guest token found for event:', eventId);
       }
     }
     

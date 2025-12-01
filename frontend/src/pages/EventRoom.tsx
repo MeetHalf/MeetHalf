@@ -495,6 +495,29 @@ export default function EventRoom() {
       timestamp: new Date().toISOString(),
     });
     
+    // Debug: Check localStorage for guestToken
+    if (id) {
+      const storageKey = `event_${id}_member`;
+      const storedMember = localStorage.getItem(storageKey);
+      if (storedMember) {
+        try {
+          const memberData = JSON.parse(storedMember);
+          console.log('[EventRoom] localStorage member data:', {
+            hasGuestToken: !!memberData.guestToken,
+            tokenLength: memberData.guestToken ? memberData.guestToken.length : 0,
+            tokenPrefix: memberData.guestToken ? memberData.guestToken.substring(0, 20) + '...' : 'none',
+            memberId: memberData.memberId,
+            currentMemberId,
+            match: memberData.memberId === currentMemberId,
+          });
+        } catch (e) {
+          console.error('[EventRoom] Failed to parse localStorage data:', e);
+        }
+      } else {
+        console.warn('[EventRoom] ⚠️ No localStorage data found for event:', id);
+      }
+    }
+    
     setPokingMemberId(targetMemberId);
     
     try {
