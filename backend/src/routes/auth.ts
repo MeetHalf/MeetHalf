@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import passport from '../lib/passport';
 import prisma from '../lib/prisma';
-import { signToken } from '../utils/jwt';
+import { signToken, generateTempAuthToken } from '../utils/jwt';
 import { optionalAuthMiddleware } from '../middleware/auth';
 
 const router = Router();
@@ -59,14 +59,19 @@ function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
     protocol: req.protocol,
     host: req.headers.host,
     origin: req.headers.origin,
+    userAgent: req.headers['user-agent'],
   });
 
+  // Set cookie (primary method)
   res.cookie('token', token, cookieOptions);
 
-  // Redirect to frontend root - let frontend router handle navigation to /events
+  // Also pass token in URL as fallback for mobile devices that block third-party cookies
+  // Frontend will detect this and store in localStorage as backup
   const frontendOrigin = getFrontendOrigin();
-  console.log('[AUTH] Redirecting to frontend:', `${frontendOrigin}/`);
-  res.redirect(`${frontendOrigin}/`);
+  const redirectUrl = `${frontendOrigin}/?auth_token=${encodeURIComponent(token)}`;
+  
+  console.log('[AUTH] Redirecting to frontend with token in URL (for mobile fallback):', redirectUrl.replace(token, '***'));
+  res.redirect(redirectUrl);
 }
 
 /**
@@ -333,6 +338,115 @@ router.post('/logout', (req: Request, res: Response): void => {
   
   console.log('[AUTH] Logout successful');
   res.json({ message: 'Logout successful' });
+});
+
+/**
+ * @swagger
+ * /auth/exchange-temp-token:
+ *   post:
+ *     summary: Exchange temporary auth token for JWT (mobile fallback)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - tempToken
+ *             properties:
+ *               tempToken:
+ *                 type: string
+ *                 description: Temporary one-time authentication token
+ *     responses:
+ *       200:
+ *         description: Exchange successful, JWT returned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   description: JWT token (should be stored in sessionStorage)
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Invalid or expired temp token
+ *       401:
+ *         description: Unauthorized
+ */
+// POST /auth/exchange-temp-token - Exchange temporary token for JWT (mobile fallback)
+router.post('/exchange-temp-token', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { tempToken } = req.body;
+    
+    if (!tempToken || typeof tempToken !== 'string') {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'tempToken is required',
+      });
+      return;
+    }
+
+    // Verify temporary token
+    const { verifyTempAuthToken } = await import('../utils/jwt');
+    let tempPayload;
+    try {
+      tempPayload = verifyTempAuthToken(tempToken);
+    } catch (error) {
+      console.error('[AUTH] Invalid temp token:', error);
+      res.status(401).json({
+        code: 'INVALID_TOKEN',
+        message: 'Invalid or expired temporary token',
+      });
+      return;
+    }
+
+    // Get user from database
+    const user = await prisma.user.findUnique({
+      where: { id: tempPayload.userId },
+      select: {
+        id: true,
+        userId: true,
+        email: true,
+        name: true,
+        avatar: true,
+        provider: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found',
+      });
+      return;
+    }
+
+    // Generate real JWT token
+    const realToken = signToken(user.id);
+    
+    // Also set cookie (in case it works)
+    const cookieOptions = getCookieOptions(req);
+    cookieOptions.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+    res.cookie('token', realToken, cookieOptions);
+
+    console.log('[AUTH] Temp token exchanged successfully for user:', user.id);
+    
+    // Return JWT token (frontend should store in sessionStorage)
+    res.json({
+      token: realToken,
+      user,
+    });
+  } catch (error: any) {
+    console.error('[AUTH] Error exchanging temp token:', error);
+    res.status(500).json({
+      code: 'INTERNAL_ERROR',
+      message: 'Failed to exchange token',
+    });
+  }
 });
 
 export default router;

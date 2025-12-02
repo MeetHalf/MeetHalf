@@ -40,6 +40,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await api.post('/auth/logout');
     setUser(null);
+    
+    // Also clear auth token from sessionStorage (mobile fallback)
+    try {
+      sessionStorage.removeItem('auth_token');
+      console.log('[Auth] Cleared auth token from sessionStorage');
+    } catch (error) {
+      console.error('[Auth] Error clearing auth token from sessionStorage:', error);
+    }
   }, []);
 
   useEffect(() => {

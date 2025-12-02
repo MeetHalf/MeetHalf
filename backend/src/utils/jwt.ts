@@ -13,6 +13,11 @@ export interface GuestTokenPayload {
   eventId: number;
 }
 
+export interface TempAuthTokenPayload {
+  userId: number;
+  type: 'temp_auth';
+}
+
 export function signToken(userId: number): string {
   if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not defined in environment variables');
@@ -55,6 +60,43 @@ export function verifyGuestToken(token: string): GuestTokenPayload {
     return decoded;
   } catch (error) {
     throw new Error('Invalid or expired guest token');
+  }
+}
+
+/**
+ * Generate a temporary one-time authentication token
+ * Used for mobile devices when cookies are blocked
+ * Short expiration (5 minutes) and single-use only
+ */
+export function generateTempAuthToken(userId: number): string {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is not defined in environment variables');
+  }
+  
+  return jwt.sign(
+    { userId, type: 'temp_auth' },
+    JWT_SECRET,
+    { expiresIn: '5m' } // 5 minutes expiration
+  );
+}
+
+/**
+ * Verify and extract user ID from temporary auth token
+ * This token should only be used once to exchange for a real JWT
+ */
+export function verifyTempAuthToken(token: string): TempAuthTokenPayload {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is not defined in environment variables');
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as TempAuthTokenPayload;
+    if (decoded.type !== 'temp_auth' || !decoded.userId) {
+      throw new Error('Invalid temp auth token format');
+    }
+    return decoded;
+  } catch (error) {
+    throw new Error('Invalid or expired temp auth token');
   }
 }
 

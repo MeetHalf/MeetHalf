@@ -24,6 +24,17 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Helper function to get auth token from sessionStorage (mobile fallback)
+// sessionStorage is more secure than localStorage (cleared when tab closes)
+function getAuthTokenFromStorage(): string | null {
+  try {
+    return sessionStorage.getItem('auth_token');
+  } catch (error) {
+    console.error('[API] Error reading auth token from sessionStorage:', error);
+    return null;
+  }
+}
+
 // Helper function to get guest token from localStorage for any event
 function getGuestTokenForEvent(eventId: number | string): string | null {
   try {
@@ -50,10 +61,10 @@ function extractEventIdFromUrl(url: string): string | null {
   return match ? match[1] : null;
 }
 
-// Request interceptor: Add Authorization header with guest token if available
+// Request interceptor: Add Authorization header with guest token or auth token if available
 api.interceptors.request.use(
   (config) => {
-    // Try to extract event ID from URL
+    // Priority 1: Check for guest token (for event-specific actions)
     const url = config.url || '';
     const eventId = extractEventIdFromUrl(url);
     
@@ -65,6 +76,17 @@ api.interceptors.request.use(
       // 2. No Authorization header is already set (don't override existing auth)
       if (guestToken && !config.headers['Authorization']) {
         config.headers['Authorization'] = `Bearer ${guestToken}`;
+        return config;
+      }
+    }
+    
+    // Priority 2: Check for auth token from sessionStorage (mobile fallback)
+    // Only use if no Authorization header is already set
+    if (!config.headers['Authorization']) {
+      const authToken = getAuthTokenFromStorage();
+      if (authToken) {
+        config.headers['Authorization'] = `Bearer ${authToken}`;
+        console.log('[API] Using auth token from sessionStorage (mobile fallback)');
       }
     }
     
