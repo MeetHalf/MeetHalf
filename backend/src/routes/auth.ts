@@ -72,7 +72,8 @@ function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
   
   // Pass temporary token in URL (safer: short-lived, one-time use)
   // Frontend will exchange this for the real JWT via API call
-  const redirectUrl = `${frontendOrigin}/?auth_temp=${encodeURIComponent(tempToken)}`;
+  // Redirect to /events directly to avoid frontend root redirect stripping params
+  const redirectUrl = `${frontendOrigin}/events?auth_temp=${encodeURIComponent(tempToken)}`;
   
   console.log('[AUTH] Redirecting to frontend with temp token (for mobile fallback)');
   res.redirect(redirectUrl);

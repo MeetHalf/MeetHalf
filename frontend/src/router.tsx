@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -6,6 +6,12 @@ import Events from './pages/Events';
 import EventDetail from './pages/EventDetail';
 import CreateEvent from './pages/CreateEvent';
 import { Box, CircularProgress } from '@mui/material';
+
+// Redirect helper that preserves query parameters
+function RedirectToEvents() {
+  const location = useLocation();
+  return <Navigate to={`/events${location.search}`} replace />;
+}
 
 // Loading Route wrapper
 function LoadingRoute({ children }: { children: React.ReactNode }) {
@@ -39,7 +45,7 @@ function NotFoundPage() {
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Navigate to="/events" replace />,
+    element: <RedirectToEvents />,
   },
   {
     path: '/login',
