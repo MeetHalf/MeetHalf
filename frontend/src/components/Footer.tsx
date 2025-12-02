@@ -17,10 +17,7 @@ export default function Footer() {
     >
       <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          © 2025 MeetHalf - 找到完美的聚會地點
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Web Programming HW#4 | Made with ❤️
+          © 2025 MeetHalf - 找到完美的聚會地點，成為守時大師！
         </Typography>
       </Box>
     </Box>

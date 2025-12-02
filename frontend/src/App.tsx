@@ -1,13 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
-import { CssBaseline, ThemeProvider } from '@mui/material';
+import { CssBaseline, ThemeProvider, Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './hooks/useAuth';
 import { router } from './router';
 import { theme } from './theme';
 
 // Handle temporary auth token from URL (mobile fallback for when cookies are blocked)
 // This uses a secure one-time token exchange mechanism
-async function handleTempAuthTokenFromURL() {
+async function handleTempAuthTokenFromURL(): Promise<boolean> {
   const urlParams = new URLSearchParams(window.location.search);
   const tempToken = urlParams.get('auth_temp');
   
@@ -54,19 +54,54 @@ async function handleTempAuthTokenFromURL() {
         console.log('[App] Reloading page to ensure auth state is synced');
         window.location.reload();
       }, 500);
+      
+      return true; // Token exchange initiated
     } catch (error: any) {
       console.error('[App] Error exchanging temp token:', error);
       // Redirect to login on error
       window.location.href = '/login?error=token_exchange_failed';
+      return false;
     }
   }
+  return false; // No token found
 }
 
 function App() {
+  const [isExchangingToken, setIsExchangingToken] = useState(false);
+
   // Handle temporary auth token from URL on mount (for mobile fallback)
   useEffect(() => {
-    handleTempAuthTokenFromURL();
+    // Check if we have an auth param, if so, show loading state
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('auth_temp')) {
+      setIsExchangingToken(true);
+      handleTempAuthTokenFromURL().then(() => {
+        // We keep isExchangingToken true because handleTempAuthTokenFromURL 
+        // will trigger a reload or auth refresh shortly
+      });
+    }
   }, []);
+
+  if (isExchangingToken) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '100vh',
+          bgcolor: 'background.default'
+        }}>
+          <CircularProgress size={60} thickness={4} sx={{ mb: 4 }} />
+          <div style={{ fontSize: '1.2rem', fontWeight: 500, color: '#555' }}>
+            正在完成登入...
+          </div>
+        </Box>
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider theme={theme}>

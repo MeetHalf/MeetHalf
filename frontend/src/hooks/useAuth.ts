@@ -51,12 +51,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.post('/auth/logout');
     setUser(null);
     
-    // Also clear auth token from sessionStorage (mobile fallback)
+    // Clear auth token from sessionStorage (mobile fallback)
     try {
       sessionStorage.removeItem('auth_token');
       console.log('[Auth] Cleared auth token from sessionStorage');
     } catch (error) {
       console.error('[Auth] Error clearing auth token from sessionStorage:', error);
+    }
+    
+    // Also clear the cookie that was set via JavaScript (in App.tsx)
+    // This is necessary because axios interceptor reads from cookie as fallback
+    try {
+      const isSecure = window.location.protocol === 'https:';
+      // Clear cookie by setting it to empty with expired date
+      // Try multiple variations to ensure it's cleared regardless of path/domain
+      const cookieOptions = [
+        `token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`,
+        `token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None${isSecure ? '; Secure' : ''}`,
+        `token=; path=/; domain=${window.location.hostname}; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`,
+      ];
+      
+      cookieOptions.forEach(cookieString => {
+        document.cookie = cookieString;
+      });
+      
+      console.log('[Auth] Cleared auth token cookie (JavaScript-set cookie)');
+    } catch (error) {
+      console.error('[Auth] Error clearing auth token cookie:', error);
     }
   }, []);
 
