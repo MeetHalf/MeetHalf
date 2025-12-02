@@ -62,15 +62,19 @@ function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
     userAgent: req.headers['user-agent'],
   });
 
-  // Set cookie (primary method)
+  // Set cookie (primary method - most secure)
   res.cookie('token', token, cookieOptions);
 
-  // Also pass token in URL as fallback for mobile devices that block third-party cookies
-  // Frontend will detect this and store in localStorage as backup
+  // For mobile devices that may block cookies, use a temporary one-time token
+  // This is more secure than passing the JWT directly in URL
+  const tempToken = generateTempAuthToken(user.id);
   const frontendOrigin = getFrontendOrigin();
-  const redirectUrl = `${frontendOrigin}/?auth_token=${encodeURIComponent(token)}`;
   
-  console.log('[AUTH] Redirecting to frontend with token in URL (for mobile fallback):', redirectUrl.replace(token, '***'));
+  // Pass temporary token in URL (safer: short-lived, one-time use)
+  // Frontend will exchange this for the real JWT via API call
+  const redirectUrl = `${frontendOrigin}/?auth_temp=${encodeURIComponent(tempToken)}`;
+  
+  console.log('[AUTH] Redirecting to frontend with temp token (for mobile fallback)');
   res.redirect(redirectUrl);
 }
 
