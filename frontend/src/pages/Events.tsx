@@ -16,7 +16,7 @@ import {
   Snackbar,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import GroupCard from '../components/GroupCard';
+import GroupCard from '../components/EventCard';
 import { eventsApi, Event } from '../api/events';
 
 export default function Events() {

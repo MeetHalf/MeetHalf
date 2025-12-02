@@ -3,15 +3,26 @@ import { Prisma } from '@prisma/client';
 
 export class MemberRepository {
   /**
-   * Find member by ID
+   * Find member by ID with user avatar if userId is a real user
    */
   async findById(id: number) {
-    return prisma.member.findUnique({
+    const member = await prisma.member.findUnique({
       where: { id },
       include: {
         event: true,
       },
     });
+
+    // If member has userId and it's not a guest ID, fetch user avatar
+    if (member && member.userId && !member.userId.startsWith('guest_')) {
+      const user = await prisma.user.findUnique({
+        where: { userId: member.userId },
+        select: { avatar: true },
+      });
+      return { ...member, avatar: user?.avatar || null };
+    }
+
+    return { ...member, avatar: null };
   }
 
   /**
@@ -27,13 +38,29 @@ export class MemberRepository {
   }
 
   /**
-   * Find all members by event ID
+   * Find all members by event ID with user avatars
    */
   async findByEventId(eventId: number) {
-    return prisma.member.findMany({
+    const members = await prisma.member.findMany({
       where: { eventId },
       orderBy: { id: 'asc' },
     });
+
+    // Fetch avatars for non-guest members
+    const membersWithAvatars = await Promise.all(
+      members.map(async (member) => {
+        if (member.userId && !member.userId.startsWith('guest_')) {
+          const user = await prisma.user.findUnique({
+            where: { userId: member.userId },
+            select: { avatar: true },
+          });
+          return { ...member, avatar: user?.avatar || null };
+        }
+        return { ...member, avatar: null };
+      })
+    );
+
+    return membersWithAvatars;
   }
 
   /**

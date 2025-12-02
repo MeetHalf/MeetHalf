@@ -42,8 +42,19 @@ export interface Member {
   nickname: string | null;
   shareLocation: boolean;
   arrivalTime: string | null; // ISO 8601
+  avatar?: string | null; // User avatar URL
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MemberETA {
+  memberId: number;
+  nickname: string;
+  eta: {
+    duration: string; // "15 分鐘"
+    durationValue: number; // seconds
+    distance: string; // "2.5 公里"
+  } | null;
 }
 
 export interface CreateEventRequest {
@@ -224,6 +235,12 @@ export const eventsApi = {
     travelMode?: TravelMode;
   }): Promise<{ member: Member }> {
     const response = await api.post(`/events/${eventId}/location`, data);
+    return response.data;
+  },
+
+  // Get members ETA
+  async getMembersETA(eventId: number): Promise<{ members: MemberETA[] }> {
+    const response = await api.get(`/events/${eventId}/members/eta`);
     return response.data;
   },
 

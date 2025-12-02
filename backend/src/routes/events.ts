@@ -1923,6 +1923,141 @@ router.post('/:id/location', optionalAuthMiddleware, async (req: Request, res: R
 
 /**
  * @swagger
+ * /events/{id}/members/eta:
+ *   get:
+ *     summary: Get estimated arrival time (ETA) for all members
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: ETA calculated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 members:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       memberId:
+ *                         type: integer
+ *                       nickname:
+ *                         type: string
+ *                       eta:
+ *                         type: object
+ *                         nullable: true
+ *                         properties:
+ *                           duration:
+ *                             type: string
+ *                             example: "15 分鐘"
+ *                           durationValue:
+ *                             type: integer
+ *                             example: 900
+ *                           distance:
+ *                             type: string
+ *                             example: "2.5 公里"
+ *       404:
+ *         description: Event not found
+ */
+// GET /events/:id/members/eta - Get ETA for all members
+router.get('/:id/members/eta', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    const event = await eventRepository.findById(id);
+    if (!event) {
+      res.status(404).json({
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found',
+      });
+      return;
+    }
+
+    // Check if event has meeting point
+    if (!event.meetingPointLat || !event.meetingPointLng) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Event does not have a meeting point',
+      });
+      return;
+    }
+
+    // Get members who are sharing location and haven't arrived
+    const membersWithLocation = event.members.filter(
+      (m) => m.shareLocation && m.lat && m.lng && !m.arrivalTime
+    );
+
+    // Calculate ETA for each member
+
+    const etaResults = await Promise.all(
+      membersWithLocation.map(async (member) => {
+        try {
+          const directionsResult = await gmapsClient.directions({
+            params: {
+              origin: `${member.lat},${member.lng}`,
+              destination: `${event.meetingPointLat},${event.meetingPointLng}`,
+              mode: (member.travelMode || 'driving') as any,
+              departure_time: Math.floor(Date.now() / 1000),
+              key: GMAPS_KEY,
+            },
+          });
+
+          if (directionsResult.data.status === 'OK' && directionsResult.data.routes.length > 0) {
+            const route = directionsResult.data.routes[0];
+            const leg = route.legs[0];
+
+            return {
+              memberId: member.id,
+              nickname: member.nickname || member.userId || 'Unknown',
+              eta: {
+                duration: leg.duration.text,
+                durationValue: leg.duration.value, // in seconds
+                distance: leg.distance.text,
+              },
+            };
+          }
+        } catch (error) {
+          console.error(`Error calculating ETA for member ${member.id}:`, error);
+        }
+
+        return {
+          memberId: member.id,
+          nickname: member.nickname || member.userId || 'Unknown',
+          eta: null,
+        };
+      })
+    );
+
+    res.json({ members: etaResults });
+  } catch (error: any) {
+    console.error('Error calculating ETA:', error);
+    res.status(500).json({
+      code: 'INTERNAL_ERROR',
+      message: 'Failed to calculate ETA',
+    });
+  }
+});
+
+/**
+ * @swagger
  * /events/{id}/arrival:
  *   post:
  *     summary: Mark member arrival

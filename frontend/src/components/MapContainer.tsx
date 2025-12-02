@@ -11,6 +11,7 @@ interface MapContainerProps {
     id?: number;
     draggable?: boolean;
     label?: string;
+    avatarUrl?: string;
   }>;
   routes?: Array<{
     polyline: string;
@@ -94,8 +95,14 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
         draggable: marker.draggable || false,
       };
 
-      // 如果有 label，使用圓形頭像樣式
-      if (marker.label) {
+      // 如果有 avatarUrl，使用頭像圖片
+      if (marker.avatarUrl) {
+        markerOptions.icon = {
+          url: marker.avatarUrl,
+          scaledSize: new google.maps.Size(48, 48),
+          anchor: new google.maps.Point(24, 24),
+        };
+      } else if (marker.label) {
         // 根據 label 決定顏色
         let color = '#2196f3'; // 默認藍色
         if (marker.label === '📍') {

@@ -233,7 +233,7 @@
 
 //   const handleSetMyLocation = () => {
 //     if (!currentUserMember) {
-//       setSnackbar({ open: true, message: '您需要先加入群組才能設定位置', severity: 'error' });
+//       setSnackbar({ open: true, message: '您需要先加入活動才能設定位置', severity: 'error' });
 //       return;
 //     }
 //     setSetLocationDialogOpen(true);
@@ -1213,7 +1213,7 @@
 //                       onClick={isOwner ? () => setDeleteEventDialogOpen(true) : handleLeaveEvent}
 //                       disabled={actionLoading}
 //                     >
-//                       {isOwner ? '刪除群組' : '離開群組'}
+//                       {isOwner ? '刪除活動' : '離開活動'}
 //                     </Button>
 //                   ) : (
 //                     <Button
@@ -1226,7 +1226,7 @@
 //                       onClick={() => setAddMemberDialogOpen(true)}
 //                       disabled={actionLoading}
 //                     >
-//                       加入群組
+//                       加入活動
 //                     </Button>
 //                   )}
 //                 </Box>
@@ -1289,7 +1289,7 @@
 //             setEditEventDialogOpen(true);
 //           }}>
 //             <EditIcon sx={{ mr: 1 }} />
-//             編輯群組名稱
+//             編輯活動名稱
 //           </MenuItem>
 //         )}
 //       </Menu>
@@ -1297,7 +1297,7 @@
 //       {/* Add Member Dialog */}
 //       <Dialog open={addMemberDialogOpen} onClose={() => setAddMemberDialogOpen(false)} maxWidth="sm" fullWidth>
 //         <DialogTitle>
-//           {currentUserMember ? '新增群組成員' : '加入群組'}
+//           {currentUserMember ? '新增活動成員' : '加入活動'}
 //         </DialogTitle>
 //         <DialogContent>
 //           {currentUserMember ? (
@@ -1306,11 +1306,11 @@
 //                 💡 提示：目前版本尚未支援通過 Email 直接添加成員。
 //               </Typography>
 //               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-//                 請將群組連結分享給其他成員，讓他們自行加入群組。他們可以：
+//                 請將活動連結分享給其他成員，讓他們自行加入活動。他們可以：
 //               </Typography>
 //               <Typography variant="body2" color="text.secondary" component="ul" sx={{ mt: 1, pl: 3, mb: 3 }}>
-//                 <li>訪問此群組頁面</li>
-//                 <li>點擊「加入群組」按鈕</li>
+//                 <li>訪問此活動頁面</li>
+//                 <li>點擊「加入活動」按鈕</li>
 //                 <li>設定自己的位置</li>
 //               </Typography>
               
@@ -1322,7 +1322,7 @@
 //                 border: '1px solid #E5E7EB' 
 //               }}>
 //                 <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1, color: '#374151' }}>
-//                   📋 群組邀請連結
+//                   📋 活動邀請連結
 //                 </Typography>
 //                 <Box sx={{ 
 //                   display: 'flex', 
@@ -1373,7 +1373,7 @@
 //                 您即將加入活動「{event?.name}」
 //               </Typography>
 //               <Typography variant="body2" color="text.secondary">
-//                 加入後您可以設定自己的位置，並查看群組的聚會中點。
+//                 加入後您可以設定自己的位置，並查看活動的聚會中點。
 //               </Typography>
 //             </Box>
 //           )}
@@ -1389,7 +1389,7 @@
 //               disabled={actionLoading}
 //               startIcon={actionLoading ? <CircularProgress size={20} /> : <AddIcon />}
 //             >
-//               {actionLoading ? '處理中...' : '加入群組'}
+//               {actionLoading ? '處理中...' : '加入活動'}
 //             </Button>
 //           )}
 //         </DialogActions>

@@ -3,10 +3,10 @@ import { Prisma } from '@prisma/client';
 
 export class EventRepository {
   /**
-   * Find event by ID with members
+   * Find event by ID with members (including user avatars)
    */
   async findById(id: number) {
-    return prisma.event.findUnique({
+    const event = await prisma.event.findUnique({
       where: { id },
       include: {
         members: {
@@ -18,6 +18,24 @@ export class EventRepository {
         },
       },
     });
+
+    if (!event) return null;
+
+    // Fetch avatars for non-guest members
+    const membersWithAvatars = await Promise.all(
+      event.members.map(async (member) => {
+        if (member.userId && !member.userId.startsWith('guest_')) {
+          const user = await prisma.user.findUnique({
+            where: { userId: member.userId },
+            select: { avatar: true },
+          });
+          return { ...member, avatar: user?.avatar || null };
+        }
+        return { ...member, avatar: null };
+      })
+    );
+
+    return { ...event, members: membersWithAvatars };
   }
 
   /**

@@ -61,7 +61,7 @@ export default function GroupCard({ id, name, memberCount, createdAt, onClick }:
                 {name}
               </Typography>
               <Chip 
-                label={`群組 #${id}`} 
+                label={`活動 #${id}`} 
                 size="small" 
                 sx={{ 
                   height: 20,

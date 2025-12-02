@@ -30,11 +30,13 @@ import {
   TouchApp as PokeIcon,
   EmojiEvents as TrophyIcon,
 } from '@mui/icons-material';
-import { eventsApi, type Event as ApiEvent, type Member, type TravelMode } from '../api/events';
+import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type MemberETA } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
+import { useLocationTracking } from '../hooks/useLocationTracking';
 import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
 import { initializeBeamsClient, subscribeToInterest, unsubscribeFromInterest } from '../lib/pusherBeams';
+import { LOCATION_CONFIG } from '../config/location';
 import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, MemberJoinedEvent, LocationUpdateEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
 import EventResultPopup from '../components/EventResultPopup';
@@ -68,6 +70,9 @@ export default function EventRoom() {
   
   // 結果彈出視窗
   const [showResultPopup, setShowResultPopup] = useState(false);
+  
+  // ETA 相關狀態
+  const [membersETA, setMembersETA] = useState<Map<number, MemberETA['eta']>>(new Map());
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -438,6 +443,53 @@ export default function EventRoom() {
     return now > endTime;
   }, [event]);
 
+  // 位置追蹤 hook
+  const currentMember = members.find(m => m.id === currentMemberId);
+  useLocationTracking({
+    enabled: hasJoined && (currentMember?.shareLocation || false),
+    eventId: Number(id || 0),
+    shareLocation: currentMember?.shareLocation || false,
+    hasJoined,
+    startTime: event?.startTime || '',
+    endTime: event?.endTime || '',
+    onError: (error) => {
+      console.error('[EventRoom] Location tracking error:', error);
+      setSnackbar({
+        open: true,
+        message: `位置追蹤錯誤: ${error.message}`,
+        severity: 'error',
+      });
+    },
+  });
+
+  // 定期更新 ETA
+  useEffect(() => {
+    if (!event || !id || !event.meetingPointLat || !event.meetingPointLng) {
+      return;
+    }
+
+    const updateETA = async () => {
+      try {
+        const response = await eventsApi.getMembersETA(Number(id));
+        const etaMap = new Map<number, MemberETA['eta']>();
+        response.members.forEach((member) => {
+          etaMap.set(member.memberId, member.eta);
+        });
+        setMembersETA(etaMap);
+      } catch (error) {
+        console.error('[EventRoom] Failed to update ETA:', error);
+      }
+    };
+
+    // 立即更新一次
+    updateETA();
+
+    // 定期更新
+    const interval = setInterval(updateETA, LOCATION_CONFIG.ETA_UPDATE_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [event, id]);
+
   // 載入 Event 數據
   useEffect(() => {
     if (!id) {
@@ -741,16 +793,23 @@ export default function EventRoom() {
     members
       .filter((m) => m.lat && m.lng && m.shareLocation)
       .forEach((m) => {
+        const eta = membersETA.get(m.id);
+        const etaText = eta ? `約 ${eta.duration}` : '';
+        const title = m.arrivalTime 
+          ? `${m.nickname || '成員'} - 已到達`
+          : `${m.nickname || '成員'}${etaText ? ` - ${etaText}` : ''}`;
+        
         markers.push({
           lat: m.lat!,
           lng: m.lng!,
-          title: m.nickname || '成員',
+          title,
           label: m.arrivalTime ? '✅' : (m.nickname?.charAt(0) || '?'),
+          avatarUrl: m.avatar || undefined,
         });
       });
 
     return markers;
-  }, [event?.meetingPointLat, event?.meetingPointLng, event?.meetingPointName, members]);
+  }, [event?.meetingPointLat, event?.meetingPointLng, event?.meetingPointName, members, membersETA]);
 
   // Loading 狀態
   if (loading) {
@@ -1258,24 +1317,40 @@ export default function EventRoom() {
                     }}
                   >
                     {/* Avatar */}
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: '50%',
-                        bgcolor: isCurrentUser ? status.color : '#f5f5f5',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: isCurrentUser ? 'white' : '#666',
-                        fontWeight: 600,
-                        fontSize: '1.1rem',
-                        border: `2px solid ${isCurrentUser ? 'white' : '#e0e0e0'}`,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {member.nickname?.charAt(0) || '?'}
-                    </Box>
+                    {member.avatar ? (
+                      <Box
+                        component="img"
+                        src={member.avatar}
+                        alt={member.nickname || '成員'}
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: '50%',
+                          border: `2px solid ${isCurrentUser ? status.color : '#e0e0e0'}`,
+                          flexShrink: 0,
+                          objectFit: 'cover',
+                        }}
+                      />
+                    ) : (
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: '50%',
+                          bgcolor: isCurrentUser ? status.color : '#f5f5f5',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: isCurrentUser ? 'white' : '#666',
+                          fontWeight: 600,
+                          fontSize: '1.1rem',
+                          border: `2px solid ${isCurrentUser ? 'white' : '#e0e0e0'}`,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {member.nickname?.charAt(0) || '?'}
+                      </Box>
+                    )}
                     
                     {/* 成員資訊 */}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1323,7 +1398,15 @@ export default function EventRoom() {
                           fontSize: '0.8125rem',
                         }}
                       >
-                        {status.text}
+                        {member.arrivalTime 
+                          ? '已到達'
+                          : (() => {
+                              const eta = membersETA.get(member.id);
+                              if (eta) {
+                                return `約 ${eta.duration} 抵達`;
+                              }
+                              return status.text;
+                            })()}
                       </Typography>
                     </Box>
 

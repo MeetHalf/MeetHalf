@@ -5,10 +5,17 @@ import { triggerEventChannel } from '../lib/pusher';
 export class EventService {
   /**
    * Check if current time is within event time window
+   * Includes 30 minutes before startTime and 30 minutes after endTime
    */
   isWithinTimeWindow(event: { startTime: Date; endTime: Date }): boolean {
     const now = new Date();
-    return now >= event.startTime && now <= event.endTime;
+    const TIME_WINDOW_BEFORE = 30 * 60 * 1000; // 30 minutes
+    const TIME_WINDOW_AFTER = 30 * 60 * 1000; // 30 minutes
+    
+    const windowStart = new Date(event.startTime.getTime() - TIME_WINDOW_BEFORE);
+    const windowEnd = new Date(event.endTime.getTime() + TIME_WINDOW_AFTER);
+    
+    return now >= windowStart && now <= windowEnd;
   }
 
   /**

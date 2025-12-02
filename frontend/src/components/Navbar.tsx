@@ -106,7 +106,7 @@ export default function Navbar() {
                   }
                 }}
               >
-                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>群組</Box>
+                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>活動</Box>
               </Button>
             )}
 
