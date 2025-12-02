@@ -26,9 +26,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshMe = useCallback(async () => {
     try {
+      console.log('[Auth] Calling /auth/me to refresh user state');
       const response = await api.get('/auth/me');
+      console.log('[Auth] /auth/me response:', {
+        hasUser: !!response.data.user,
+        userId: response.data.user?.id,
+        email: response.data.user?.email,
+      });
       setUser(response.data.user);
-    } catch (error) {
+    } catch (error: any) {
+      console.warn('[Auth] /auth/me failed:', {
+        message: error?.message,
+        response: error?.response?.data,
+      });
       // Silently fail - user is not authenticated
       setUser(null);
     } finally {
@@ -52,6 +62,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshMe();
+    
+    // Listen for auth token updates (from temp token exchange)
+    const handleAuthTokenUpdate = () => {
+      console.log('[Auth] Auth token updated event received, refreshing user');
+      refreshMe();
+    };
+    
+    window.addEventListener('auth-token-updated', handleAuthTokenUpdate);
+    
+    return () => {
+      window.removeEventListener('auth-token-updated', handleAuthTokenUpdate);
+    };
   }, [refreshMe]);
 
   return React.createElement(

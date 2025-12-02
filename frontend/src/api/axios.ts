@@ -35,6 +35,30 @@ function getAuthTokenFromStorage(): string | null {
   }
 }
 
+// Helper function to get auth token from cookie (fallback when sessionStorage is empty)
+// This is needed when cookie is set but sessionStorage is not (e.g., desktop browser)
+function getAuthTokenFromCookie(): string | null {
+  try {
+    if (typeof document === 'undefined') {
+      return null;
+    }
+    
+    // Parse cookies manually (since HttpOnly cookies can't be read via JavaScript)
+    // But if cookie was set via JavaScript (non-HttpOnly), we can read it
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'token' && value) {
+        return decodeURIComponent(value);
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('[API] Error reading auth token from cookie:', error);
+    return null;
+  }
+}
+
 // Helper function to get guest token from localStorage for any event
 function getGuestTokenForEvent(eventId: number | string): string | null {
   try {
@@ -83,10 +107,26 @@ api.interceptors.request.use(
     // Priority 2: Check for auth token from sessionStorage (mobile fallback)
     // Only use if no Authorization header is already set
     if (!config.headers['Authorization']) {
-      const authToken = getAuthTokenFromStorage();
+      let authToken = getAuthTokenFromStorage();
+      
+      // If not in sessionStorage, try to read from cookie (for desktop browsers)
+      // Note: This only works if cookie is NOT HttpOnly (set via JavaScript)
+      if (!authToken) {
+        authToken = getAuthTokenFromCookie();
+        if (authToken) {
+          console.log('[API] Using auth token from cookie (desktop fallback)');
+        }
+      } else {
+        console.log('[API] Using auth token from sessionStorage (mobile fallback)');
+      }
+      
       if (authToken) {
         config.headers['Authorization'] = `Bearer ${authToken}`;
-        console.log('[API] Using auth token from sessionStorage (mobile fallback)');
+      } else {
+        // Debug: Log when no token found
+        if (url === '/auth/me') {
+          console.log('[API] No auth token found in sessionStorage or cookie, relying on HttpOnly cookie');
+        }
       }
     }
     

@@ -43,9 +43,17 @@ async function handleTempAuthTokenFromURL() {
       document.cookie = cookieString;
       console.log('[App] Attempted to set cookie via JavaScript');
       
-      // Trigger auth refresh by reloading
-      console.log('[App] Reloading page to apply auth token');
-      window.location.reload();
+      // Trigger auth refresh by dispatching a custom event
+      // This allows AuthProvider to refresh without full page reload
+      console.log('[App] Token exchange complete, triggering auth refresh');
+      window.dispatchEvent(new Event('auth-token-updated'));
+      
+      // Also reload after a short delay to ensure everything is in sync
+      // This is a fallback in case the event doesn't work
+      setTimeout(() => {
+        console.log('[App] Reloading page to ensure auth state is synced');
+        window.location.reload();
+      }, 500);
     } catch (error: any) {
       console.error('[App] Error exchanging temp token:', error);
       // Redirect to login on error
