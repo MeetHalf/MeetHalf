@@ -52,6 +52,10 @@ export class MemberService {
       throw new Error('Member not found');
     }
 
+    if (!member.eventId) {
+      throw new Error('Member eventId is missing');
+    }
+
     const event = await eventRepository.findById(member.eventId);
     if (!event) {
       throw new Error('Event not found');
@@ -90,6 +94,10 @@ export class MemberService {
       throw new Error('Member not found');
     }
 
+    if (!member.eventId) {
+      throw new Error('Member eventId is missing');
+    }
+
     const event = await eventRepository.findById(member.eventId);
     if (!event) {
       throw new Error('Event not found');
@@ -122,6 +130,10 @@ export class MemberService {
   async canUpdateLocation(memberId: number): Promise<boolean> {
     const member = await memberRepository.findById(memberId);
     if (!member) {
+      return false;
+    }
+
+    if (!member.eventId) {
       return false;
     }
 
