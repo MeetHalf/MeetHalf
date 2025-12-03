@@ -96,7 +96,14 @@ export default function GroupCard({ id, name, memberCount, createdAt, onClick }:
           }}>
             <CalendarIcon sx={{ fontSize: 18 }} />
             <Typography variant="body2">
-              建立於 {createdAt}
+              建立於 {new Date(createdAt).toLocaleString('zh-TW', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })}
             </Typography>
           </Box>
 
