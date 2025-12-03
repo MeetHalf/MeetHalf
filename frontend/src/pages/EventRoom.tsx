@@ -791,7 +791,7 @@ export default function EventRoom() {
 
     // 成員位置標記
     members
-      .filter((m) => m.lat && m.lng && m.shareLocation)
+      .filter((m) => m.lat !== null && m.lng !== null && m.shareLocation)
       .forEach((m) => {
         const eta = membersETA.get(m.id);
         const etaText = eta ? `約 ${eta.duration}` : '';
@@ -800,6 +800,7 @@ export default function EventRoom() {
           : `${m.nickname || '成員'}${etaText ? ` - ${etaText}` : ''}`;
         
         markers.push({
+          id: m.id, // 添加 id 以便追蹤和更新
           lat: m.lat!,
           lng: m.lng!,
           title,
