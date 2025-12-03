@@ -445,8 +445,9 @@ export default function EventRoom() {
 
   // 位置追蹤 hook
   const currentMember = members.find(m => m.id === currentMemberId);
+  const shouldTrackLocation = hasJoined && (currentMember?.shareLocation || false) && event !== null;
   useLocationTracking({
-    enabled: hasJoined && (currentMember?.shareLocation || false),
+    enabled: shouldTrackLocation,
     eventId: Number(id || 0),
     shareLocation: currentMember?.shareLocation || false,
     hasJoined,
@@ -629,6 +630,48 @@ export default function EventRoom() {
       setMembers(updatedMembers);
       setEvent(eventResponse.event);
       
+      // 如果用戶選擇分享位置，立即請求位置權限並獲取一次位置
+      if (joinForm.shareLocation && navigator.geolocation) {
+        console.log('[EventRoom] Requesting location permission and getting initial position');
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const { latitude, longitude } = position.coords;
+              console.log('[EventRoom] Got initial position, updating to backend', { lat: latitude, lng: longitude });
+              await eventsApi.updateLocation(Number(id), {
+                lat: latitude,
+                lng: longitude,
+              });
+              console.log('[EventRoom] Initial location updated successfully');
+              
+              // 更新本地狀態
+              setMembers((prevMembers) => 
+                prevMembers.map((m) => 
+                  m.id === member.id 
+                    ? { ...m, lat: latitude, lng: longitude }
+                    : m
+                )
+              );
+            } catch (error) {
+              console.error('[EventRoom] Failed to update initial location:', error);
+            }
+          },
+          (error) => {
+            console.error('[EventRoom] Failed to get initial position:', error);
+            setSnackbar({
+              open: true,
+              message: '無法獲取位置，請檢查瀏覽器權限設定',
+              severity: 'error',
+            });
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0,
+          }
+        );
+      }
+      
       setSnackbar({ open: true, message: '成功加入聚會！', severity: 'success' });
     } catch (err: any) {
       console.error('加入聚會失敗:', err);
@@ -790,24 +833,50 @@ export default function EventRoom() {
     }
 
     // 成員位置標記
-    members
-      .filter((m) => m.lat !== null && m.lng !== null && m.shareLocation)
-      .forEach((m) => {
-        const eta = membersETA.get(m.id);
-        const etaText = eta ? `約 ${eta.duration}` : '';
-        const title = m.arrivalTime 
-          ? `${m.nickname || '成員'} - 已到達`
-          : `${m.nickname || '成員'}${etaText ? ` - ${etaText}` : ''}`;
-        
-        markers.push({
-          id: m.id, // 添加 id 以便追蹤和更新
-          lat: m.lat!,
-          lng: m.lng!,
-          title,
-          label: m.arrivalTime ? '✅' : (m.nickname?.charAt(0) || '?'),
-          avatarUrl: m.avatar || undefined,
-        });
+    const membersWithLocation = members.filter((m) => {
+      const hasLocation = m.lat !== null && m.lng !== null;
+      const isSharing = m.shareLocation;
+      return hasLocation && isSharing;
+    });
+
+    console.log('[EventRoom] Map markers calculation', {
+      totalMembers: members.length,
+      membersWithLocation: membersWithLocation.length,
+      membersWithLocationDetails: membersWithLocation.map(m => ({
+        id: m.id,
+        nickname: m.nickname,
+        lat: m.lat,
+        lng: m.lng,
+        shareLocation: m.shareLocation,
+      })),
+    });
+
+    membersWithLocation.forEach((m) => {
+      const eta = membersETA.get(m.id);
+      const etaText = eta ? `約 ${eta.duration}` : '';
+      const title = m.arrivalTime 
+        ? `${m.nickname || '成員'} - 已到達`
+        : `${m.nickname || '成員'}${etaText ? ` - ${etaText}` : ''}`;
+      
+      markers.push({
+        id: m.id, // 添加 id 以便追蹤和更新
+        lat: m.lat!,
+        lng: m.lng!,
+        title,
+        label: m.arrivalTime ? '✅' : (m.nickname?.charAt(0) || '?'),
+        avatarUrl: m.avatar || undefined,
       });
+    });
+
+    console.log('[EventRoom] Final map markers', {
+      totalMarkers: markers.length,
+      markers: markers.map(m => ({ 
+        id: 'id' in m ? m.id : undefined, 
+        title: m.title, 
+        lat: m.lat, 
+        lng: m.lng 
+      })),
+    });
 
     return markers;
   }, [event?.meetingPointLat, event?.meetingPointLng, event?.meetingPointName, members, membersETA]);

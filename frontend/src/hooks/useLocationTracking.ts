@@ -31,6 +31,11 @@ export function useLocationTracking({
   useEffect(() => {
     // Check if tracking should be enabled
     if (!enabled || !shareLocation || !hasJoined) {
+      console.log('[useLocationTracking] Tracking disabled', {
+        enabled,
+        shareLocation,
+        hasJoined,
+      });
       // Clean up if disabled
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
@@ -54,14 +59,27 @@ export function useLocationTracking({
     const windowStart = new Date(start.getTime() - LOCATION_CONFIG.TIME_WINDOW_BEFORE);
     const windowEnd = new Date(end.getTime() + LOCATION_CONFIG.TIME_WINDOW_AFTER);
 
+    console.log('[useLocationTracking] Time window check', {
+      now: now.toISOString(),
+      windowStart: windowStart.toISOString(),
+      windowEnd: windowEnd.toISOString(),
+      isWithinWindow: now >= windowStart && now <= windowEnd,
+    });
+
     if (now < windowStart || now > windowEnd) {
-      console.log('[useLocationTracking] Outside time window', {
-        now,
-        windowStart,
-        windowEnd,
+      console.log('[useLocationTracking] Outside time window, skipping location tracking', {
+        now: now.toISOString(),
+        windowStart: windowStart.toISOString(),
+        windowEnd: windowEnd.toISOString(),
       });
       return;
     }
+
+    console.log('[useLocationTracking] Starting location tracking', {
+      eventId,
+      shareLocation,
+      hasJoined,
+    });
 
     // Start watching position
     const watchId = navigator.geolocation.watchPosition(
