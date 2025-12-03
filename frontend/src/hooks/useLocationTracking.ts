@@ -53,10 +53,19 @@ export function useLocationTracking({
     }
 
     // Check if within time window (startTime - 30min to endTime + 30min)
+    // 在開發模式下，放寬時間窗限制：允許在活動開始前 24 小時內開始追蹤
     const now = new Date();
     const start = new Date(startTime);
     const end = new Date(endTime);
-    const windowStart = new Date(start.getTime() - LOCATION_CONFIG.TIME_WINDOW_BEFORE);
+    const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+    
+    // 開發模式：允許在活動開始前 24 小時內開始追蹤
+    // 生產模式：只在活動開始前 30 分鐘到結束後 30 分鐘內追蹤
+    const windowBefore = isDevelopment 
+      ? 24 * 60 * 60 * 1000  // 24 小時（開發模式）
+      : LOCATION_CONFIG.TIME_WINDOW_BEFORE;  // 30 分鐘（生產模式）
+    
+    const windowStart = new Date(start.getTime() - windowBefore);
     const windowEnd = new Date(end.getTime() + LOCATION_CONFIG.TIME_WINDOW_AFTER);
 
     console.log('[useLocationTracking] Time window check', {
@@ -64,6 +73,8 @@ export function useLocationTracking({
       windowStart: windowStart.toISOString(),
       windowEnd: windowEnd.toISOString(),
       isWithinWindow: now >= windowStart && now <= windowEnd,
+      isDevelopment,
+      windowBefore: `${windowBefore / 1000 / 60} minutes`,
     });
 
     if (now < windowStart || now > windowEnd) {
@@ -71,6 +82,7 @@ export function useLocationTracking({
         now: now.toISOString(),
         windowStart: windowStart.toISOString(),
         windowEnd: windowEnd.toISOString(),
+        isDevelopment,
       });
       return;
     }
