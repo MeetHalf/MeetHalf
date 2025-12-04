@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 import {
   Box,
   Typography,
@@ -44,6 +45,7 @@ import EventResultPopup from '../components/EventResultPopup';
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth(); // 獲取當前登入用戶信息
   
   const [event, setEvent] = useState<ApiEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -538,6 +540,11 @@ export default function EventRoom() {
       }
     }
 
+    // 等待 auth 載入完成後再檢查（避免在 user 未載入時檢查）
+    if (authLoading) {
+      return;
+    }
+
     // 呼叫真實 API
     const fetchEvent = async () => {
       try {
@@ -551,9 +558,12 @@ export default function EventRoom() {
 
         setEvent(response.event);
         
-        // 檢查當前用戶是否是成員
+        // 檢查當前用戶是否是成員（優先檢查 localStorage，然後檢查已登入用戶）
+        let currentMember: Member | undefined;
+        
+        // 方法 1: 檢查 localStorage 中的 guest member
         if (savedMemberData && savedMemberData.memberId) {
-          const currentMember = response.event.members.find(m => m.id === savedMemberData.memberId);
+          currentMember = response.event.members.find(m => m.id === savedMemberData.memberId);
           if (currentMember) {
             setHasJoined(true);
             setCurrentMemberId(currentMember.id);
@@ -572,10 +582,44 @@ export default function EventRoom() {
           } else {
             // 如果成員不存在，清除 localStorage
             localStorage.removeItem(storageKey);
-            setHasJoined(false);
-            setCurrentMemberId(null);
-            setHasArrived(false);
           }
+        }
+        
+        // 方法 2: 如果沒有找到 guest member，檢查已登入用戶是否在 members 列表中
+        if (!currentMember && user?.userId) {
+          currentMember = response.event.members.find(m => m.userId === user.userId);
+          if (currentMember) {
+            console.log('[EventRoom] Found logged-in user in members list:', {
+              userId: user.userId,
+              memberId: currentMember.id,
+              nickname: currentMember.nickname,
+            });
+            setHasJoined(true);
+            setCurrentMemberId(currentMember.id);
+            setHasArrived(!!currentMember.arrivalTime);
+            
+            // 將已登入用戶的 member 資料也保存到 localStorage（方便後續使用）
+            localStorage.setItem(storageKey, JSON.stringify({
+              memberId: currentMember.id,
+              userId: currentMember.userId,
+              nickname: currentMember.nickname,
+              shareLocation: currentMember.shareLocation,
+              travelMode: currentMember.travelMode,
+              arrivalTime: currentMember.arrivalTime,
+              lat: currentMember.lat,
+              lng: currentMember.lng,
+              address: currentMember.address,
+              createdAt: currentMember.createdAt,
+              updatedAt: currentMember.updatedAt,
+            }));
+          }
+        }
+        
+        // 如果都沒有找到，確保狀態正確
+        if (!currentMember) {
+          setHasJoined(false);
+          setCurrentMemberId(null);
+          setHasArrived(false);
         }
         
         // 排序成員：已到達 → 分享位置中 → 前往中
@@ -598,7 +642,7 @@ export default function EventRoom() {
     };
 
     fetchEvent();
-  }, [id]);
+  }, [id, user, authLoading]);
 
   // 加入聚會
   const handleJoinEvent = async () => {
