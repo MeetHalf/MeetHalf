@@ -468,6 +468,9 @@ export default function EventRoom() {
       return;
     }
 
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 3;
+
     const updateETA = async () => {
       try {
         const response = await eventsApi.getMembersETA(Number(id));
@@ -476,7 +479,28 @@ export default function EventRoom() {
           etaMap.set(member.memberId, member.eta);
         });
         setMembersETA(etaMap);
-      } catch (error) {
+        consecutiveFailures = 0; // 重置失敗計數
+      } catch (error: any) {
+        consecutiveFailures++;
+        
+        // 檢查是否為網絡錯誤（後端不可用）
+        const isNetworkError = 
+          error?.code === 'ERR_NETWORK' ||
+          error?.code === 'ERR_CONNECTION_REFUSED' ||
+          error?.code === 'ERR_EMPTY_RESPONSE' ||
+          error?.message?.includes('Network Error') ||
+          error?.message?.includes('Connection refused');
+        
+        // 如果是網絡錯誤且連續失敗次數較少，靜默處理（避免 Console 噪音）
+        if (isNetworkError && consecutiveFailures <= MAX_CONSECUTIVE_FAILURES) {
+          // 只在開發模式下記錄第一次失敗
+          if (consecutiveFailures === 1 && import.meta.env.DEV) {
+            console.warn('[EventRoom] Backend unavailable, ETA updates paused');
+          }
+          return;
+        }
+        
+        // 其他錯誤或連續失敗過多時才記錄
         console.error('[EventRoom] Failed to update ETA:', error);
       }
     };
