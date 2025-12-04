@@ -48,17 +48,52 @@ export function useLocationTracking({
     }
 
     // Check if within time window (startTime - 30min to endTime + 30min)
+    // 在開發模式下，放寬時間窗限制：允許在活動開始前的任何時間開始追蹤
     const now = new Date();
     const start = new Date(startTime);
     const end = new Date(endTime);
-    const windowStart = new Date(start.getTime() - LOCATION_CONFIG.TIME_WINDOW_BEFORE);
-    const windowEnd = new Date(end.getTime() + LOCATION_CONFIG.TIME_WINDOW_AFTER);
+    const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+    
+    let windowStart: Date;
+    let windowEnd: Date;
+    
+    if (isDevelopment) {
+      // 開發模式：允許在活動開始前的任何時間開始追蹤，直到活動結束後 30 分鐘
+      windowStart = new Date(0); // 1970-01-01，表示任何時間都可以
+      windowEnd = new Date(end.getTime() + LOCATION_CONFIG.TIME_WINDOW_AFTER);
+    } else {
+      // 生產模式：只在活動開始前 30 分鐘到結束後 30 分鐘內追蹤
+      windowStart = new Date(start.getTime() - LOCATION_CONFIG.TIME_WINDOW_BEFORE);
+      windowEnd = new Date(end.getTime() + LOCATION_CONFIG.TIME_WINDOW_AFTER);
+    }
 
-    if (now < windowStart || now > windowEnd) {
-      console.log('[useLocationTracking] Outside time window', {
-        now,
-        windowStart,
-        windowEnd,
+    console.log('[useLocationTracking] Time window check', {
+      now: now.toISOString(),
+      windowStart: windowStart.toISOString(),
+      windowEnd: windowEnd.toISOString(),
+      isWithinWindow: now >= windowStart && now <= windowEnd,
+      isDevelopment,
+      eventStart: start.toISOString(),
+      eventEnd: end.toISOString(),
+    });
+
+    // 檢查是否在時間窗內（開發模式下，只要不超過活動結束後 30 分鐘即可）
+    if (now > windowEnd) {
+      console.log('[useLocationTracking] Event has ended, skipping location tracking', {
+        now: now.toISOString(),
+        windowEnd: windowEnd.toISOString(),
+        isDevelopment,
+      });
+      return;
+    }
+    
+    // 開發模式下，不檢查 windowStart（允許任何時間開始）
+    // 生產模式下，檢查是否在 windowStart 之前
+    if (!isDevelopment && now < windowStart) {
+      console.log('[useLocationTracking] Before time window, skipping location tracking', {
+        now: now.toISOString(),
+        windowStart: windowStart.toISOString(),
+        isDevelopment,
       });
       return;
     }
