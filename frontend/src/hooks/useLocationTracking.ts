@@ -10,6 +10,7 @@ interface UseLocationTrackingOptions {
   startTime: string; // ISO 8601
   endTime: string; // ISO 8601
   onError?: (error: Error) => void;
+  onLocationUpdate?: (lat: number, lng: number) => void; // 立即更新本地状态的回调
 }
 
 /**
@@ -24,6 +25,7 @@ export function useLocationTracking({
   startTime,
   endTime,
   onError,
+  onLocationUpdate,
 }: UseLocationTrackingOptions) {
   const watchIdRef = useRef<number | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
@@ -111,8 +113,17 @@ export function useLocationTracking({
 
         lastUpdateTimeRef.current = now;
 
+        // 立即更新本地状态，让地图立即显示位置
+        if (onLocationUpdate) {
+          console.log('[useLocationTracking] Immediately updating local state', {
+            lat: latitude,
+            lng: longitude,
+          });
+          onLocationUpdate(latitude, longitude);
+        }
+
         try {
-          console.log('[useLocationTracking] Updating location', {
+          console.log('[useLocationTracking] Updating location to backend', {
             lat: latitude,
             lng: longitude,
             eventId,
@@ -149,6 +160,6 @@ export function useLocationTracking({
         watchIdRef.current = null;
       }
     };
-  }, [enabled, eventId, shareLocation, hasJoined, startTime, endTime, onError]);
+  }, [enabled, eventId, shareLocation, hasJoined, startTime, endTime, onError, onLocationUpdate]);
 }
 

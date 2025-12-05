@@ -30,6 +30,8 @@ import {
   Check as CheckIcon,
   TouchApp as PokeIcon,
   EmojiEvents as TrophyIcon,
+  Notifications as NotificationsIcon,
+  NotificationsOff as NotificationsOffIcon,
 } from '@mui/icons-material';
 import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type MemberETA } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
@@ -83,41 +85,106 @@ export default function EventRoom() {
     severity: 'success' as 'success' | 'error' | 'info',
   });
 
-  // 請求通知權限並初始化 Pusher Beams
+  // 通知權限狀態
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    typeof window !== 'undefined' && 'Notification' in window 
+      ? Notification.permission 
+      : 'denied'
+  );
+  const [requestingPermission, setRequestingPermission] = useState(false);
+
+  // 檢查通知權限狀態（不自動請求）
   useEffect(() => {
-    const setupNotifications = async () => {
-      try {
-        // Request notification permission
-        const permission = await requestNotificationPermission();
-        console.log('[EventRoom] Notification permission status:', {
-          permission,
-          granted: permission === 'granted',
-          denied: permission === 'denied',
-          default: permission === 'default',
-        });
-        
-        if (permission === 'granted') {
-          console.log('[EventRoom] ✓ Notification permission granted');
-          
-          // Initialize Pusher Beams client (this will also register Service Worker)
-          const client = await initializeBeamsClient();
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
+      
+      // 如果已經有權限，初始化 Pusher Beams
+      if (Notification.permission === 'granted') {
+        initializeBeamsClient().then((client) => {
           if (client) {
             console.log('[EventRoom] ✓ Pusher Beams client initialized');
           } else {
             console.warn('[EventRoom] ⚠️ Failed to initialize Pusher Beams client');
           }
-        } else if (permission === 'denied') {
-          console.warn('[EventRoom] ⚠️ Notification permission denied by user');
+        });
+      }
+    }
+  }, []);
+
+  // 處理通知權限請求（必須由用戶點擊觸發）
+  const handleRequestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      setSnackbar({
+        open: true,
+        message: '您的瀏覽器不支援通知功能',
+        severity: 'error',
+      });
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      setSnackbar({
+        open: true,
+        message: '通知權限已啟用',
+        severity: 'success',
+      });
+      return;
+    }
+
+    if (Notification.permission === 'denied') {
+      setSnackbar({
+        open: true,
+        message: '通知權限已被拒絕。請在瀏覽器設定中重新啟用通知權限。',
+        severity: 'error',
+      });
+      return;
+    }
+
+    // Permission is 'default', request it (this will show browser popup)
+    setRequestingPermission(true);
+      try {
+        const permission = await requestNotificationPermission();
+      setNotificationPermission(permission);
+        
+        if (permission === 'granted') {
+          console.log('[EventRoom] ✓ Notification permission granted');
+        
+        // Initialize Pusher Beams client
+        const client = await initializeBeamsClient();
+        if (client) {
+          console.log('[EventRoom] ✓ Pusher Beams client initialized');
+          setSnackbar({
+            open: true,
+            message: '通知權限已啟用！您將收到聚會相關通知。',
+            severity: 'success',
+          });
         } else {
-          console.log('[EventRoom] Notification permission is default (not yet requested)');
+          console.warn('[EventRoom] ⚠️ Failed to initialize Pusher Beams client');
+          setSnackbar({
+            open: true,
+            message: '通知權限已啟用，但初始化通知服務失敗',
+            severity: 'error',
+          });
+        }
+      } else {
+        console.warn('[EventRoom] ⚠️ Notification permission denied by user');
+        setSnackbar({
+          open: true,
+          message: '通知權限被拒絕。您將無法收到推送通知。',
+          severity: 'error',
+        });
         }
       } catch (err) {
-        console.error('[EventRoom] Failed to setup notifications:', err);
-      }
-    };
-    
-    setupNotifications();
-  }, []);
+        console.error('[EventRoom] Failed to request notification permission:', err);
+      setSnackbar({
+        open: true,
+        message: '請求通知權限時發生錯誤',
+        severity: 'error',
+      });
+    } finally {
+      setRequestingPermission(false);
+    }
+  };
 
   // 訂閱 Pusher Beams Device Interest（當用戶已加入活動時）
   useEffect(() => {
@@ -461,6 +528,47 @@ export default function EventRoom() {
         message: `位置追蹤錯誤: ${error.message}`,
         severity: 'error',
       });
+    },
+    onLocationUpdate: (lat, lng) => {
+      // 立即更新当前用户的位置，让地图立即显示
+      if (currentMemberId) {
+        console.log('[EventRoom] Immediately updating current member location on map', {
+          memberId: currentMemberId,
+          lat,
+          lng,
+        });
+        
+        setMembers((prevMembers) => {
+          return prevMembers.map((member) => {
+            if (member.id === currentMemberId) {
+              return {
+                ...member,
+                lat,
+                lng,
+              };
+            }
+            return member;
+          });
+        });
+        
+        // 同时更新 event 中的成员位置
+        setEvent((prevEvent) => {
+          if (!prevEvent) return null;
+          return {
+            ...prevEvent,
+            members: prevEvent.members.map((member) => {
+              if (member.id === currentMemberId) {
+                return {
+                  ...member,
+                  lat,
+                  lng,
+                };
+              }
+              return member;
+            }),
+          };
+        });
+      }
     },
   });
 
@@ -1110,8 +1218,8 @@ export default function EventRoom() {
             borderColor: 'divider',
           }}
         >
-          {/* 狀態標籤 */}
-          <Box sx={{ mb: 3 }}>
+          {/* 狀態標籤和通知權限提示 */}
+          <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Chip
               label={getStatusText(event.status)}
               size="small"
@@ -1120,8 +1228,58 @@ export default function EventRoom() {
                 color: event.status === 'ongoing' ? '#2e7d32' : 'text.secondary',
                 fontWeight: 500,
                 border: 'none',
+                alignSelf: 'flex-start',
               }}
             />
+            
+            {/* 通知權限提示 */}
+            {notificationPermission !== 'granted' && (
+              <Alert 
+                severity={notificationPermission === 'denied' ? 'error' : 'info'}
+                sx={{
+                  borderRadius: 2,
+                  '& .MuiAlert-icon': {
+                    alignItems: 'center',
+                  },
+                }}
+                action={
+                  notificationPermission !== 'denied' && (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={handleRequestNotificationPermission}
+                      disabled={requestingPermission}
+                      sx={{
+                        textTransform: 'none',
+                        fontSize: '0.75rem',
+                        minWidth: 'auto',
+                        px: 2,
+                      }}
+                    >
+                      {requestingPermission ? '請求中...' : '啟用通知'}
+                    </Button>
+                  )
+                }
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {notificationPermission === 'denied' ? (
+                    <>
+                      <NotificationsOffIcon sx={{ fontSize: 18 }} />
+                      <Typography variant="body2">
+                        通知權限已被拒絕。請在瀏覽器設定中重新啟用通知權限，以接收聚會相關通知。
+                      </Typography>
+                    </>
+                  ) : (
+                    <>
+                      <NotificationsIcon sx={{ fontSize: 18 }} />
+                      <Typography variant="body2">
+                        啟用通知以接收「戳一下」和其他聚會相關的推送通知。
+                      </Typography>
+                    </>
+                  )}
+                </Box>
+              </Alert>
+            )}
           </Box>
 
           {/* 聚會標題 */}
@@ -1400,24 +1558,24 @@ export default function EventRoom() {
                         }}
                       />
                     ) : (
-                      <Box
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: '50%',
-                          bgcolor: isCurrentUser ? status.color : '#f5f5f5',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: isCurrentUser ? 'white' : '#666',
-                          fontWeight: 600,
-                          fontSize: '1.1rem',
-                          border: `2px solid ${isCurrentUser ? 'white' : '#e0e0e0'}`,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {member.nickname?.charAt(0) || '?'}
-                      </Box>
+                    <Box
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: '50%',
+                        bgcolor: isCurrentUser ? status.color : '#f5f5f5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: isCurrentUser ? 'white' : '#666',
+                        fontWeight: 600,
+                        fontSize: '1.1rem',
+                        border: `2px solid ${isCurrentUser ? 'white' : '#e0e0e0'}`,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {member.nickname?.charAt(0) || '?'}
+                    </Box>
                     )}
                     
                     {/* 成員資訊 */}
