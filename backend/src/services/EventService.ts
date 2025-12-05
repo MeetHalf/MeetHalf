@@ -6,16 +6,37 @@ export class EventService {
   /**
    * Check if current time is within event time window
    * Includes 30 minutes before startTime and 30 minutes after endTime
+   * In development mode, allows location updates at any time before event ends
    */
   isWithinTimeWindow(event: { startTime: Date; endTime: Date }): boolean {
     const now = new Date();
+    const isDevelopment = process.env.NODE_ENV === 'development';
     const TIME_WINDOW_BEFORE = 30 * 60 * 1000; // 30 minutes
     const TIME_WINDOW_AFTER = 30 * 60 * 1000; // 30 minutes
     
-    const windowStart = new Date(event.startTime.getTime() - TIME_WINDOW_BEFORE);
+    let windowStart: Date;
     const windowEnd = new Date(event.endTime.getTime() + TIME_WINDOW_AFTER);
     
-    return now >= windowStart && now <= windowEnd;
+    if (isDevelopment) {
+      // 開發模式：允許在活動開始前的任何時間開始追蹤，直到活動結束後 30 分鐘
+      windowStart = new Date(0); // 1970-01-01，表示任何時間都可以
+    } else {
+      // 生產模式：只在活動開始前 30 分鐘到結束後 30 分鐘內追蹤
+      windowStart = new Date(event.startTime.getTime() - TIME_WINDOW_BEFORE);
+    }
+    
+    // 檢查是否超過活動結束時間
+    if (now > windowEnd) {
+      return false;
+    }
+    
+    // 開發模式下，不檢查 windowStart（允許任何時間開始）
+    // 生產模式下，檢查是否在 windowStart 之前
+    if (!isDevelopment && now < windowStart) {
+      return false;
+    }
+    
+    return true;
   }
 
   /**
