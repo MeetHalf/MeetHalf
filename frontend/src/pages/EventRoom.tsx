@@ -37,7 +37,7 @@ import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type M
 import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
 import { useLocationTracking } from '../hooks/useLocationTracking';
-import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
+import { showPokeNotification } from '../lib/notifications';
 import { initializeBeamsClient, subscribeToInterest, unsubscribeFromInterest } from '../lib/pusherBeams';
 import { LOCATION_CONFIG } from '../config/location';
 import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, MemberJoinedEvent, LocationUpdateEvent } from '../types/events';
@@ -100,9 +100,10 @@ export default function EventRoom() {
       
       // 如果已經有權限，初始化 Pusher Beams
       if (Notification.permission === 'granted') {
+        console.log('[EventRoom] ✓ Notification permission granted 已經啟用通知囉！');
         initializeBeamsClient().then((client) => {
           if (client) {
-            console.log('[EventRoom] ✓ Pusher Beams client initialized');
+            console.log('[EventRoom] ✓ Pusher Beams client initialized 已經初始化 Pusher Beams 囉！');
           } else {
             console.warn('[EventRoom] ⚠️ Failed to initialize Pusher Beams client');
           }
@@ -131,23 +132,17 @@ export default function EventRoom() {
       return;
     }
 
-    if (Notification.permission === 'denied') {
-      setSnackbar({
-        open: true,
-        message: '通知權限已被拒絕。請在瀏覽器設定中重新啟用通知權限。',
-        severity: 'error',
-      });
-      return;
-    }
-
-    // Permission is 'default', request it (this will show browser popup)
+    // 即使權限是 'denied'，也嘗試再次請求（某些瀏覽器可能會重新考慮）
+    // 如果仍然是 'denied'，我們會顯示更詳細的說明
     setRequestingPermission(true);
-      try {
-        const permission = await requestNotificationPermission();
+    try {
+      // 直接調用 Notification.requestPermission()，即使當前狀態是 'denied'
+      // 這允許瀏覽器有機會重新考慮（例如用戶清除了瀏覽器數據後）
+      const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
-        
-        if (permission === 'granted') {
-          console.log('[EventRoom] ✓ Notification permission granted');
+      
+      if (permission === 'granted') {
+        console.log('[EventRoom] ✓ Notification permission granted');
         
         // Initialize Pusher Beams client
         const client = await initializeBeamsClient();
@@ -166,16 +161,42 @@ export default function EventRoom() {
             severity: 'error',
           });
         }
-      } else {
+      } else if (permission === 'denied') {
         console.warn('[EventRoom] ⚠️ Notification permission denied by user');
+        // 提供更詳細的說明，告訴用戶如何在瀏覽器設置中啟用
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isChrome = /Chrome/.test(navigator.userAgent);
+        const isSafari = /Safari/.test(navigator.userAgent) && !isChrome;
+        const isFirefox = /Firefox/.test(navigator.userAgent);
+        
+        let instructions = '';
+        if (isIOS) {
+          instructions = '請前往「設定」>「Safari」>「網站設定」>「通知」，然後允許此網站的通知。';
+        } else if (isChrome) {
+          instructions = '請點擊網址列左側的鎖頭圖示，然後將「通知」設為「允許」。';
+        } else if (isSafari) {
+          instructions = '請前往「Safari」>「偏好設定」>「網站」>「通知」，然後允許此網站的通知。';
+        } else if (isFirefox) {
+          instructions = '請點擊網址列左側的圖示，然後將「通知」設為「允許」。';
+        } else {
+          instructions = '請在瀏覽器設定中搜尋「通知」或「網站權限」，然後允許此網站的通知。';
+        }
+        
         setSnackbar({
           open: true,
-          message: '通知權限被拒絕。您將無法收到推送通知。',
+          message: `通知權限被拒絕。${instructions}`,
           severity: 'error',
         });
-        }
-      } catch (err) {
-        console.error('[EventRoom] Failed to request notification permission:', err);
+      } else {
+        // permission === 'default' (理論上不應該發生，因為我們剛剛請求了)
+        setSnackbar({
+          open: true,
+          message: '通知權限狀態未知，請重新整理頁面後再試。',
+          severity: 'error',
+        });
+      }
+    } catch (err) {
+      console.error('[EventRoom] Failed to request notification permission:', err);
       setSnackbar({
         open: true,
         message: '請求通知權限時發生錯誤',
@@ -1243,22 +1264,20 @@ export default function EventRoom() {
                   },
                 }}
                 action={
-                  notificationPermission !== 'denied' && (
-                    <Button
-                      size="small"
-                      variant="contained"
-                      onClick={handleRequestNotificationPermission}
-                      disabled={requestingPermission}
-                      sx={{
-                        textTransform: 'none',
-                        fontSize: '0.75rem',
-                        minWidth: 'auto',
-                        px: 2,
-                      }}
-                    >
-                      {requestingPermission ? '請求中...' : '啟用通知'}
-                    </Button>
-                  )
+                  <Button
+                    size="small"
+                    variant={notificationPermission === 'denied' ? 'outlined' : 'contained'}
+                    onClick={handleRequestNotificationPermission}
+                    disabled={requestingPermission}
+                    sx={{
+                      textTransform: 'none',
+                      fontSize: '0.75rem',
+                      minWidth: 'auto',
+                      px: 2,
+                    }}
+                  >
+                    {requestingPermission ? '請求中...' : notificationPermission === 'denied' ? '再次嘗試' : '啟用通知'}
+                  </Button>
                 }
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1266,7 +1285,7 @@ export default function EventRoom() {
                     <>
                       <NotificationsOffIcon sx={{ fontSize: 18 }} />
                       <Typography variant="body2">
-                        通知權限已被拒絕。請在瀏覽器設定中重新啟用通知權限，以接收聚會相關通知。
+                        通知權限已被拒絕。點擊「再次嘗試」或前往瀏覽器設定中重新啟用通知權限，以接收聚會相關通知。
                       </Typography>
                     </>
                   ) : (
