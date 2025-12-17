@@ -1,6 +1,19 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import Pusher from 'pusher-js';
 import type { Channel } from 'pusher-js';
+
+/**
+ * Connection state type
+ */
+export type ConnectionState = 'initialized' | 'connecting' | 'connected' | 'disconnected' | 'unavailable' | 'failed';
+
+/**
+ * Return type for useEventChannel hook
+ */
+export interface UseEventChannelResult {
+  connectionState: ConnectionState;
+  channel: Channel | null;
+}
 
 /**
  * Pusher event handler type
@@ -298,5 +311,115 @@ export function usePusher(options: UsePusherOptions): void {
       }
     };
   }, [eventName, log]);
+}
+
+// Singleton Pusher instance for useEventChannel
+let pusherInstance: Pusher | null = null;
+
+function getPusherInstance(): Pusher | null {
+  if (pusherInstance) return pusherInstance;
+  
+  const pusherKey = import.meta.env.VITE_PUSHER_KEY;
+  const pusherCluster = import.meta.env.VITE_PUSHER_CLUSTER;
+
+  if (!pusherKey || !pusherCluster) {
+    console.error('[usePusher] Configuration missing for useEventChannel');
+    return null;
+  }
+
+  pusherInstance = new Pusher(pusherKey, {
+    cluster: pusherCluster,
+  });
+
+  return pusherInstance;
+}
+
+/**
+ * Hook for subscribing to a Pusher channel and getting access to the channel object
+ * This is used by EventRoom to manually bind multiple events
+ * 
+ * @param channelName - Channel name or null to skip subscription
+ * @returns Object with connectionState and channel
+ * 
+ * @example
+ * ```tsx
+ * const { connectionState, channel } = useEventChannel(
+ *   hasJoined && event ? `private-event-${event.id}` : null
+ * );
+ * 
+ * useEffect(() => {
+ *   if (!channel) return;
+ *   channel.bind('poke', handlePoke);
+ *   return () => channel.unbind('poke', handlePoke);
+ * }, [channel]);
+ * ```
+ */
+export function useEventChannel(channelName: string | null): UseEventChannelResult {
+  const [connectionState, setConnectionState] = useState<ConnectionState>('initialized');
+  const [channel, setChannel] = useState<Channel | null>(null);
+  const channelRef = useRef<Channel | null>(null);
+
+  // Initialize Pusher and subscribe to channel
+  useEffect(() => {
+    if (!channelName) {
+      setChannel(null);
+      return;
+    }
+
+    const pusher = getPusherInstance();
+    if (!pusher) {
+      setConnectionState('failed');
+      return;
+    }
+
+    // Set up connection state listeners
+    const handleConnected = () => setConnectionState('connected');
+    const handleDisconnected = () => setConnectionState('disconnected');
+    const handleConnecting = () => setConnectionState('connecting');
+    const handleUnavailable = () => setConnectionState('unavailable');
+    const handleFailed = () => setConnectionState('failed');
+
+    pusher.connection.bind('connected', handleConnected);
+    pusher.connection.bind('disconnected', handleDisconnected);
+    pusher.connection.bind('connecting', handleConnecting);
+    pusher.connection.bind('unavailable', handleUnavailable);
+    pusher.connection.bind('failed', handleFailed);
+
+    // Set initial state
+    setConnectionState(pusher.connection.state as ConnectionState);
+
+    // Subscribe to channel
+    console.log('[usePusher] Subscribing to channel:', channelName);
+    const newChannel = pusher.subscribe(channelName);
+    channelRef.current = newChannel;
+    setChannel(newChannel);
+
+    newChannel.bind('pusher:subscription_succeeded', () => {
+      console.log('[usePusher] ✓ Subscribed to', channelName);
+    });
+
+    newChannel.bind('pusher:subscription_error', (error: any) => {
+      console.error('[usePusher] ✗ Subscription error:', error);
+    });
+
+    return () => {
+      console.log('[usePusher] Unsubscribing from channel:', channelName);
+      if (channelRef.current) {
+        channelRef.current.unbind_all();
+        pusher.unsubscribe(channelName);
+        channelRef.current = null;
+      }
+      setChannel(null);
+
+      // Cleanup connection listeners
+      pusher.connection.unbind('connected', handleConnected);
+      pusher.connection.unbind('disconnected', handleDisconnected);
+      pusher.connection.unbind('connecting', handleConnecting);
+      pusher.connection.unbind('unavailable', handleUnavailable);
+      pusher.connection.unbind('failed', handleFailed);
+    };
+  }, [channelName]);
+
+  return { connectionState, channel };
 }
 

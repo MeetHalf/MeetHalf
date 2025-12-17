@@ -1,36 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Typography,
-  Alert,
-  Button,
-  Container,
-  Fade,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  CircularProgress,
-  Snackbar,
-} from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
-import GroupCard from '../components/EventCard';
+import { format } from 'date-fns';
+import { zhTW } from 'date-fns/locale';
+import { 
+  Plus, 
+  Clock, 
+  ChevronRight, 
+  Trophy, 
+  Home as HomeIcon, 
+  Users, 
+  LayoutGrid,
+  Loader2,
+} from 'lucide-react';
+
 import { eventsApi, Event } from '../api/events';
+import { useAuth } from '../hooks/useAuth';
+import { IconButton } from '../components/ui';
 
 export default function Events() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [newEventName, setNewEventName] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  // Fetch events on component mount
   useEffect(() => {
     fetchEvents();
   }, []);
@@ -42,29 +35,9 @@ export default function Events() {
       const response = await eventsApi.getEvents();
       setEvents(response.events);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load events');
+      setError(err instanceof Error ? err.message : '載入失敗');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCreateEvent = async () => {
-    if (!newEventName.trim()) return;
-
-    try {
-      setCreating(true);
-      const response = await eventsApi.createEvent({ name: newEventName.trim() });
-      setEvents(prev => [response.event, ...prev]);
-      setCreateDialogOpen(false);
-      setNewEventName('');
-      setSnackbarMessage('活動建立成功！');
-      setSnackbarOpen(true);
-      // Navigate to the new event
-      navigate(`/events/${response.event.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create event');
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -72,247 +45,215 @@ export default function Events() {
     navigate(`/events/${eventId}`);
   };
 
+  // Split events into active and past
+  const activeEvents = events.filter(e => e.status !== 'ended');
+  const pastEvents = events.filter(e => e.status === 'ended');
+
+  // Mock groups (can be replaced with real data later)
+  const groups = [
+    { id: 101, name: "午餐團", avatar: "🍱" },
+    { id: 102, name: "週末爬山", avatar: "🏔️" },
+    { id: 103, name: "羽球社", avatar: "🏸" },
+  ];
+
   if (loading) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: 'calc(100vh - 200px)' 
-      }}>
-        <CircularProgress />
-      </Box>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+      </div>
     );
   }
 
   return (
-    <Box sx={{ bgcolor: 'background.default', minHeight: 'calc(100vh - 200px)', py: 4 }}>
-      <Container maxWidth="lg">
-        {/* Header Section */}
-        <Fade in={true} timeout={600}>
-          <Box>
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              mb: 4,
-              flexWrap: 'wrap',
-              gap: 2
-            }}>
-              <Box>
-                <Typography 
-                  variant="h3" 
-                  component="h1"
-                  sx={{ 
-                    fontWeight: 'bold',
-                    color: 'text.primary',
-                    mb: 1
-                  }}
-                >
-                  我的活動
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                  管理您的活動，規劃完美的聚會地點
-                </Typography>
-              </Box>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<AddIcon />}
-                onClick={() => navigate('/events/new')}
-                sx={{
-                  px: 3,
-                  py: 1.5,
-                  boxShadow: 2,
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: 4,
-                  },
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                建立新活動
-              </Button>
-            </Box>
-
-            {/* Error Alert */}
-            {error && (
-              <Alert 
-                severity="error" 
-                sx={{ 
-                  mb: 4,
-                  borderRadius: 2,
-                }}
-                onClose={() => setError(null)}
-              >
-                {error}
-              </Alert>
+    <div className="min-h-screen bg-slate-50 pb-24">
+      {/* Header */}
+      <header className="px-6 pt-10 pb-6 bg-white border-b border-slate-100">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">MeetHalf</h1>
+            <p className="text-slate-400 text-sm font-medium">大家到哪了？</p>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-blue-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center">
+            {user?.avatar ? (
+              <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-blue-600 font-bold text-sm">
+                {user?.name?.charAt(0).toUpperCase() || 'U'}
+              </span>
             )}
-          </Box>
-        </Fade>
+          </div>
+        </div>
 
-        {/* Events Grid */}
-        {events.length > 0 ? (
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
-            gap: 3
-          }}>
-            {events.map((event, index) => (
-              <Fade in={true} timeout={800 + index * 200} key={event.id}>
-                <Box>
-                  <GroupCard
-                    id={event.id}
-                    name={event.name}
-                    memberCount={event._count?.members || event.members.length}
-                    createdAt={event.createdAt}
-                    onClick={() => handleEventClick(event.id)}
-                  />
-                </Box>
-              </Fade>
-            ))}
-          </Box>
-        ) : (
-          <Fade in={true} timeout={800}>
-            <Box 
-              sx={{ 
-                textAlign: 'center', 
-                py: 12,
-                px: 2
-              }}
+        {/* Groups Scroll */}
+        <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 -mx-2 px-2">
+          {/* New Meet Button */}
+          <button 
+            onClick={() => navigate('/events/new')} 
+            className="flex-shrink-0 flex flex-col items-center gap-2"
+          >
+            <div className="w-16 h-16 rounded-3xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-200">
+              <Plus size={24} />
+            </div>
+            <span className="text-[10px] font-bold text-slate-500">新活動</span>
+          </button>
+          
+          {/* Groups */}
+          {groups.map(g => (
+            <div key={g.id} className="flex-shrink-0 flex flex-col items-center gap-2">
+              <div className="w-16 h-16 rounded-3xl bg-white border border-slate-100 flex items-center justify-center text-3xl shadow-sm">
+                {g.avatar}
+              </div>
+              <span className="text-[10px] font-bold text-slate-500 truncate w-16 text-center">{g.name}</span>
+            </div>
+          ))}
+        </div>
+      </header>
+
+      <main className="p-6 space-y-8">
+        {/* Error Alert */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-600 text-sm">
+            {error}
+            <button 
+              onClick={fetchEvents} 
+              className="ml-2 text-red-700 font-bold underline"
             >
-              <Box
-                sx={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 120,
-                  height: 120,
-                  borderRadius: '50%',
-                  bgcolor: 'grey.100',
-                  mb: 3,
-                }}
-              >
-                <Typography variant="h1" sx={{ fontSize: '4rem' }}>
-                  📭
-                </Typography>
-              </Box>
-              <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                還沒有活動
-              </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-                建立第一個活動來開始使用 MeetHalf
-              </Typography>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<AddIcon />}
-                onClick={() => setCreateDialogOpen(true)}
-                sx={{
-                  px: 4,
-                  py: 1.5,
-                }}
+              重試
+            </button>
+          </div>
+        )}
+
+        {/* Active Events */}
+        <section>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="font-bold text-slate-800">進行中的活動</h2>
+            <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+              Live
+            </span>
+          </div>
+          
+          {activeEvents.length > 0 ? (
+            <div className="space-y-4">
+              {activeEvents.map(e => (
+                <div 
+                  key={e.id} 
+                  onClick={() => handleEventClick(e.id)} 
+                  className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between group cursor-pointer active:scale-95 transition-all"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-2xl">
+                      📍
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                        {e.name}
+                      </h3>
+                      <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                        <Clock size={12} />
+                        <span>{format(new Date(e.startTime), 'HH:mm', { locale: zhTW })}</span>
+                        <span>•</span>
+                        <span>{e._count?.members || e.members?.length || 0} 人</span>
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight size={18} className="text-slate-300" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-slate-50 rounded-2xl p-8 text-center">
+              <div className="text-4xl mb-3">🗓️</div>
+              <p className="text-slate-500 text-sm font-medium">目前沒有進行中的活動</p>
+              <button
+                onClick={() => navigate('/events/new')}
+                className="mt-4 px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-full"
               >
                 建立新活動
-              </Button>
-            </Box>
-          </Fade>
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Past Events */}
+        {pastEvents.length > 0 && (
+          <section>
+            <h2 className="font-bold text-slate-800 mb-4">歷史記錄</h2>
+            <div className="space-y-3">
+              {pastEvents.map(e => (
+                <div 
+                  key={e.id} 
+                  onClick={() => handleEventClick(e.id)} 
+                  className="bg-slate-100/50 p-4 rounded-2xl flex items-center justify-between opacity-80 cursor-pointer hover:opacity-100 transition-opacity"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="text-xl grayscale">🕒</div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700">{e.name}</h4>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                        {format(new Date(e.startTime), 'MM/dd', { locale: zhTW })}
+                      </span>
+                    </div>
+                  </div>
+                  <Trophy size={14} className="text-slate-300" />
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
-        {/* Quick Stats (Optional) */}
+        {/* Quick Stats */}
         {events.length > 0 && (
-          <Fade in={true} timeout={1200}>
-            <Box 
-              sx={{ 
-                mt: 6, 
-                p: 3, 
-                bgcolor: 'background.paper',
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: 'divider',
-                display: 'flex',
-                justifyContent: 'space-around',
-                flexWrap: 'wrap',
-                gap: 3
-              }}
-            >
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h3" sx={{ fontWeight: 'bold', color: 'primary.main', mb: 0.5 }}>
-                  {events.length}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  活動總數
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h3" sx={{ fontWeight: 'bold', color: 'success.main', mb: 0.5 }}>
-                  {events.reduce((sum, e) => sum + (e._count?.members || e.members.length), 0)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  成員總數
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h3" sx={{ fontWeight: 'bold', color: 'warning.main', mb: 0.5 }}>
-                  {events.length > 0 ? Math.max(...events.map(e => e._count?.members || e.members.length)) : 0}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  最大活動人數
-                </Typography>
-              </Box>
-            </Box>
-          </Fade>
+          <section className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">統計</h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-black text-blue-600">{events.length}</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">活動</div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-green-600">
+                  {events.reduce((sum, e) => sum + (e._count?.members || e.members?.length || 0), 0)}
+                </div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">總人次</div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-orange-500">
+                  {events.length > 0 
+                    ? Math.max(...events.map(e => e._count?.members || e.members?.length || 0)) 
+                    : 0
+                  }
+                </div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">最大人數</div>
+              </div>
+            </div>
+          </section>
         )}
-      </Container>
 
-      {/* Create Event Dialog */}
-      <Dialog 
-        open={createDialogOpen} 
-        onClose={() => setCreateDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>建立新活動</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="活動名稱"
-            fullWidth
-            variant="outlined"
-            value={newEventName}
-            onChange={(e) => setNewEventName(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && newEventName.trim()) {
-                handleCreateEvent();
-              }
-            }}
-            sx={{ mt: 2 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>
-            取消
-          </Button>
-          <Button 
-            onClick={handleCreateEvent}
-            variant="contained"
-            disabled={!newEventName.trim() || creating}
-            startIcon={creating ? <CircularProgress size={20} /> : <AddIcon />}
-          >
-            {creating ? '建立中...' : '建立'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        {/* Empty State */}
+        {events.length === 0 && !error && (
+          <div className="text-center py-12 px-6">
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-slate-100 mb-6">
+              <span className="text-5xl">📭</span>
+            </div>
+            <h3 className="text-xl font-black text-slate-800 mb-2">還沒有活動</h3>
+            <p className="text-slate-500 text-sm mb-6">建立第一個活動來開始使用 MeetHalf</p>
+            <button
+              onClick={() => navigate('/events/new')}
+              className="px-8 py-3 bg-blue-600 text-white font-black rounded-full shadow-lg shadow-blue-500/30 active:scale-95 transition-all"
+            >
+              <Plus size={18} className="inline mr-2" />
+              建立新活動
+            </button>
+          </div>
+        )}
+      </main>
 
-      {/* Success Snackbar */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={() => setSnackbarOpen(false)}
-        message={snackbarMessage}
-      />
-    </Box>
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 w-full bg-white/80 backdrop-blur-md border-t border-slate-100 px-8 py-4 flex justify-around items-center z-50 safe-bottom">
+        <IconButton icon={HomeIcon} active onClick={() => navigate('/events')} />
+        <IconButton icon={Users} onClick={() => {}} />
+        <IconButton icon={LayoutGrid} onClick={() => {}} />
+      </nav>
+    </div>
   );
 }
-

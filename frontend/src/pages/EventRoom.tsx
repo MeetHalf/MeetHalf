@@ -1,61 +1,58 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { zhTW } from 'date-fns/locale';
+import { 
+  ArrowLeft, 
+  Trophy, 
+  Clock, 
+  MapPin, 
+  Zap, 
+  Crown,
+  X,
+  Users,
+  Bell,
+  BellOff,
+  Check,
+  Loader2,
+} from 'lucide-react';
+
 import { useAuth } from '../hooks/useAuth';
-import {
-  Box,
-  Typography,
-  CircularProgress,
-  Alert,
-  Container,
-  Chip,
-  Paper,
-  Collapse,
-  IconButton,
-  TextField,
-  Button,
-  FormControlLabel,
-  Checkbox,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Snackbar,
-} from '@mui/material';
-import {
-  AccessTime as TimeIcon,
-  LocationOn as LocationIcon,
-  People as PeopleIcon,
-  Person as PersonIcon,
-  ExpandMore as ExpandMoreIcon,
-  Check as CheckIcon,
-  TouchApp as PokeIcon,
-  EmojiEvents as TrophyIcon,
-  Notifications as NotificationsIcon,
-  NotificationsOff as NotificationsOffIcon,
-} from '@mui/icons-material';
 import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type MemberETA } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
-import { usePusher } from '../hooks/usePusher';
+import { useEventChannel } from '../hooks/usePusher';
 import { useLocationTracking } from '../hooks/useLocationTracking';
 import { requestNotificationPermission, showPokeNotification } from '../lib/notifications';
 import { initializeBeamsClient, subscribeToInterest, unsubscribeFromInterest } from '../lib/pusherBeams';
 import { LOCATION_CONFIG } from '../config/location';
 import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, MemberJoinedEvent, LocationUpdateEvent } from '../types/events';
+
+import { IconButton, BottomDrawer, ExpandablePill, Avatar } from '../components/ui';
 import MapContainer from '../components/MapContainer';
 import EventResultPopup from '../components/EventResultPopup';
+
+// Types
+type TravelModeOption = 'driving' | 'transit' | 'walking' | 'bicycling';
+
+const TRAVEL_MODE_OPTIONS: { value: TravelModeOption; label: string; emoji: string }[] = [
+  { value: 'driving', label: '開車', emoji: '🚗' },
+  { value: 'transit', label: '大眾運輸', emoji: '🚇' },
+  { value: 'walking', label: '步行', emoji: '🚶' },
+  { value: 'bicycling', label: '騎車', emoji: '🚴' },
+];
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth(); // 獲取當前登入用戶信息
+  const { user, loading: authLoading } = useAuth();
   
+  // Core state
   const [event, setEvent] = useState<ApiEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [memberListExpanded, setMemberListExpanded] = useState(true);
 
-  // 加入聚會相關狀態
+  // Join state
   const [hasJoined, setHasJoined] = useState(false);
   const [currentMemberId, setCurrentMemberId] = useState<number | null>(null);
   const [joinForm, setJoinForm] = useState({
@@ -65,17 +62,18 @@ export default function EventRoom() {
   });
   const [joining, setJoining] = useState(false);
 
-  // 「我到了」相關狀態
+  // Arrival state
   const [hasArrived, setHasArrived] = useState(false);
   const [marking, setMarking] = useState(false);
   
-  // 戳人相關狀態
+  // Poke state
   const [pokingMemberId, setPokingMemberId] = useState<number | null>(null);
+  const [pokedId, setPokedId] = useState<number | null>(null);
   
-  // 結果彈出視窗
+  // Result popup
   const [showResultPopup, setShowResultPopup] = useState(false);
   
-  // ETA 相關狀態
+  // ETA
   const [membersETA, setMembersETA] = useState<Map<number, MemberETA['eta']>>(new Map());
   
   // Snackbar
@@ -85,7 +83,7 @@ export default function EventRoom() {
     severity: 'success' as 'success' | 'error' | 'info',
   });
 
-  // 通知權限狀態
+  // Notification
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' && 'Notification' in window 
       ? Notification.permission 
@@ -93,644 +91,229 @@ export default function EventRoom() {
   );
   const [requestingPermission, setRequestingPermission] = useState(false);
 
-  // 檢查通知權限狀態（不自動請求）
+  // Progress hook
+  const progress = useEventProgress(
+    event?.startTime ? new Date(event.startTime) : null,
+    event?.endTime ? new Date(event.endTime) : null
+  );
+
+  const isEventEnded = event?.status === 'ended';
+
+  // Get owner display name
+  const getOwnerDisplayName = () => {
+    if (!event) return '未知';
+    const ownerMember = event.members?.find(m => m.userId === event.ownerId);
+    return ownerMember?.nickname || 
+      (event.ownerId.includes('_') ? event.ownerId.split('_')[0] : event.ownerId);
+  };
+
+  // Notification permission check
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotificationPermission(Notification.permission);
-      
-      // 如果已經有權限，初始化 Pusher Beams
       if (Notification.permission === 'granted') {
         initializeBeamsClient().then((client) => {
-          if (client) {
-            console.log('[EventRoom] ✓ Pusher Beams client initialized');
-          } else {
-            console.warn('[EventRoom] ⚠️ Failed to initialize Pusher Beams client');
-          }
+          if (client) console.log('[EventRoom] ✓ Pusher Beams client initialized');
         });
       }
     }
   }, []);
 
-  // 處理通知權限請求（必須由用戶點擊觸發）
+  // Request notification permission
   const handleRequestNotificationPermission = async () => {
     if (!('Notification' in window)) {
-      setSnackbar({
-        open: true,
-        message: '您的瀏覽器不支援通知功能',
-        severity: 'error',
-      });
+      setSnackbar({ open: true, message: '您的瀏覽器不支援通知功能', severity: 'error' });
       return;
     }
 
     if (Notification.permission === 'granted') {
-      setSnackbar({
-        open: true,
-        message: '通知權限已啟用',
-        severity: 'success',
-      });
+      setSnackbar({ open: true, message: '通知權限已啟用', severity: 'success' });
       return;
     }
 
     if (Notification.permission === 'denied') {
-      setSnackbar({
-        open: true,
-        message: '通知權限已被拒絕。請在瀏覽器設定中重新啟用通知權限。',
-        severity: 'error',
-      });
+      setSnackbar({ open: true, message: '通知權限已被拒絕。請在瀏覽器設定中重新啟用。', severity: 'error' });
       return;
     }
 
-    // Permission is 'default', request it (this will show browser popup)
     setRequestingPermission(true);
-      try {
-        const permission = await requestNotificationPermission();
+    try {
+      const permission = await requestNotificationPermission();
       setNotificationPermission(permission);
-        
-        if (permission === 'granted') {
-          console.log('[EventRoom] ✓ Notification permission granted');
-        
-        // Initialize Pusher Beams client
+      
+      if (permission === 'granted') {
         const client = await initializeBeamsClient();
-        if (client) {
-          console.log('[EventRoom] ✓ Pusher Beams client initialized');
-          setSnackbar({
-            open: true,
-            message: '通知權限已啟用！您將收到聚會相關通知。',
-            severity: 'success',
-          });
-        } else {
-          console.warn('[EventRoom] ⚠️ Failed to initialize Pusher Beams client');
-          setSnackbar({
-            open: true,
-            message: '通知權限已啟用，但初始化通知服務失敗',
-            severity: 'error',
-          });
-        }
-      } else {
-        console.warn('[EventRoom] ⚠️ Notification permission denied by user');
         setSnackbar({
           open: true,
-          message: '通知權限被拒絕。您將無法收到推送通知。',
-          severity: 'error',
+          message: client ? '通知權限已啟用！' : '通知權限已啟用，但初始化通知服務失敗',
+          severity: client ? 'success' : 'error',
         });
-        }
-      } catch (err) {
-        console.error('[EventRoom] Failed to request notification permission:', err);
-      setSnackbar({
-        open: true,
-        message: '請求通知權限時發生錯誤',
-        severity: 'error',
-      });
+      } else {
+        setSnackbar({ open: true, message: '通知權限被拒絕', severity: 'error' });
+      }
+    } catch (err) {
+      setSnackbar({ open: true, message: '請求通知權限時發生錯誤', severity: 'error' });
     } finally {
       setRequestingPermission(false);
     }
   };
 
-  // 訂閱 Pusher Beams Device Interest（當用戶已加入活動時）
+  // Subscribe to Pusher Beams
   useEffect(() => {
-    if (!event || !currentMemberId) {
-      return;
-    }
+    if (!event || !currentMemberId) return;
 
-    // Add a delay to ensure initialization is complete
     const subscribeToPushNotifications = async () => {
       try {
-        // Wait a bit to ensure Pusher Beams is fully initialized
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Subscribe to device interest: event-{eventId}-member-{memberId}
-        const interest = `event-${event.id}-member-${currentMemberId}`;
-        console.log('[EventRoom] Attempting to subscribe to interest:', interest);
-        
-        const success = await subscribeToInterest(interest);
-        
-        if (success) {
-          console.log('[EventRoom] ✓ Successfully subscribed to push notifications:', interest);
-          
-          // Verify subscription
-          const { getSubscribedInterests } = await import('../lib/pusherBeams');
-          const interests = await getSubscribedInterests();
-          console.log('[EventRoom] Current subscribed interests:', interests);
-        } else {
-          console.warn('[EventRoom] ⚠️ Failed to subscribe to push notifications');
-          console.warn('[EventRoom] Please check:');
-          console.warn('  1. Service Worker is registered');
-          console.warn('  2. Notification permission is granted');
-          console.warn('  3. Pusher Beams client is initialized');
-        }
+        const eventInterest = `event-${event.id}`;
+        await subscribeToInterest(eventInterest);
+        console.log('[EventRoom] ✓ Subscribed to push notifications:', eventInterest);
       } catch (error) {
-        console.error('[EventRoom] Error subscribing to push notifications:', error);
+        console.error('[EventRoom] Failed to subscribe to push notifications:', error);
       }
     };
 
     subscribeToPushNotifications();
 
-    // Cleanup: unsubscribe when component unmounts or member/event changes
     return () => {
-      if (event && currentMemberId) {
-        const interest = `event-${event.id}-member-${currentMemberId}`;
-        unsubscribeFromInterest(interest).catch((error) => {
-          console.error('[EventRoom] Error unsubscribing from push notifications:', error);
-        });
-      }
+      const eventInterest = `event-${event.id}`;
+      unsubscribeFromInterest(eventInterest).catch(console.error);
     };
-  }, [event, currentMemberId]);
+  }, [event?.id, currentMemberId]);
 
-  // 整合 Pusher - 監聽 poke 事件
-  usePusher({
-    channelName: event ? `event-${event.id}` : null,
-    eventName: 'poke',
-    onEvent: (data: PokeEvent) => {
-      console.log('[EventRoom] Received poke event:', {
-        data,
-        currentMemberId,
-        toMemberId: data.toMemberId,
-        matches: currentMemberId === data.toMemberId,
-      });
-      
-      // 僅在收到 poke 事件且 toMemberId 匹配當前用戶的 memberId 時顯示通知
-      if (currentMemberId && data.toMemberId === currentMemberId) {
-        console.log('[EventRoom] Showing poke notification:', {
-          fromNickname: data.fromNickname,
-          count: data.count,
-        });
-        showPokeNotification(data.fromNickname, data.count);
-        
-        // 顯示 Snackbar 提示
-        setSnackbar({
-          open: true,
-          message: `👆 ${data.fromNickname} 戳了你${data.count > 1 ? ` (${data.count} 次)` : ''}！`,
-          severity: 'info',
-        });
-      } else {
-        // 即使不是戳自己，也顯示誰戳了誰（可選，讓用戶知道活動中的互動）
-        if (data.fromMemberId !== currentMemberId) {
-          // 找到被戳的成員名稱
-          const targetMember = members.find(m => m.id === data.toMemberId);
-          const targetNickname = targetMember?.nickname || '某人';
-          
-          // 只在 Console 記錄，不顯示通知（避免打擾）
-          console.log('[EventRoom] Poke event (not for you):', {
-            from: data.fromNickname,
-            to: targetNickname,
-          });
-        }
-      }
-    },
-    onConnected: () => {
-      console.log('[EventRoom] Pusher connected successfully');
-    },
-    onError: (error) => {
-      console.error('[EventRoom] Pusher error:', error);
-    },
-    debug: true, // Enable debug logging
-  });
-
-  // 整合 Pusher - 監聽 member-joined 事件（成員加入）
-  usePusher({
-    channelName: event ? `event-${event.id}` : null,
-    eventName: 'member-joined',
-    onEvent: (data: MemberJoinedEvent) => {
-      console.log('[EventRoom] Received member-joined event:', data);
-      
-      // 檢查成員是否已經存在（避免重複添加）
-      const memberExists = members.some(m => m.id === data.memberId);
-      if (memberExists) {
-        console.log('[EventRoom] Member already exists, skipping:', data.memberId);
-        return;
-      }
-      
-      // 添加新成員到列表
-      const newMember: Member = {
-        id: data.memberId,
-        userId: data.userId || null,
-        eventId: event!.id,
-        nickname: data.nickname,
-        shareLocation: data.shareLocation,
-        travelMode: data.travelMode || 'driving',
-        lat: null,
-        lng: null,
-        address: null,
-        arrivalTime: null,
-        createdAt: data.createdAt,
-        updatedAt: data.createdAt,
-      };
-      
-      setMembers((prevMembers) => {
-        const updatedMembers = [...prevMembers, newMember];
-        
-        // 重新排序：已到達的成員排在前面，然後是分享位置的，最後是其他
-        return updatedMembers.sort((a, b) => {
-          if (a.arrivalTime && !b.arrivalTime) return -1;
-          if (!a.arrivalTime && b.arrivalTime) return 1;
-          if (!a.arrivalTime && !b.arrivalTime) {
-            if (a.shareLocation && !b.shareLocation) return -1;
-            if (!a.shareLocation && b.shareLocation) return 1;
-          }
-          return 0;
-        });
-      });
-      
-      // 更新 event 中的成員資訊
-      setEvent((prevEvent) => {
-        if (!prevEvent) return null;
-        return {
-          ...prevEvent,
-          members: [...(prevEvent.members || []), newMember],
-        };
-      });
-      
-      // 顯示通知（如果不是當前用戶）
-      if (currentMemberId !== data.memberId) {
-        setSnackbar({
-          open: true,
-          message: `👋 ${data.nickname} 加入了聚會！`,
-          severity: 'info',
-        });
-      }
-    },
-    onConnected: () => {
-      console.log('[EventRoom] Pusher connected for member-joined');
-    },
-    onError: (error) => {
-      console.error('[EventRoom] Pusher error for member-joined:', error);
-    },
-    debug: true,
-  });
-
-  // 整合 Pusher - 監聽 member-arrived 事件（成員到達）
-  usePusher({
-    channelName: event ? `event-${event.id}` : null,
-    eventName: 'member-arrived',
-    onEvent: (data: MemberArrivedEvent) => {
-      console.log('[EventRoom] Received member-arrived event:', data);
-      
-      // 更新成員列表：將到達的成員標記為已到達
-      setMembers((prevMembers) => {
-        const updatedMembers = prevMembers.map((member) => {
-          if (member.id === data.memberId) {
-            return {
-              ...member,
-              arrivalTime: data.arrivalTime,
-            };
-          }
-          return member;
-        });
-        
-        // 重新排序：已到達的成員排在前面
-        return updatedMembers.sort((a, b) => {
-          if (a.arrivalTime && !b.arrivalTime) return -1;
-          if (!a.arrivalTime && b.arrivalTime) return 1;
-          if (!a.arrivalTime && !b.arrivalTime) {
-            if (a.shareLocation && !b.shareLocation) return -1;
-            if (!a.shareLocation && b.shareLocation) return 1;
-          }
-          return 0;
-        });
-      });
-      
-      // 更新 event 中的成員資訊
-      setEvent((prevEvent) => {
-        if (!prevEvent) return null;
-        return {
-          ...prevEvent,
-          members: prevEvent.members.map((member) => {
-            if (member.id === data.memberId) {
-              return {
-                ...member,
-                arrivalTime: data.arrivalTime,
-              };
-            }
-            return member;
-          }),
-        };
-      });
-      
-      // 顯示通知（如果不是當前用戶）
-      if (currentMemberId !== data.memberId) {
-        const statusEmoji = data.status === 'early' ? '⚡' : data.status === 'ontime' ? '✅' : '⏰';
-        setSnackbar({
-          open: true,
-          message: `${statusEmoji} ${data.nickname} 已到達！`,
-          severity: 'success',
-        });
-      }
-    },
-    onConnected: () => {
-      console.log('[EventRoom] Pusher connected for member-arrived');
-    },
-    onError: (error) => {
-      console.error('[EventRoom] Pusher error for member-arrived:', error);
-    },
-    debug: true,
-  });
-
-  // 整合 Pusher - 監聽 location-update 事件（位置更新）
-  usePusher({
-    channelName: event ? `event-${event.id}` : null,
-    eventName: 'location-update',
-    onEvent: (data: LocationUpdateEvent) => {
-      console.log('[EventRoom] Received location-update event:', data);
-      
-      // 更新成員列表中的位置資訊
-      setMembers((prevMembers) => {
-        return prevMembers.map((member) => {
-          if (member.id === data.memberId) {
-            return {
-              ...member,
-              lat: data.lat,
-              lng: data.lng,
-            };
-          }
-          return member;
-        });
-      });
-      
-      // 更新 event 中的成員位置資訊
-      setEvent((prevEvent) => {
-        if (!prevEvent) return null;
-        return {
-          ...prevEvent,
-          members: prevEvent.members.map((member) => {
-            if (member.id === data.memberId) {
-              return {
-                ...member,
-                lat: data.lat,
-                lng: data.lng,
-              };
-            }
-            return member;
-          }),
-        };
-      });
-      
-      // 注意：地圖上的標記會自動更新，因為 MapContainer 使用 members prop
-      console.log('[EventRoom] Member location updated on map');
-    },
-    onConnected: () => {
-      console.log('[EventRoom] Pusher connected for location-update');
-    },
-    onError: (error) => {
-      console.error('[EventRoom] Pusher error for location-update:', error);
-    },
-    debug: true,
-  });
-
-  // 整合 Pusher - 監聽 event-ended 事件
-  usePusher({
-    channelName: event ? `event-${event.id}` : null,
-    eventName: 'event-ended',
-    onEvent: (data: EventEndedEvent) => {
-      console.log('[EventRoom] Received event-ended event:', data);
-      setEvent((prevEvent) => (prevEvent ? { ...prevEvent, status: 'ended' } : null));
-      setSnackbar({ 
-        open: true, 
-        message: '🎊 聚會已結束！查看排行榜結果', 
-        severity: 'info' 
-      });
-      // 5 秒後自動顯示結果彈出視窗
-      setTimeout(() => {
-        setShowResultPopup(true);
-      }, 5000);
-    },
-    onError: (error) => {
-      console.error('[EventRoom] Pusher event-ended error:', error);
-    },
-    debug: true,
-  });
-
-  // 使用進度條 hook（始終調用，內部處理 null）
-  const progress = useEventProgress(event);
-
-  // 檢查 event 是否已結束（用於顯示「查看結果」按鈕）
-  const isEventEnded = useMemo(() => {
-    if (!event) return false;
-    if (event.status === 'ended') return true;
-    // 如果現在時間超過 endTime，也視為已結束
-    const now = new Date();
-    const endTime = new Date(event.endTime);
-    return now > endTime;
-  }, [event]);
-
-  // 位置追蹤 hook
-  const currentMember = members.find(m => m.id === currentMemberId);
+  // Location tracking
   useLocationTracking({
-    enabled: hasJoined && (currentMember?.shareLocation || false),
-    eventId: Number(id || 0),
-    shareLocation: currentMember?.shareLocation || false,
-    hasJoined,
-    startTime: event?.startTime || '',
-    endTime: event?.endTime || '',
+    eventId: event?.id ?? 0,
+    memberId: currentMemberId ?? 0,
+    startTime: event?.startTime ? new Date(event.startTime) : null,
+    endTime: event?.endTime ? new Date(event.endTime) : null,
+    enabled: hasJoined && joinForm.shareLocation && !hasArrived && !!event && !!currentMemberId,
+    onLocationUpdate: (lat, lng) => {
+      // Update local state immediately
+      if (currentMemberId) {
+        setMembers(prev => prev.map(m => 
+          m.id === currentMemberId ? { ...m, lat, lng } : m
+        ));
+      }
+    },
     onError: (error) => {
       console.error('[EventRoom] Location tracking error:', error);
-      setSnackbar({
-        open: true,
-        message: `位置追蹤錯誤: ${error.message}`,
-        severity: 'error',
-      });
-    },
-    onLocationUpdate: (lat, lng) => {
-      // 立即更新当前用户的位置，让地图立即显示
-      if (currentMemberId) {
-        console.log('[EventRoom] Immediately updating current member location on map', {
-          memberId: currentMemberId,
-          lat,
-          lng,
-        });
-        
-        setMembers((prevMembers) => {
-          return prevMembers.map((member) => {
-            if (member.id === currentMemberId) {
-              return {
-                ...member,
-                lat,
-                lng,
-              };
-            }
-            return member;
-          });
-        });
-        
-        // 同时更新 event 中的成员位置
-        setEvent((prevEvent) => {
-          if (!prevEvent) return null;
-          return {
-            ...prevEvent,
-            members: prevEvent.members.map((member) => {
-              if (member.id === currentMemberId) {
-                return {
-                  ...member,
-                  lat,
-                  lng,
-                };
-              }
-              return member;
-            }),
-          };
-        });
-      }
     },
   });
 
-  // 定期更新 ETA
+  // Pusher realtime updates
+  const { connectionState, channel } = useEventChannel(
+    hasJoined && event ? `private-event-${event.id}` : null
+  );
+
+  // Pusher event handlers
   useEffect(() => {
-    if (!event || !id || !event.meetingPointLat || !event.meetingPointLng) {
-      return;
-    }
+    if (!channel || !event) return;
 
-    let consecutiveFailures = 0;
-    const MAX_CONSECUTIVE_FAILURES = 3;
+    const handleLocationUpdate = (data: LocationUpdateEvent) => {
+      setMembers(prev => prev.map(m => 
+        m.id === data.memberId ? { ...m, lat: data.lat, lng: data.lng } : m
+      ));
+    };
 
-    const updateETA = async () => {
-      try {
-        const response = await eventsApi.getMembersETA(Number(id));
-        const etaMap = new Map<number, MemberETA['eta']>();
-        response.members.forEach((member) => {
-          etaMap.set(member.memberId, member.eta);
-        });
-        setMembersETA(etaMap);
-        consecutiveFailures = 0; // 重置失敗計數
-      } catch (error: any) {
-        consecutiveFailures++;
-        
-        // 檢查是否為網絡錯誤（後端不可用）
-        const isNetworkError = 
-          error?.code === 'ERR_NETWORK' ||
-          error?.code === 'ERR_CONNECTION_REFUSED' ||
-          error?.code === 'ERR_EMPTY_RESPONSE' ||
-          error?.message?.includes('Network Error') ||
-          error?.message?.includes('Connection refused');
-        
-        // 如果是網絡錯誤且連續失敗次數較少，靜默處理（避免 Console 噪音）
-        if (isNetworkError && consecutiveFailures <= MAX_CONSECUTIVE_FAILURES) {
-          // 只在開發模式下記錄第一次失敗
-          if (consecutiveFailures === 1 && import.meta.env.DEV) {
-            console.warn('[EventRoom] Backend unavailable, ETA updates paused');
-          }
-          return;
-        }
-        
-        // 其他錯誤或連續失敗過多時才記錄
-        console.error('[EventRoom] Failed to update ETA:', error);
+    const handleMemberJoined = (data: MemberJoinedEvent) => {
+      setMembers(prev => {
+        if (prev.find(m => m.id === data.member.id)) return prev;
+        return [...prev, data.member];
+      });
+      if (data.member.id !== currentMemberId) {
+        setSnackbar({ open: true, message: `${data.member.nickname} 加入了聚會！`, severity: 'info' });
       }
     };
 
-    // 立即更新一次
-    updateETA();
-
-    // 定期更新
-    const interval = setInterval(updateETA, LOCATION_CONFIG.ETA_UPDATE_INTERVAL);
-
-    return () => clearInterval(interval);
-  }, [event, id]);
-
-  // 載入 Event 數據
-  useEffect(() => {
-    if (!id) {
-      setError('找不到聚會 ID');
-      setLoading(false);
-      return;
-    }
-
-    // 檢查 localStorage 是否已加入此聚會
-    const storageKey = `event_${id}_member`;
-    const storedMember = localStorage.getItem(storageKey);
-    let savedMemberData: any = null;
-    
-    if (storedMember) {
-      try {
-        savedMemberData = JSON.parse(storedMember);
-        setHasJoined(true);
-        setCurrentMemberId(savedMemberData.memberId);
-        setHasArrived(!!savedMemberData.arrivalTime);
-      } catch (e) {
-        console.error('Failed to parse stored member data:', e);
+    const handleMemberArrived = (data: MemberArrivedEvent) => {
+      setMembers(prev => prev.map(m => 
+        m.id === data.memberId ? { ...m, arrivalTime: data.arrivalTime } : m
+      ));
+      const member = members.find(m => m.id === data.memberId);
+      if (member && data.memberId !== currentMemberId) {
+        setSnackbar({ open: true, message: `${member.nickname} 已到達！`, severity: 'success' });
       }
-    }
+    };
 
-    // 等待 auth 載入完成後再檢查（避免在 user 未載入時檢查）
-    if (authLoading) {
-      return;
-    }
+    const handlePoke = (data: PokeEvent) => {
+      if (data.toMemberId === currentMemberId) {
+        showPokeNotification(data.fromNickname);
+        setSnackbar({ open: true, message: `${data.fromNickname} 戳了你一下！`, severity: 'info' });
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      }
+    };
 
-    // 呼叫真實 API
+    const handleEventEnded = (_data: EventEndedEvent) => {
+      setEvent(prev => prev ? { ...prev, status: 'ended' } : null);
+      setSnackbar({ open: true, message: '聚會已結束！查看排行榜！', severity: 'info' });
+      setShowResultPopup(true);
+    };
+
+    channel.bind('location-update', handleLocationUpdate);
+    channel.bind('member-joined', handleMemberJoined);
+    channel.bind('member-arrived', handleMemberArrived);
+    channel.bind('poke', handlePoke);
+    channel.bind('event-ended', handleEventEnded);
+
+    return () => {
+      channel.unbind('location-update', handleLocationUpdate);
+      channel.unbind('member-joined', handleMemberJoined);
+      channel.unbind('member-arrived', handleMemberArrived);
+      channel.unbind('poke', handlePoke);
+      channel.unbind('event-ended', handleEventEnded);
+    };
+  }, [channel, event, currentMemberId, members]);
+
+  // Fetch event data
+  useEffect(() => {
+    if (!id || authLoading) return;
+
     const fetchEvent = async () => {
       try {
-        const response = await eventsApi.getEvent(parseInt(id));
-
-        if (!response || !response.event) {
-          setError('找不到此聚會');
-          setLoading(false);
-          return;
-        }
-
+        const response = await eventsApi.getEvent(Number(id));
         setEvent(response.event);
+
+        // Check if user has joined
+        const storageKey = `event_${id}_member`;
+        const storedMember = localStorage.getItem(storageKey);
         
-        // 檢查當前用戶是否是成員（優先檢查 localStorage，然後檢查已登入用戶）
         let currentMember: Member | undefined;
-        
-        // 方法 1: 檢查 localStorage 中的 guest member
-        if (savedMemberData && savedMemberData.memberId) {
-          currentMember = response.event.members.find(m => m.id === savedMemberData.memberId);
+
+        if (storedMember) {
+          const memberData = JSON.parse(storedMember);
+          currentMember = response.event.members?.find(m => m.id === memberData.memberId);
           if (currentMember) {
             setHasJoined(true);
             setCurrentMemberId(currentMember.id);
             setHasArrived(!!currentMember.arrivalTime);
-            
-            // 更新 localStorage 中的數據（確保與 API 同步）
-            localStorage.setItem(storageKey, JSON.stringify({
-              ...savedMemberData,
-              arrivalTime: currentMember.arrivalTime,
-              lat: currentMember.lat,
-              lng: currentMember.lng,
-              address: currentMember.address,
-              shareLocation: currentMember.shareLocation,
-              travelMode: currentMember.travelMode,
+            setJoinForm(prev => ({
+              ...prev,
+              nickname: currentMember?.nickname || '',
+              shareLocation: currentMember?.shareLocation ?? true,
+              travelMode: currentMember?.travelMode || 'transit',
             }));
-          } else {
-            // 如果成員不存在，清除 localStorage
-            localStorage.removeItem(storageKey);
           }
         }
-        
-        // 方法 2: 如果沒有找到 guest member，檢查已登入用戶是否在 members 列表中
+
+        // Check if logged-in user is in members
         if (!currentMember && user?.userId) {
-          currentMember = response.event.members.find(m => m.userId === user.userId);
+          currentMember = response.event.members?.find(m => m.userId === user.userId);
           if (currentMember) {
-            console.log('[EventRoom] Found logged-in user in members list:', {
-              userId: user.userId,
-              memberId: currentMember.id,
-              nickname: currentMember.nickname,
-            });
             setHasJoined(true);
             setCurrentMemberId(currentMember.id);
             setHasArrived(!!currentMember.arrivalTime);
-            
-            // 將已登入用戶的 member 資料也保存到 localStorage（方便後續使用）
             localStorage.setItem(storageKey, JSON.stringify({
               memberId: currentMember.id,
               userId: currentMember.userId,
               nickname: currentMember.nickname,
               shareLocation: currentMember.shareLocation,
               travelMode: currentMember.travelMode,
-              arrivalTime: currentMember.arrivalTime,
-              lat: currentMember.lat,
-              lng: currentMember.lng,
-              address: currentMember.address,
-              createdAt: currentMember.createdAt,
-              updatedAt: currentMember.updatedAt,
             }));
           }
         }
-        
-        // 如果都沒有找到，確保狀態正確
-        if (!currentMember) {
-          setHasJoined(false);
-          setCurrentMemberId(null);
-          setHasArrived(false);
-        }
-        
-        // 排序成員：已到達 → 分享位置中 → 前往中
+
+        // Sort members
         const sortedMembers = (response.event.members || []).sort((a, b) => {
           if (a.arrivalTime && !b.arrivalTime) return -1;
           if (!a.arrivalTime && b.arrivalTime) return 1;
@@ -743,7 +326,6 @@ export default function EventRoom() {
         setMembers(sortedMembers);
         setLoading(false);
       } catch (err: any) {
-        console.error('載入聚會失敗:', err);
         setError(err.response?.data?.message || '載入聚會失敗');
         setLoading(false);
       }
@@ -752,19 +334,15 @@ export default function EventRoom() {
     fetchEvent();
   }, [id, user, authLoading]);
 
-  // 加入聚會
+  // Join event
   const handleJoinEvent = async () => {
-    if (!event || !id) return;
-    
-    if (!joinForm.nickname.trim()) {
+    if (!event || !id || !joinForm.nickname.trim()) {
       setSnackbar({ open: true, message: '請輸入暱稱', severity: 'error' });
       return;
     }
 
     setJoining(true);
-    
     try {
-      // 使用真實 API
       const response = await eventsApi.joinEvent(Number(id), {
         nickname: joinForm.nickname.trim(),
         shareLocation: joinForm.shareLocation,
@@ -773,45 +351,32 @@ export default function EventRoom() {
       
       const { member, guestToken } = response;
       
-      // 儲存到 localStorage（完整成員信息 + guest token）
-      const storageKey = `event_${id}_member`;
-      localStorage.setItem(storageKey, JSON.stringify({
+      localStorage.setItem(`event_${id}_member`, JSON.stringify({
         memberId: member.id,
         userId: member.userId,
         nickname: member.nickname || joinForm.nickname,
         shareLocation: member.shareLocation,
         travelMode: member.travelMode || joinForm.travelMode,
-        guestToken: guestToken, // 保存真實的 guest token
-        arrivalTime: member.arrivalTime,
-        createdAt: member.createdAt,
-        updatedAt: member.updatedAt,
+        guestToken,
       }));
       
       setHasJoined(true);
       setCurrentMemberId(member.id);
       
-      // 重新獲取 event 以獲取最新成員列表（包含新加入的成員）
       const eventResponse = await eventsApi.getEvent(Number(id));
       const updatedMembers = (eventResponse.event.members || []).sort((a, b) => {
         if (a.arrivalTime && !b.arrivalTime) return -1;
         if (!a.arrivalTime && b.arrivalTime) return 1;
-        if (!a.arrivalTime && !b.arrivalTime) {
-          if (a.shareLocation && !b.shareLocation) return -1;
-          if (!a.shareLocation && b.shareLocation) return 1;
-        }
         return 0;
       });
       
       setMembers(updatedMembers);
       setEvent(eventResponse.event);
-      
       setSnackbar({ open: true, message: '成功加入聚會！', severity: 'success' });
     } catch (err: any) {
-      console.error('加入聚會失敗:', err);
-      const errorMessage = err.response?.data?.message || err.message || '加入失敗，請稍後再試';
       setSnackbar({ 
         open: true, 
-        message: errorMessage, 
+        message: err.response?.data?.message || '加入失敗，請稍後再試', 
         severity: 'error' 
       });
     } finally {
@@ -819,20 +384,15 @@ export default function EventRoom() {
     }
   };
 
-  // 標記「我到了」
+  // Mark arrival
   const handleMarkArrival = async () => {
     if (!event || !id || !currentMemberId) return;
     
     setMarking(true);
-    
     try {
-      // 使用真實 API
       const response = await eventsApi.markArrival(Number(id));
-      
-      // 更新本地狀態
       setHasArrived(true);
       
-      // 更新 localStorage
       const storageKey = `event_${id}_member`;
       const storedMember = localStorage.getItem(storageKey);
       if (storedMember) {
@@ -841,15 +401,10 @@ export default function EventRoom() {
         localStorage.setItem(storageKey, JSON.stringify(memberData));
       }
       
-      // 重新獲取 event 以獲取最新成員列表
       const eventResponse = await eventsApi.getEvent(Number(id));
       const updatedMembers = (eventResponse.event.members || []).sort((a, b) => {
         if (a.arrivalTime && !b.arrivalTime) return -1;
         if (!a.arrivalTime && b.arrivalTime) return 1;
-        if (!a.arrivalTime && !b.arrivalTime) {
-          if (a.shareLocation && !b.shareLocation) return -1;
-          if (!a.shareLocation && b.shareLocation) return 1;
-        }
         return 0;
       });
       
@@ -863,11 +418,9 @@ export default function EventRoom() {
         severity: 'success' 
       });
     } catch (err: any) {
-      console.error('標記到達失敗:', err);
-      const errorMessage = err.response?.data?.message || err.message || '標記失敗，請稍後再試';
       setSnackbar({ 
         open: true, 
-        message: errorMessage, 
+        message: err.response?.data?.message || '標記失敗，請稍後再試', 
         severity: 'error' 
       });
     } finally {
@@ -875,75 +428,34 @@ export default function EventRoom() {
     }
   };
 
-  // 戳人
+  // Poke member
   const handlePokeMember = async (targetMemberId: number) => {
-    if (!event || !id || !currentMemberId || targetMemberId === currentMemberId) {
-      console.log('[EventRoom] Cannot poke:', {
-        hasEvent: !!event,
-        eventId: id,
-        currentMemberId,
-        targetMemberId,
-        reason: !event ? 'no event' : !id ? 'no id' : !currentMemberId ? 'no currentMemberId' : 'self poke',
-      });
-      return;
-    }
-    
-    console.log('[EventRoom] Poking member:', {
-      eventId: id,
-      currentMemberId,
-      targetMemberId,
-      timestamp: new Date().toISOString(),
-    });
+    if (!event || !id || !currentMemberId || targetMemberId === currentMemberId) return;
     
     setPokingMemberId(targetMemberId);
+    setPokedId(targetMemberId);
     
     try {
       const response = await eventsApi.pokeMember(Number(id), targetMemberId);
-      
-      console.log('[EventRoom] ✓ Poke API response:', response);
-      
       const targetMember = members.find(m => m.id === targetMemberId);
-      const targetNickname = targetMember?.nickname || '成員';
-      
       setSnackbar({ 
         open: true, 
-        message: `👆 已戳 ${targetNickname}！(${response.pokeCount}/3 次)`, 
+        message: `⚡ 已戳 ${targetMember?.nickname || '成員'}！(${response.pokeCount}/3 次)`, 
         severity: 'success' 
       });
     } catch (err: any) {
-      console.error('[EventRoom] ✗ Poke API error:', {
-        error: err,
-        message: err?.message,
-        response: err?.response?.data,
-        eventId: id,
-        targetMemberId,
-      });
-      const errorMessage = err.response?.data?.message || err.message || '戳人失敗，請稍後再試';
       setSnackbar({ 
         open: true, 
-        message: errorMessage, 
+        message: err.response?.data?.message || '戳人失敗', 
         severity: 'error' 
       });
     } finally {
       setPokingMemberId(null);
+      setTimeout(() => setPokedId(null), 1000);
     }
   };
 
-  // 取得狀態文字
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'upcoming':
-        return '即將開始';
-      case 'ongoing':
-        return '進行中';
-      case 'ended':
-        return '已結束';
-      default:
-        return status;
-    }
-  };
-
-  // Memoize 地圖中心點，避免重新渲染
+  // Map markers
   const mapCenter = useMemo(() => {
     if (event?.meetingPointLat && event?.meetingPointLng) {
       return { lat: event.meetingPointLat, lng: event.meetingPointLng };
@@ -951,11 +463,9 @@ export default function EventRoom() {
     return undefined;
   }, [event?.meetingPointLat, event?.meetingPointLng]);
 
-  // Memoize 地圖標記，避免重新渲染
   const mapMarkers = useMemo(() => {
     const markers = [];
 
-    // 集合地點標記
     if (event?.meetingPointLat && event?.meetingPointLng) {
       markers.push({
         lat: event.meetingPointLat,
@@ -965,7 +475,6 @@ export default function EventRoom() {
       });
     }
 
-    // 成員位置標記
     members
       .filter((m) => m.lat && m.lng && m.shareLocation)
       .forEach((m) => {
@@ -980,824 +489,397 @@ export default function EventRoom() {
           lng: m.lng!,
           title,
           label: m.arrivalTime ? '✅' : (m.nickname?.charAt(0) || '?'),
-          avatarUrl: m.avatar || undefined,
         });
       });
 
     return markers;
-  }, [event?.meetingPointLat, event?.meetingPointLng, event?.meetingPointName, members, membersETA]);
+  }, [event, members, membersETA]);
 
-  // Loading 狀態
+  // Loading state
   if (loading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '60vh',
-        }}
-      >
-        <CircularProgress size={60} />
-      </Box>
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+      </div>
     );
   }
 
-  // Error 狀態
+  // Error state
   if (error || !event) {
     return (
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error || '無法載入聚會資訊'}
-        </Alert>
-        <Typography
-          variant="body2"
-          sx={{ cursor: 'pointer', color: 'primary.main' }}
-          onClick={() => navigate('/events')}
-        >
-          ← 返回聚會列表
-        </Typography>
-      </Container>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center max-w-md">
+          <p className="text-red-600 font-medium mb-4">{error || '無法載入聚會資訊'}</p>
+          <button
+            onClick={() => navigate('/events')}
+            className="text-blue-600 font-medium hover:text-blue-700"
+          >
+            ← 返回聚會列表
+          </button>
+        </div>
+      </div>
     );
   }
 
-  // 未加入狀態 - 顯示聚會預覽和加入表單
+  // Not joined state - Join form
   if (!hasJoined) {
     return (
-      <Box sx={{ bgcolor: '#fafafa', minHeight: 'calc(100vh - 64px)', py: 4 }}>
-        <Container maxWidth="md">
-          {/* 聚會預覽卡片 */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: 4,
-              mb: 3,
-              borderRadius: 3,
-              bgcolor: 'white',
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
+      <div className="min-h-screen bg-slate-50 pb-8">
+        {/* Header */}
+        <header className="px-6 pt-10 pb-6 bg-white border-b border-slate-100">
+          <button
+            onClick={() => navigate('/events')}
+            className="flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-4"
           >
-            <Chip
-              label={getStatusText(event.status)}
-              size="small"
-              sx={{
-                mb: 3,
-                bgcolor: event.status === 'ongoing' ? '#e8f5e9' : '#f5f5f5',
-                color: event.status === 'ongoing' ? '#2e7d32' : 'text.secondary',
-                fontWeight: 500,
-              }}
-            />
+            <ArrowLeft size={20} />
+            <span className="font-medium">返回</span>
+          </button>
+          <h1 className="text-2xl font-black text-slate-900 mb-1">加入聚會</h1>
+          <p className="text-slate-400 text-sm font-medium">填寫資料後加入聚會</p>
+        </header>
+
+        <main className="p-6 space-y-6">
+          {/* Event Preview Card */}
+          <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm">
+            <span className={`
+              text-[10px] font-black uppercase tracking-widest mb-2 inline-block
+              ${event.status === 'ongoing' ? 'text-green-500' : 'text-slate-400'}
+            `}>
+              {event.status === 'ongoing' ? '進行中' : event.status === 'upcoming' ? '即將開始' : '已結束'}
+            </span>
             
-            <Typography variant="h4" sx={{ fontWeight: 600, mb: 3, color: '#1a1a1a' }}>
-              你被邀請參加：{event.name}
-            </Typography>
-
-            {/* 聚會詳情 */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <TimeIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-                <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                  {new Date(event.startTime).toLocaleString('zh-TW', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    weekday: 'short',
-                  })}
-                </Typography>
-              </Box>
-
+            <h2 className="text-xl font-black text-slate-900 mb-4">{event.name}</h2>
+            
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-slate-600">
+                <div className="w-8 h-8 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
+                  <Clock size={16} />
+                </div>
+                <span className="text-sm font-medium">
+                  {format(new Date(event.startTime), 'yyyy/MM/dd HH:mm (E)', { locale: zhTW })}
+                </span>
+              </div>
+              
               {event.meetingPointName && (
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                  <LocationIcon sx={{ color: 'text.secondary', fontSize: 18, mt: 0.25 }} />
-                  <Box>
-                    <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                      {event.meetingPointName}
-                    </Typography>
+                <div className="flex items-center gap-3 text-slate-600">
+                  <div className="w-8 h-8 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+                    <MapPin size={16} />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium">{event.meetingPointName}</span>
                     {event.meetingPointAddress && (
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                        {event.meetingPointAddress}
-                      </Typography>
+                      <p className="text-[10px] text-slate-400">{event.meetingPointAddress}</p>
                     )}
-                  </Box>
-                </Box>
+                  </div>
+                </div>
               )}
+              
+              <div className="flex items-center gap-3 text-slate-600">
+                <div className="w-8 h-8 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
+                  <Users size={16} />
+                </div>
+                <span className="text-sm font-medium">{members.length} 位成員已加入</span>
+              </div>
+              
+              <div className="flex items-center gap-3 text-slate-600">
+                <div className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600">
+                  <Crown size={16} />
+                </div>
+                <span className="text-sm font-medium">主揪：{getOwnerDisplayName()}</span>
+              </div>
+            </div>
+          </div>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <PeopleIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-                <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                  {members.length} 位成員已加入
-                </Typography>
-              </Box>
-
-              {/* 主揪資訊 */}
-              {(() => {
-                // 嘗試從 members 中找到 owner 的 member 記錄
-                const ownerMember = event.members?.find(m => m.userId === event.ownerId);
-                const ownerDisplayName = ownerMember?.nickname || 
-                  (event.ownerId.includes('_') 
-                    ? event.ownerId.split('_')[0] 
-                    : event.ownerId);
-                
-                return (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <PersonIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-                    <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                      主揪：{ownerDisplayName}
-                    </Typography>
-                  </Box>
-                );
-              })()}
-            </Box>
-          </Paper>
-
-          {/* 加入表單 */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: 4,
-              borderRadius: 3,
-              bgcolor: 'white',
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-          >
-            <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, color: '#1a1a1a' }}>
-              加入聚會
-            </Typography>
-
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <TextField
-                label="你的暱稱"
-                placeholder="例如：小明"
-                value={joinForm.nickname}
-                onChange={(e) => setJoinForm({ ...joinForm, nickname: e.target.value })}
-                fullWidth
-                required
-              />
-
-              <FormControl fullWidth>
-                <InputLabel>交通方式</InputLabel>
-                <Select
-                  value={joinForm.travelMode}
-                  onChange={(e) => setJoinForm({ ...joinForm, travelMode: e.target.value as TravelMode })}
-                  label="交通方式"
-                >
-                  <MenuItem value="driving">🚗 開車</MenuItem>
-                  <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                  <MenuItem value="walking">🚶 步行</MenuItem>
-                  <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControlLabel
-                control={
-                  <Checkbox
+          {/* Join Form */}
+          <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm">
+            <h3 className="text-lg font-black text-slate-800 mb-6">填寫你的資料</h3>
+            
+            <div className="space-y-5">
+              {/* Nickname */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">你的暱稱</label>
+                <input
+                  type="text"
+                  placeholder="例如：小明"
+                  value={joinForm.nickname}
+                  onChange={(e) => setJoinForm({ ...joinForm, nickname: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+                />
+              </div>
+              
+              {/* Travel Mode */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">交通方式</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {TRAVEL_MODE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setJoinForm({ ...joinForm, travelMode: option.value })}
+                      className={`
+                        p-3 rounded-xl border-2 text-sm font-medium transition-all
+                        ${joinForm.travelMode === option.value 
+                          ? 'border-blue-500 bg-blue-50 text-blue-600' 
+                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                        }
+                      `}
+                    >
+                      {option.emoji} {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Share Location */}
+              <div>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
                     checked={joinForm.shareLocation}
                     onChange={(e) => setJoinForm({ ...joinForm, shareLocation: e.target.checked })}
+                    className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5"
                   />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      分享我的位置
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  <div>
+                    <span className="block text-sm font-bold text-slate-700">分享我的位置</span>
+                    <span className="block text-[10px] text-slate-400 mt-0.5">
                       我們會在聚會前後 30 分鐘內追蹤你的位置
-                    </Typography>
-                  </Box>
-                }
-              />
-
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
+                    </span>
+                  </div>
+                </label>
+              </div>
+              
+              {/* Join Button */}
+              <button
                 onClick={handleJoinEvent}
                 disabled={joining}
-                sx={{
-                  py: 1.5,
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                }}
+                className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-500/30 disabled:opacity-50 active:scale-95 transition-all"
               >
-                {joining ? <CircularProgress size={24} /> : '加入聚會'}
-              </Button>
-            </Box>
-          </Paper>
+                {joining ? (
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                ) : (
+                  '加入聚會'
+                )}
+              </button>
+            </div>
+          </div>
+        </main>
 
-          {/* Snackbar */}
-          <Snackbar
-            open={snackbar.open}
-            autoHideDuration={3000}
-            onClose={() => setSnackbar({ ...snackbar, open: false })}
-            message={snackbar.message}
-          />
-        </Container>
-      </Box>
+        {/* Snackbar */}
+        {snackbar.open && (
+          <div className="fixed bottom-6 left-6 right-6 z-50">
+            <div className={`
+              p-4 rounded-2xl shadow-lg text-white font-medium text-center
+              ${snackbar.severity === 'success' ? 'bg-green-500' : snackbar.severity === 'error' ? 'bg-red-500' : 'bg-blue-500'}
+            `}>
+              {snackbar.message}
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 
-  // 已加入狀態 - 顯示完整 EventRoom
+  // Joined state - Full EventRoom
   return (
-    <Box sx={{ bgcolor: '#fafafa', minHeight: 'calc(100vh - 64px)', py: 4, pb: 10 }}>
-      <Container maxWidth="md">
-        {/* 聚會資訊卡片 - 極簡風格 */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 4,
-            mb: 3,
-            borderRadius: 3,
-            bgcolor: 'white',
-            border: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          {/* 狀態標籤和通知權限提示 */}
-          <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Chip
-              label={getStatusText(event.status)}
-              size="small"
-              sx={{
-                bgcolor: event.status === 'ongoing' ? '#e8f5e9' : '#f5f5f5',
-                color: event.status === 'ongoing' ? '#2e7d32' : 'text.secondary',
-                fontWeight: 500,
-                border: 'none',
-                alignSelf: 'flex-start',
-              }}
-            />
-            
-            {/* 通知權限提示 */}
-            {notificationPermission !== 'granted' && (
-              <Alert 
-                severity={notificationPermission === 'denied' ? 'error' : 'info'}
-                sx={{
-                  borderRadius: 2,
-                  '& .MuiAlert-icon': {
-                    alignItems: 'center',
-                  },
-                }}
-                action={
-                  notificationPermission !== 'denied' && (
-                    <Button
-                      size="small"
-                      variant="contained"
-                      onClick={handleRequestNotificationPermission}
-                      disabled={requestingPermission}
-                      sx={{
-                        textTransform: 'none',
-                        fontSize: '0.75rem',
-                        minWidth: 'auto',
-                        px: 2,
-                      }}
-                    >
-                      {requestingPermission ? '請求中...' : '啟用通知'}
-                    </Button>
-                  )
-                }
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {notificationPermission === 'denied' ? (
-                    <>
-                      <NotificationsOffIcon sx={{ fontSize: 18 }} />
-                      <Typography variant="body2">
-                        通知權限已被拒絕。請在瀏覽器設定中重新啟用通知權限，以接收聚會相關通知。
-                      </Typography>
-                    </>
-                  ) : (
-                    <>
-                      <NotificationsIcon sx={{ fontSize: 18 }} />
-                      <Typography variant="body2">
-                        啟用通知以接收「戳一下」和其他聚會相關的推送通知。
-                      </Typography>
-                    </>
-                  )}
-                </Box>
-              </Alert>
-            )}
-          </Box>
+    <div className="fixed inset-0 flex flex-col bg-slate-100 overflow-hidden">
+      {/* Full-screen Map */}
+      <div className="absolute inset-0 z-0">
+        <MapContainer center={mapCenter} markers={mapMarkers} fullScreen={true} />
+      </div>
 
-          {/* 聚會標題 */}
-          <Typography
-            variant="h3"
-            component="h1"
-            sx={{
-              fontWeight: 600,
-              mb: 1,
-              fontSize: { xs: '1.75rem', sm: '2.25rem' },
-              color: '#1a1a1a',
-              letterSpacing: '-0.02em',
+      {/* Floating Header */}
+      <div className="absolute top-0 left-0 w-full p-4 z-20 flex flex-col items-center safe-top">
+        <div className="w-full flex justify-between items-start mb-4">
+          {/* Back Button */}
+          <IconButton
+            icon={ArrowLeft}
+            onClick={() => navigate('/events')}
+            className="bg-white/80 backdrop-blur-md border-white/40"
+          />
+          
+          {/* Expandable Event Info Pill */}
+          <ExpandablePill
+            eventName={event.name}
+            startTime={event.startTime}
+            endTime={event.endTime}
+            meetingPointName={event.meetingPointName}
+            meetingPointAddress={event.meetingPointAddress}
+            ownerName={getOwnerDisplayName()}
+            onShareClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              setSnackbar({ open: true, message: '已複製連結！', severity: 'success' });
             }}
-          >
-            {event.name}
-          </Typography>
+          />
+          
+          {/* Trophy/Result Button */}
+          <IconButton
+            icon={Trophy}
+            onClick={() => setShowResultPopup(true)}
+            className="bg-white/80 backdrop-blur-md border-white/40 text-blue-600"
+          />
+        </div>
 
-          {/* 主揪資訊 */}
-          {(() => {
-            // 嘗試從 members 中找到 owner 的 member 記錄
-            const ownerMember = event.members?.find(m => m.userId === event.ownerId);
-            const ownerDisplayName = ownerMember?.nickname || 
-              (event.ownerId.includes('_') 
-                ? event.ownerId.split('_')[0] 
-                : event.ownerId);
+        {/* Notification Permission Alert */}
+        {notificationPermission !== 'granted' && (
+          <div className="w-full max-w-sm">
+            <div className={`
+              flex items-center gap-3 p-3 rounded-2xl backdrop-blur-xl
+              ${notificationPermission === 'denied' 
+                ? 'bg-red-50/90 border border-red-200' 
+                : 'bg-white/90 border border-white/40'
+              }
+            `}>
+              {notificationPermission === 'denied' ? (
+                <BellOff size={18} className="text-red-500" />
+              ) : (
+                <Bell size={18} className="text-slate-500" />
+              )}
+              <span className="text-xs font-medium text-slate-600 flex-1">
+                {notificationPermission === 'denied' 
+                  ? '通知已被拒絕' 
+                  : '啟用通知以接收提醒'
+                }
+              </span>
+              {notificationPermission !== 'denied' && (
+                <button
+                  onClick={handleRequestNotificationPermission}
+                  disabled={requestingPermission}
+                  className="text-[10px] font-black text-blue-600 uppercase tracking-wider"
+                >
+                  {requestingPermission ? '...' : '啟用'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Arrival Button */}
+      <div className="absolute bottom-32 left-0 w-full flex justify-center z-10 pointer-events-none">
+        {!hasArrived && !isEventEnded ? (
+          <button 
+            onClick={handleMarkArrival}
+            disabled={marking}
+            className="bg-blue-600 text-white px-10 py-4 rounded-full font-black shadow-2xl shadow-blue-500/40 border-4 border-white active:scale-90 transition-all pointer-events-auto disabled:opacity-70"
+          >
+            {marking ? (
+              <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+            ) : (
+              "I'M HERE 🏁"
+            )}
+          </button>
+        ) : hasArrived ? (
+          <div className="bg-green-500 text-white px-8 py-4 rounded-full font-black shadow-lg border-4 border-white flex items-center gap-2 pointer-events-auto">
+            <Crown size={20} fill="currentColor" /> ARRIVED
+          </div>
+        ) : null}
+      </div>
+
+      {/* Bottom Drawer - Member List */}
+      <BottomDrawer
+        title="The Squad"
+        rightElement={
+          <div className="flex -space-x-3">
+            {members.slice(0, 3).map(m => (
+              <div 
+                key={m.id} 
+                className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[10px] font-bold"
+              >
+                {m.nickname?.charAt(0).toUpperCase() || '?'}
+              </div>
+            ))}
+            {members.length > 3 && (
+              <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                +{members.length - 3}
+              </div>
+            )}
+          </div>
+        }
+      >
+        {/* Member Grid */}
+        <div className="grid grid-cols-2 gap-4 pb-10">
+          {members.map(m => {
+            const isCurrentUser = m.id === currentMemberId;
+            const isOwner = m.userId === event.ownerId;
             
             return (
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: 'text.secondary',
-                  mb: 3,
-                  fontSize: '0.875rem',
-                }}
+              <div 
+                key={m.id} 
+                className={`
+                  p-4 rounded-3xl border transition-all
+                  ${m.arrivalTime ? 'bg-green-50 border-green-100' : 'bg-white border-slate-100'}
+                  ${pokedId === m.id ? 'animate-shake' : ''}
+                `}
               >
-                主揪：{ownerDisplayName}
-              </Typography>
-            );
-          })()}
-
-          {/* 進度條區域 */}
-          {progress && (
-            <Box sx={{ mb: 4 }}>
-              {/* 標籤 */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: 'text.secondary',
-                  mb: 1,
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                }}
-              >
-                {progress.label}
-              </Typography>
-
-              {/* 進度條 */}
-              <Box
-                sx={{
-                  position: 'relative',
-                  height: 10,
-                  bgcolor: '#e0e0e0',
-                  borderRadius: 10,
-                  overflow: 'hidden',
-                  mb: 0.75,
-                }}
-              >
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    height: '100%',
-                    width: `${progress.progress * 100}%`,
-                    bgcolor: progress.color,
-                    borderRadius: 10,
-                    transition: 'width 0.5s ease-out',
-                  }}
-                />
-              </Box>
-
-              {/* 時間描述 */}
-              {progress.description && (
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: 'block',
-                    color: 'text.secondary',
-                    fontSize: '0.75rem',
-                    textAlign: 'right',
-                  }}
-                >
-                  {progress.description}
-                </Typography>
-              )}
-            </Box>
-          )}
-
-          {/* 聚會詳情 - 緊湊列表 */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* 聚會時間 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <TimeIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-              <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                {new Date(event.startTime).toLocaleString('zh-TW', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  weekday: 'short',
-                })}
-              </Typography>
-            </Box>
-
-            {/* 集合地點 */}
-            {(event.meetingPointName || event.meetingPointAddress) && (
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                <LocationIcon sx={{ color: 'text.secondary', fontSize: 18, mt: 0.25 }} />
-                <Box>
-                  {event.meetingPointName && (
-                    <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                      {event.meetingPointName}
-                    </Typography>
-                  )}
-                  {event.meetingPointAddress && (
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                      {event.meetingPointAddress}
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-            )}
-
-            {/* 成員數量 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <PeopleIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-              <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                {members.length} 位成員
-              </Typography>
-            </Box>
-          </Box>
-        </Paper>
-
-        {/* 地圖區塊 */}
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 3,
-            borderRadius: 3,
-            bgcolor: 'white',
-            border: '1px solid',
-            borderColor: 'divider',
-            overflow: 'hidden',
-          }}
-        >
-          <MapContainer center={mapCenter} markers={mapMarkers} />
-        </Paper>
-
-        {/* 成員預覽 - 極簡風格（可收合） */}
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 3,
-            borderRadius: 3,
-            bgcolor: 'white',
-            border: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          {/* 標題列 - 可點擊收合 */}
-          <Box
-            sx={{
-              px: 4,
-              pt: 4,
-              pb: 2,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-            }}
-            onClick={() => setMemberListExpanded(!memberListExpanded)}
-          >
-            <Box>
-              <Typography
-                variant="h5"
-                sx={{
-                  mb: 0.5,
-                  fontWeight: 600,
-                  color: '#1a1a1a',
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                參加成員
-              </Typography>
-              
-              {/* 排序說明 */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: 'text.secondary',
-                  fontSize: '0.75rem',
-                }}
-              >
-                依到達狀態排序：已到達 → 分享位置中 → 前往中
-              </Typography>
-            </Box>
-
-            {/* 展開/收合按鈕 */}
-            <IconButton
-              sx={{
-                transform: memberListExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.3s',
-              }}
-            >
-              <ExpandMoreIcon />
-            </IconButton>
-          </Box>
-
-          {/* 可收合的成員列表 */}
-          <Collapse in={memberListExpanded}>
-            <Box sx={{ px: 4, pb: 4 }}>
-              {members.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
-              目前還沒有成員加入
-            </Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {members.map((member, index) => {
-                // 定義狀態
-                const getMemberStatus = () => {
-                  if (member.arrivalTime) {
-                    return { text: '已到達', color: '#4caf50' };
-                  }
-                  if (member.shareLocation) {
-                    return { text: '分享位置中', color: '#2196f3' };
-                  }
-                  return { text: '前往中', color: '#bdbdbd' };
-                };
-                const status = getMemberStatus();
-                const isCurrentUser = member.id === currentMemberId;
-                const isOwner = event && member.userId === event.ownerId;
-
-                return (
-                  <Box
-                    key={member.id}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      py: 2.5,
-                      px: 2,
-                      mx: -2,
-                      borderTop: index === 0 ? 'none' : '1px solid',
-                      borderColor: 'divider',
-                      bgcolor: isOwner && isCurrentUser ? '#fff8e1' : isCurrentUser ? '#e3f2fd' : isOwner ? '#fff8e1' : 'transparent',
-                      borderRadius: isCurrentUser || isOwner ? 2 : 0,
-                    }}
-                  >
-                    {/* Avatar */}
-                    {member.avatar ? (
-                      <Box
-                        component="img"
-                        src={member.avatar}
-                        alt={member.nickname || '成員'}
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: '50%',
-                          border: `2px solid ${isCurrentUser ? status.color : '#e0e0e0'}`,
-                          flexShrink: 0,
-                          objectFit: 'cover',
-                        }}
-                      />
-                    ) : (
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: '50%',
-                        bgcolor: isCurrentUser ? status.color : '#f5f5f5',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: isCurrentUser ? 'white' : '#666',
-                        fontWeight: 600,
-                        fontSize: '1.1rem',
-                        border: `2px solid ${isCurrentUser ? 'white' : '#e0e0e0'}`,
-                        flexShrink: 0,
-                      }}
+                <div className="flex items-center justify-between mb-3">
+                  <Avatar
+                    name={m.nickname || '?'}
+                    size="lg"
+                    isArrived={!!m.arrivalTime}
+                    isCurrentUser={isCurrentUser}
+                  />
+                  
+                  {/* Poke Button */}
+                  {!isCurrentUser && !m.arrivalTime && (
+                    <button 
+                      onClick={() => handlePokeMember(m.id)}
+                      disabled={pokingMemberId === m.id}
+                      className={`
+                        w-10 h-10 rounded-xl flex items-center justify-center transition-all
+                        ${pokedId === m.id 
+                          ? 'bg-orange-500 text-white' 
+                          : 'bg-slate-50 text-slate-400 hover:bg-orange-50 hover:text-orange-500'
+                        }
+                        disabled:opacity-50
+                      `}
                     >
-                      {member.nickname?.charAt(0) || '?'}
-                    </Box>
-                    )}
-                    
-                    {/* 成員資訊 */}
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography
-                        variant="body1"
-                        sx={{
-                          fontWeight: 500,
-                          color: '#1a1a1a',
-                          mb: 0.3,
-                        }}
-                      >
-                        {member.nickname}
-                        {isOwner && (
-                          <Chip
-                            label="主揪"
-                            size="small"
-                            sx={{
-                              ml: 1,
-                              height: 20,
-                              fontSize: '0.7rem',
-                              bgcolor: '#ff9800',
-                              color: 'white',
-                              fontWeight: 600,
-                            }}
-                          />
-                        )}
-                        {isCurrentUser && (
-                          <Chip
-                            label="你"
-                            size="small"
-                            sx={{
-                              ml: 1,
-                              height: 20,
-                              fontSize: '0.7rem',
-                              bgcolor: '#1976d2',
-                              color: 'white',
-                            }}
-                          />
-                        )}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: 'text.secondary',
-                          fontSize: '0.8125rem',
-                        }}
-                      >
-                        {member.arrivalTime 
-                          ? '已到達'
-                          : (() => {
-                              const eta = membersETA.get(member.id);
-                              if (eta) {
-                                return `約 ${eta.duration} 抵達`;
-                              }
-                              return status.text;
-                            })()}
-                      </Typography>
-                    </Box>
+                      <Zap size={16} />
+                    </button>
+                  )}
+                </div>
+                
+                <div className="font-bold text-slate-900 truncate">
+                  {m.nickname} {isCurrentUser && '(You)'}
+                  {isOwner && (
+                    <span className="ml-1 text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-black">
+                      主揪
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {m.arrivalTime 
+                    ? `Arrived ${format(new Date(m.arrivalTime), 'HH:mm')}` 
+                    : 'En Route...'
+                  }
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </BottomDrawer>
 
-                    {/* 狀態指示器 */}
-                    <Box
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        bgcolor: status.color,
-                        flexShrink: 0,
-                      }}
-                    />
-
-                    {/* 戳人按鈕（不能戳自己） */}
-                    {!isCurrentUser && hasJoined && (
-                      <IconButton
-                        size="small"
-                        onClick={() => handlePokeMember(member.id)}
-                        disabled={pokingMemberId === member.id}
-                        sx={{
-                          color: '#ff6b6b',
-                          '&:hover': {
-                            bgcolor: '#ffe0e0',
-                            transform: 'scale(1.1)',
-                          },
-                          transition: 'all 0.2s',
-                        }}
-                        title="戳一下"
-                      >
-                        <PokeIcon />
-                      </IconButton>
-                    )}
-                  </Box>
-                );
-              })}
-            </Box>
-          )}
-            </Box>
-          </Collapse>
-        </Paper>
-
-        {/* 「我到了」按鈕 - 成員列表下方 */}
-        {!hasArrived && !isEventEnded && (
-          <Paper
-            elevation={0}
-            sx={{
-              mt: 3,
-              p: 3,
-              borderRadius: 3,
-              bgcolor: 'white',
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-          >
-            <Button
-              variant="contained"
-              size="large"
-              fullWidth
-              onClick={handleMarkArrival}
-              disabled={marking}
-              startIcon={marking ? <CircularProgress size={20} sx={{ color: 'white' }} /> : <CheckIcon />}
-              sx={{
-                py: 2,
-                borderRadius: 2,
-                textTransform: 'none',
-                fontSize: '1.125rem',
-                fontWeight: 600,
-                bgcolor: '#4caf50',
-                '&:hover': {
-                  bgcolor: '#45a049',
-                },
-                boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
-              }}
-            >
-              {marking ? '標記中...' : '我到了！'}
-            </Button>
-          </Paper>
-        )}
-
-        {/* 「查看結果」按鈕 - 聚會結束後顯示 */}
-        {isEventEnded && (
-          <Paper
-            elevation={0}
-            sx={{
-              mt: 3,
-              p: 2.5,
-              borderRadius: 2,
-              bgcolor: 'white',
-              border: '1px solid',
-              borderColor: '#E5E9F0',
-            }}
-          >
-            <Button
-              variant="outlined"
-              size="large"
-              fullWidth
-              onClick={() => setShowResultPopup(true)}
-              startIcon={<TrophyIcon sx={{ fontSize: 20 }} />}
-              sx={{
-                py: 1.5,
-                borderRadius: 2,
-                textTransform: 'none',
-                fontSize: '1rem',
-                fontWeight: 600,
-                borderColor: 'primary.main',
-                color: 'primary.main',
-                borderWidth: 2,
-                '&:hover': {
-                  borderWidth: 2,
-                  borderColor: 'primary.dark',
-                  bgcolor: 'primary.light',
-                  color: 'primary.dark',
-                },
-              }}
-            >
-              查看排行榜結果
-            </Button>
-          </Paper>
-        )}
-
-        {/* 底部提示 - 卡片樣式 */}
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 3,
-            py: 2,
-            px: 3,
-            borderRadius: 2,
-            bgcolor: '#f5f5f5',
-            border: '1px solid',
-            borderColor: '#e0e0e0',
-            textAlign: 'center',
-          }}
+      {/* Snackbar */}
+      {snackbar.open && (
+        <div 
+          className="fixed bottom-28 left-4 right-4 z-50 animate-bounce-subtle"
+          onClick={() => setSnackbar({ ...snackbar, open: false })}
         >
-          <Typography
-            variant="caption"
-            sx={{
-              color: 'text.secondary',
-              fontSize: '0.75rem',
-              fontWeight: 500,
-            }}
-          >
-            📍 EventRoom 完整版 • Guest 加入 + 地圖顯示 + 到達標記
-          </Typography>
-        </Paper>
+          <div className={`
+            p-4 rounded-2xl shadow-lg text-white font-medium text-center cursor-pointer
+            ${snackbar.severity === 'success' ? 'bg-green-500' : snackbar.severity === 'error' ? 'bg-red-500' : 'bg-blue-500'}
+          `}>
+            {snackbar.message}
+          </div>
+        </div>
+      )}
 
-        {/* Snackbar */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={3000}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          message={snackbar.message}
+      {/* Event Result Popup */}
+      {id && (
+        <EventResultPopup
+          open={showResultPopup}
+          onClose={() => setShowResultPopup(false)}
+          eventId={Number(id)}
         />
-
-        {/* EventResultPopup */}
-        {id && (
-          <EventResultPopup
-            open={showResultPopup}
-            onClose={() => setShowResultPopup(false)}
-            eventId={Number(id)}
-          />
-        )}
-      </Container>
-    </Box>
+      )}
+    </div>
   );
 }
-

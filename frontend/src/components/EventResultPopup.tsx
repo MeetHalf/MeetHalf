@@ -1,59 +1,25 @@
 import { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  Paper,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Avatar,
-  Chip,
-  Divider,
-  CircularProgress,
-  Alert,
-  useTheme,
-  useMediaQuery,
-  Slide,
-  Fade,
-  Grid,
-} from '@mui/material';
-import {
-  EmojiEvents as TrophyIcon,
-  CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
-  Cancel as CancelIcon,
-  TouchApp as PokeIcon,
-} from '@mui/icons-material';
+import { format } from 'date-fns';
+import { 
+  X, 
+  Trophy, 
+  Crown, 
+  Clock, 
+  XCircle, 
+  Zap,
+  Loader2,
+  ArrowLeft,
+} from 'lucide-react';
+
 import { eventsApi } from '../api/events';
 import type { EventResult, RankingItem, MemberStatus } from '../types/events';
-// 測試用：使用 mock data
-import { mockEventResult, mockEventResultSimple, mockEventResultAllAbsent, mockEventResultAllLate } from '../mocks/eventResultMockData';
+import { Podium, ArrivalList } from './ui';
 
 interface EventResultPopupProps {
   open: boolean;
   onClose: () => void;
   eventId: number;
 }
-
-const getStatusColor = (status: MemberStatus): 'success' | 'warning' | 'error' | 'default' => {
-  switch (status) {
-    case 'early':
-    case 'ontime':
-      return 'success';
-    case 'late':
-      return 'warning';
-    case 'absent':
-      return 'error';
-    default:
-      return 'default';
-  }
-};
 
 const getStatusLabel = (status: MemberStatus): string => {
   switch (status) {
@@ -70,36 +36,16 @@ const getStatusLabel = (status: MemberStatus): string => {
   }
 };
 
-const formatDateTime = (timeString?: string): string => {
+const formatTime = (timeString?: string): string => {
   if (!timeString) return '--';
   const date = new Date(timeString);
-  return date.toLocaleString('zh-TW', {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const getRankBadgeColor = (rank: number): string => {
-  switch (rank) {
-    case 1:
-      return '#FFD700'; // Gold
-    case 2:
-      return '#C0C0C0'; // Silver
-    case 3:
-      return '#CD7F32'; // Bronze
-    default:
-      return '#E0E0E0';
-  }
+  return format(date, 'HH:mm:ss');
 };
 
 export default function EventResultPopup({ open, onClose, eventId }: EventResultPopupProps) {
   const [result, setResult] = useState<EventResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     if (open && eventId) {
@@ -111,19 +57,6 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
     setLoading(true);
     setError(null);
     try {
-      // 測試用：取消註解下面這段來使用 mock data
-      // const USE_MOCK_DATA = true;
-      // if (USE_MOCK_DATA) {
-      //   await new Promise((resolve) => setTimeout(resolve, 500)); // 模擬 API 延遲
-      //   setResult(mockEventResult); // 完整版：包含前三名、遲到、缺席
-      //   // setResult(mockEventResultSimple); // 簡化版：只有前三名
-      //   // setResult(mockEventResultAllAbsent); // 只有缺席
-      //   // setResult(mockEventResultAllLate); // 只有遲到
-      //   setLoading(false);
-      //   return;
-      // }
-
-      // 真實 API 調用
       const response = await eventsApi.getEventResult(eventId);
       setResult(response.result);
     } catch (err: any) {
@@ -134,431 +67,261 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
     }
   };
 
-  if (!result && !loading && !error) {
-    return null;
-  }
+  if (!open) return null;
 
-  const topThree = result?.rankings.filter((r) => r.rank && r.rank <= 3 && r.status !== 'absent') || [];
-  const late = result?.rankings.filter((r) => r.status === 'late') || [];
-  const absent = result?.rankings.filter((r) => r.status === 'absent') || [];
+  // Prepare data
+  const arrived = result?.rankings
+    .filter(r => r.arrivalTime)
+    .sort((a, b) => {
+      const timeA = new Date(a.arrivalTime!).getTime();
+      const timeB = new Date(b.arrivalTime!).getTime();
+      return timeA - timeB;
+    }) || [];
+
+  const late = result?.rankings.filter(r => r.status === 'late') || [];
+  const absent = result?.rankings.filter(r => r.status === 'absent') || [];
 
   // Calculate on-time rate
-  const onTimeRate =
-    result && result.stats.totalMembers > 0
-      ? Math.round(
-          ((result.stats.totalMembers - result.stats.lateCount - result.stats.absentCount) /
-            result.stats.totalMembers) *
-            100
-        )
-      : 0;
+  const onTimeRate = result && result.stats.totalMembers > 0
+    ? Math.round(((result.stats.totalMembers - result.stats.lateCount - result.stats.absentCount) / result.stats.totalMembers) * 100)
+    : 0;
+
+  // Podium members
+  const podiumMembers = arrived.slice(0, 3).map(r => ({
+    id: r.memberId,
+    nickname: r.nickname || '未知',
+    arrivalTime: r.arrivalTime,
+  }));
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      fullScreen={isMobile}
-      maxWidth="md"
-      fullWidth
-      TransitionComponent={Fade}
-      TransitionProps={{ timeout: 300 }}
-    >
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <TrophyIcon color="primary" sx={{ fontSize: 28 }} />
-          <Typography variant="h6" fontWeight={600}>
-            聚會排行榜
-          </Typography>
-        </Box>
-      </DialogTitle>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="relative bg-white w-full sm:max-w-lg sm:rounded-[2rem] rounded-t-[2rem] max-h-[90vh] overflow-hidden flex flex-col animate-bounce-subtle">
+        {/* Header */}
+        <header className="flex items-center justify-between p-6 border-b border-slate-100">
+          <button 
+            onClick={onClose}
+            className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-100"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="text-xl font-black text-slate-900">Leaderboard</h1>
+          <div className="w-12 h-12" /> {/* Spacer */}
+        </header>
 
-      <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Loading */}
+          {loading && (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+            </div>
+          )}
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        {result && (
-          <Box>
-            {/* 1. Stats Summary - Simplified: 3 main cards + secondary text */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                mb: 3,
-                bgcolor: '#F5F7FA',
-                borderRadius: 2,
-                border: '1px solid',
-                borderColor: '#E5E9F0',
-              }}
-            >
-              <Typography 
-                variant="subtitle2" 
-                fontWeight={600} 
-                sx={{ 
-                  mb: 2, 
-                  color: 'text.primary', 
-                  fontSize: '0.875rem',
-                  textAlign: 'center',
-                }}
+          {/* Error */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-600 text-sm text-center">
+              {error}
+              <button 
+                onClick={loadResult}
+                className="ml-2 font-bold underline"
               >
-                統計數據
-              </Typography>
-              
-              {/* 三個主指標卡片 */}
-              <Grid container spacing={2} sx={{ mb: 2.5, justifyContent: 'center' }}>
-                <Grid item xs={4}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      py: 2,
-                      px: 1,
-                      borderRadius: 2,
-                      bgcolor: 'white',
-                      border: '1px solid',
-                      borderColor: '#F3F4F6', // border-gray-100
-                      minHeight: 72,
-                    }}
-                  >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.75, lineHeight: 1.2 }}>
-                      總參加人數
-                    </Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1.125rem', color: 'text.primary', lineHeight: 1.2 }}>
-                      {result.stats.totalMembers}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={4}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      py: 2,
-                      px: 1,
-                      borderRadius: 2,
-                      bgcolor: 'white',
-                      border: '1px solid',
-                      borderColor: '#F3F4F6', // border-gray-100
-                      minHeight: 72,
-                    }}
-                  >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.75, lineHeight: 1.2 }}>
-                      已到達
-                    </Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1.125rem', color: 'text.primary', lineHeight: 1.2 }}>
-                      {result.stats.arrivedCount}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={4}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      py: 2,
-                      px: 1,
-                      borderRadius: 2,
-                      bgcolor: 'white',
-                      border: '1px solid',
-                      borderColor: '#F3F4F6', // border-gray-100
-                      minHeight: 72,
-                    }}
-                  >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem', mb: 0.75, lineHeight: 1.2 }}>
-                      準時率
-                    </Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ fontSize: '1.125rem', color: 'text.primary', lineHeight: 1.2 }}>
-                      {onTimeRate}%
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
+                重試
+              </button>
+            </div>
+          )}
 
-              {/* 次指標：單行灰色文字 */}
-              <Typography 
-                variant="caption" 
-                color="text.secondary" 
-                sx={{ 
-                  fontSize: '0.75rem',
-                  display: 'block',
-                  textAlign: 'center',
-                  lineHeight: 1.5,
-                }}
-              >
-                遲到 {result.stats.lateCount} 人 · 缺席 {result.stats.absentCount} 人 · 總戳數{' '}
-                {result.stats.totalPokes !== undefined ? result.stats.totalPokes : 0}
-              </Typography>
-            </Paper>
+          {result && (
+            <>
+              {/* Stats Summary */}
+              <div className="bg-slate-50 rounded-[2rem] p-5 mb-8 border border-slate-100">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 text-center">
+                  統計數據
+                </h3>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="bg-white rounded-2xl p-3 text-center border border-slate-100">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1">總參加</div>
+                    <div className="text-xl font-black text-slate-800">{result.stats.totalMembers}</div>
+                  </div>
+                  <div className="bg-white rounded-2xl p-3 text-center border border-slate-100">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1">已到達</div>
+                    <div className="text-xl font-black text-green-600">{result.stats.arrivedCount}</div>
+                  </div>
+                  <div className="bg-white rounded-2xl p-3 text-center border border-slate-100">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1">準時率</div>
+                    <div className="text-xl font-black text-blue-600">{onTimeRate}%</div>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400 text-center font-medium">
+                  遲到 {result.stats.lateCount} 人 · 缺席 {result.stats.absentCount} 人 · 總戳數 {result.stats.totalPokes || 0}
+                </p>
+              </div>
 
-            {/* 2. Top 3 Ranking - Main hero */}
-            {topThree.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <TrophyIcon color="primary" sx={{ fontSize: 20 }} />
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    前三名
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  {topThree.map((item, index) => {
-                    const statusColor = getStatusColor(item.status);
-                    const statusLabel = getStatusLabel(item.status);
-                    const rankBadgeColor = getRankBadgeColor(item.rank || 0);
-                    const lateText =
-                      item.lateMinutes !== undefined && item.lateMinutes > 0
-                        ? `遲到 ${item.lateMinutes} 分鐘`
-                        : statusLabel;
+              {/* Podium */}
+              {podiumMembers.length > 0 && (
+                <div className="mb-10">
+                  <Podium members={podiumMembers} />
+                </div>
+              )}
 
-                    return (
-                      <Slide direction="up" in timeout={300 + index * 50} key={item.memberId}>
-                        <Paper
-                          elevation={0}
-                          sx={{
-                            p: 2,
-                            borderRadius: 2,
-                            bgcolor: 'white',
-                            border: '1px solid',
-                            borderColor: '#E5E9F0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 2,
-                          }}
-                        >
-                          {/* Left: Rank badge */}
-                          <Box
-                            sx={{
-                              width: 48,
-                              height: 48,
-                              borderRadius: '50%',
-                              bgcolor: rankBadgeColor,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'white',
-                              fontWeight: 700,
-                              fontSize: '1.25rem',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {item.rank}
-                          </Box>
-
-                          {/* Center: Name, status, timestamp */}
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.5 }}>
-                              {item.nickname || '未命名'}
-                            </Typography>
-                            <Chip
-                              label={lateText}
-                              color={statusColor}
-                              size="small"
-                              sx={{
-                                height: 20,
-                                fontSize: '0.7rem',
-                                mb: 0.5,
-                              }}
-                            />
-                            {item.arrivalTime && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                {formatDateTime(item.arrivalTime)}
-                              </Typography>
+              {/* Full Arrival List */}
+              {arrived.length > 0 && (
+                <div className="space-y-4 mb-8">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 px-2">
+                    到達時間
+                  </h3>
+                  {arrived.map((r, idx) => (
+                    <div 
+                      key={r.memberId}
+                      className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100"
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="font-black text-slate-300 w-4">{idx + 1}</span>
+                        <div className={`
+                          w-10 h-10 rounded-xl flex items-center justify-center font-bold
+                          ${r.status === 'late' 
+                            ? 'bg-orange-50 text-orange-600' 
+                            : 'bg-white text-slate-700 border border-slate-100'
+                          }
+                        `}>
+                          {r.nickname?.charAt(0).toUpperCase() || '?'}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-800">{r.nickname}</div>
+                          <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                            <Clock size={10} />
+                            {formatTime(r.arrivalTime)}
+                            {r.status === 'late' && r.lateMinutes && (
+                              <span className="text-orange-500 ml-1">
+                                (遲到 {r.lateMinutes} 分鐘)
+                              </span>
                             )}
-                          </Box>
-
-                          {/* Right: Optional icon */}
-                          {item.status !== 'absent' && (
-                            <CheckCircleIcon
-                              sx={{
-                                color: theme.palette.success.main,
-                                fontSize: 20,
-                                flexShrink: 0,
-                              }}
-                            />
-                          )}
-                        </Paper>
-                      </Slide>
-                    );
-                  })}
-                </Box>
-              </Box>
-            )}
-
-            {/* 3. Late section - Calmer design */}
-            {late.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <ScheduleIcon sx={{ fontSize: 20, color: theme.palette.warning.main }} />
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    遲到 ({late.length})
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {late.map((item) => (
-                    <Paper
-                      key={item.memberId}
-                      elevation={0}
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2,
-                        bgcolor: 'white',
-                        borderLeft: '3px solid',
-                        borderColor: theme.palette.warning.main,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 2,
-                      }}
-                    >
-                      <Avatar
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          bgcolor: theme.palette.warning.light,
-                          color: theme.palette.warning.main,
-                          fontSize: '0.875rem',
-                        }}
-                      >
-                        {item.nickname?.charAt(0) || '?'}
-                      </Avatar>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight={500}>
-                          {item.nickname || '未命名'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {item.lateMinutes !== undefined && item.lateMinutes > 0
-                            ? `遲到 ${item.lateMinutes} 分鐘`
-                            : '遲到'}
-                        </Typography>
-                      </Box>
-                      {item.pokeCount > 0 && (
-                        <Chip
-                          icon={<PokeIcon sx={{ fontSize: 14 }} />}
-                          label={item.pokeCount}
-                          size="small"
-                          sx={{
-                            height: 24,
-                            fontSize: '0.7rem',
-                            bgcolor: theme.palette.warning.light,
-                            color: theme.palette.warning.dark,
-                          }}
-                        />
-                      )}
-                    </Paper>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {r.pokeCount > 0 && (
+                          <div className="flex items-center gap-1 text-orange-500 text-xs font-bold">
+                            <Zap size={12} />
+                            {r.pokeCount}
+                          </div>
+                        )}
+                        {idx === 0 && <Crown size={18} className="text-orange-400" fill="currentColor" />}
+                      </div>
+                    </div>
                   ))}
-                </Box>
-              </Box>
-            )}
+                </div>
+              )}
 
-            {/* 4. Absent section - Calmer design */}
-            {absent.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <CancelIcon sx={{ fontSize: 20, color: theme.palette.error.main }} />
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    缺席 ({absent.length})
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {absent.map((item) => (
-                    <Paper
-                      key={item.memberId}
-                      elevation={0}
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2,
-                        bgcolor: 'white',
-                        borderLeft: '3px solid',
-                        borderColor: theme.palette.error.main,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 2,
-                      }}
-                    >
-                      <Avatar
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          bgcolor: theme.palette.error.light,
-                          color: theme.palette.error.main,
-                          fontSize: '0.875rem',
-                        }}
+              {/* Late Section */}
+              {late.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock size={16} className="text-orange-500" />
+                    <h3 className="text-sm font-bold text-slate-700">遲到 ({late.length})</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {late.map(r => (
+                      <div 
+                        key={r.memberId}
+                        className="bg-white p-3 rounded-xl border-l-4 border-orange-400 flex items-center justify-between"
                       >
-                        {item.nickname?.charAt(0) || '?'}
-                      </Avatar>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight={500}>
-                          {item.nickname || '未命名'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          未到達
-                        </Typography>
-                      </Box>
-                      {item.pokeCount > 0 && (
-                        <Chip
-                          icon={<PokeIcon sx={{ fontSize: 14 }} />}
-                          label={item.pokeCount}
-                          size="small"
-                          sx={{
-                            height: 24,
-                            fontSize: '0.7rem',
-                            bgcolor: theme.palette.error.light,
-                            color: theme.palette.error.dark,
-                          }}
-                        />
-                      )}
-                    </Paper>
-                  ))}
-                </Box>
-              </Box>
-            )}
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600 font-bold text-sm">
+                            {r.nickname?.charAt(0).toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-slate-700">{r.nickname}</div>
+                            <div className="text-[10px] text-slate-400">
+                              {r.lateMinutes ? `遲到 ${r.lateMinutes} 分鐘` : '遲到'}
+                            </div>
+                          </div>
+                        </div>
+                        {r.pokeCount > 0 && (
+                          <div className="flex items-center gap-1 bg-orange-50 text-orange-600 px-2 py-1 rounded-lg text-[10px] font-bold">
+                            <Zap size={10} />
+                            {r.pokeCount}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-            {/* 5. Poke stats footer (small text line) */}
-            {result.pokes && result.pokes.mostPoked && result.pokes.mostPoker && (
-              (result.pokes.mostPoked.count > 0 || result.pokes.mostPoker.count > 0) && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{
-                    display: 'block',
-                    mt: 3,
-                    fontSize: '0.75rem',
-                    textAlign: 'center',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  戳人統計：最常被戳{' '}
-                  <Box component="span" sx={{ fontWeight: 500, color: '#374151' }}>
-                    {result.pokes.mostPoked.nickname} ({result.pokes.mostPoked.count})
-                  </Box>
-                  {' · '}
-                  最愛戳人{' '}
-                  <Box component="span" sx={{ fontWeight: 500, color: '#374151' }}>
-                    {result.pokes.mostPoker.nickname} ({result.pokes.mostPoker.count})
-                  </Box>
-                </Typography>
-              )
-            )}
-          </Box>
-        )}
-      </DialogContent>
+              {/* Absent Section */}
+              {absent.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <XCircle size={16} className="text-red-500" />
+                    <h3 className="text-sm font-bold text-slate-700">缺席 ({absent.length})</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {absent.map(r => (
+                      <div 
+                        key={r.memberId}
+                        className="bg-white p-3 rounded-xl border-l-4 border-red-400 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-600 font-bold text-sm">
+                            {r.nickname?.charAt(0).toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-slate-700">{r.nickname}</div>
+                            <div className="text-[10px] text-slate-400">未到達</div>
+                          </div>
+                        </div>
+                        {r.pokeCount > 0 && (
+                          <div className="flex items-center gap-1 bg-red-50 text-red-600 px-2 py-1 rounded-lg text-[10px] font-bold">
+                            <Zap size={10} />
+                            {r.pokeCount}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-      <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 2 }}>
-        <Button onClick={onClose} variant="contained" fullWidth={isMobile} sx={{ borderRadius: 2 }}>
-          關閉
-        </Button>
-      </DialogActions>
-    </Dialog>
+              {/* Poke Stats Footer */}
+              {result.pokes && result.pokes.mostPoked && result.pokes.mostPoker && 
+               (result.pokes.mostPoked.count > 0 || result.pokes.mostPoker.count > 0) && (
+                <div className="bg-orange-50 rounded-[2rem] p-5 border border-orange-100 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Zap size={48} className="text-orange-500" />
+                  </div>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-500 mb-2 flex items-center gap-1.5">
+                    <Zap size={14} fill="currentColor" /> 戳人統計
+                  </h3>
+                  <p className="text-sm text-slate-700 font-medium">
+                    最常被戳：
+                    <span className="font-bold"> {result.pokes.mostPoked.nickname} ({result.pokes.mostPoked.count}次)</span>
+                    <br />
+                    最愛戳人：
+                    <span className="font-bold"> {result.pokes.mostPoker.nickname} ({result.pokes.mostPoker.count}次)</span>
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-slate-100">
+          <button 
+            onClick={onClose}
+            className="w-full py-4 bg-slate-900 text-white rounded-3xl font-black shadow-xl active:scale-95 transition-all"
+          >
+            返回活動
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
