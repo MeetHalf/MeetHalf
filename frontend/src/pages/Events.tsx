@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -18,6 +18,43 @@ import {
 import { Add as AddIcon } from '@mui/icons-material';
 import GroupCard from '../components/EventCard';
 import { eventsApi, Event } from '../api/events';
+import { PENDING_INVITE_ROUTE_KEY } from './InvitePage';
+
+// PWA detection utility
+function isPWA(): boolean {
+  // iOS Safari
+  if ((window.navigator as any).standalone === true) {
+    return true;
+  }
+  
+  // Android Chrome and other browsers
+  if (window.matchMedia('(display-mode: standalone)').matches) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Helper function to log localStorage state
+function logLocalStorageState(context: string) {
+  try {
+    const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
+    const allLocalStorage: Record<string, string> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        allLocalStorage[key] = localStorage.getItem(key) || '';
+      }
+    }
+    console.log(`[${context}] localStorage State:`, {
+      pending_invite_route: pendingRoute,
+      allItems: allLocalStorage,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${context}] Failed to read localStorage:`, error);
+  }
+}
 
 export default function Events() {
   const navigate = useNavigate();
@@ -29,11 +66,96 @@ export default function Events() {
   const [creating, setCreating] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const hasCheckedPendingRoute = useRef(false);
 
-  // Fetch events on component mount
+  // Check for pending invite route when PWA opens from home screen
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    console.log('[Events] ===== Component Mounted =====');
+    console.log('[Events] Current path:', window.location.pathname);
+    
+    // Only check once when component mounts
+    if (hasCheckedPendingRoute.current) {
+      console.log('[Events] Already checked pending route, skipping');
+      return;
+    }
+
+    // Small delay to ensure everything is initialized
+    const timer = setTimeout(() => {
+      console.log('[Events] ===== Checking for Pending Route =====');
+      logLocalStorageState('Events-PWA-Check');
+      
+      const pwaStatus = isPWA();
+      console.log('[Events] PWA Detection:', {
+        isPWA: pwaStatus,
+        standalone: (window.navigator as any).standalone,
+        displayMode: window.matchMedia('(display-mode: standalone)').matches,
+      });
+
+      if (pwaStatus) {
+        const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
+        console.log('[Events] Checking localStorage for pending route:', {
+          pendingRoute,
+          currentPath: '/events',
+        });
+
+        if (pendingRoute && pendingRoute !== '/events' && !pendingRoute.startsWith('/invite/')) {
+          console.log('[Events] ===== NAVIGATING TO PENDING ROUTE =====');
+          console.log('[Events] From: /events');
+          console.log('[Events] To:', pendingRoute);
+          logLocalStorageState('Events-Before-Remove');
+          
+          localStorage.removeItem(PENDING_INVITE_ROUTE_KEY);
+          console.log('[Events] ✓ Removed pending route from localStorage');
+          logLocalStorageState('Events-After-Remove');
+          
+          hasCheckedPendingRoute.current = true;
+          navigate(pendingRoute, { replace: true });
+          console.log('[Events] ✓ Navigation triggered to:', pendingRoute);
+          return; // Don't fetch events if we're navigating away
+        } else if (pendingRoute) {
+          console.log('[Events] ===== Skipping Navigation =====');
+          console.log('[Events] Reason:', {
+            pendingRoute,
+            isSamePath: pendingRoute === '/events',
+            isInvitePage: pendingRoute.startsWith('/invite/'),
+          });
+          // Clear invalid pending route
+          if (pendingRoute === '/events' || pendingRoute.startsWith('/invite/')) {
+            localStorage.removeItem(PENDING_INVITE_ROUTE_KEY);
+            console.log('[Events] ✓ Removed invalid pending route');
+          }
+        } else {
+          console.log('[Events] No pending route found in localStorage');
+        }
+      } else {
+        console.log('[Events] Not in PWA mode, skipping pending route check');
+      }
+
+      hasCheckedPendingRoute.current = true;
+      console.log('[Events] ===== Pending Route Check Complete =====');
+      
+      // Fetch events after checking (only if we didn't navigate away)
+      fetchEvents();
+    }, 200);
+
+    return () => {
+      console.log('[Events] Cleanup: clearing timer');
+      clearTimeout(timer);
+    };
+  }, [navigate]);
+
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await eventsApi.getEvents();
+      setEvents(response.events);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load events');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchEvents = async () => {
     try {

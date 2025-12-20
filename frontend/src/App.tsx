@@ -57,13 +57,31 @@ function App() {
   const [isExchangingToken, setIsExchangingToken] = useState(false);
 
   useEffect(() => {
+    console.log('[App] ===== App Component Mounted =====');
+    console.log('[App] Current URL:', window.location.href);
+    console.log('[App] User Agent:', navigator.userAgent);
+    
+    // Helper to log localStorage state
+    try {
+      const pendingRoute = localStorage.getItem('pending_invite_route');
+      console.log('[App] Initial localStorage state:', {
+        pending_invite_route: pendingRoute,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('[App] Failed to read localStorage:', error);
+    }
+    
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('auth_temp')) {
+      console.log('[App] Found auth_temp token in URL');
       setIsExchangingToken(true);
       handleTempAuthTokenFromURL().then(() => {
         // Keep loading state until reload
       });
       return;
+    } else {
+      console.log('[App] No auth_temp token found, proceeding normally');
     }
   }, []);
 

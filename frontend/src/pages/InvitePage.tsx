@@ -38,6 +38,27 @@ function isPWA(): boolean {
 
 const PENDING_INVITE_ROUTE_KEY = 'pending_invite_route';
 
+// Helper function to log localStorage state
+function logLocalStorageState(context: string) {
+  try {
+    const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
+    const allLocalStorage: Record<string, string> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        allLocalStorage[key] = localStorage.getItem(key) || '';
+      }
+    }
+    console.log(`[${context}] localStorage State:`, {
+      pending_invite_route: pendingRoute,
+      allItems: allLocalStorage,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${context}] Failed to read localStorage:`, error);
+  }
+}
+
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -47,11 +68,20 @@ export default function InvitePage() {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
-    console.log('[InvitePage] Component mounted, token:', token);
+    console.log('[InvitePage] ===== Component Mounted =====');
+    console.log('[InvitePage] URL:', window.location.href);
+    console.log('[InvitePage] Token from URL:', token);
+    logLocalStorageState('InvitePage-Mount');
+    
     // Check if we're in PWA mode
     const pwaStatus = isPWA();
     setIsStandalone(pwaStatus);
-    console.log('[InvitePage] PWA status:', pwaStatus);
+    console.log('[InvitePage] PWA Detection:', {
+      isPWA: pwaStatus,
+      standalone: (window.navigator as any).standalone,
+      displayMode: window.matchMedia('(display-mode: standalone)').matches,
+      userAgent: navigator.userAgent,
+    });
   }, []);
 
   useEffect(() => {
@@ -81,12 +111,16 @@ export default function InvitePage() {
           navigate(targetRoute, { replace: true });
         } else {
           // Store the route in localStorage for later (when user opens from home screen)
-          console.log('[InvitePage] Not in PWA mode, storing route in localStorage:', targetRoute);
+          console.log('[InvitePage] ===== Storing Route in localStorage =====');
+          console.log('[InvitePage] Target route:', targetRoute);
+          logLocalStorageState('InvitePage-Before-Store');
+          
           try {
             localStorage.setItem(PENDING_INVITE_ROUTE_KEY, targetRoute);
-            console.log('[InvitePage] Successfully stored route in localStorage');
+            console.log('[InvitePage] ✓ Successfully stored route in localStorage');
+            logLocalStorageState('InvitePage-After-Store');
           } catch (storageError) {
-            console.error('[InvitePage] Failed to store in localStorage:', storageError);
+            console.error('[InvitePage] ✗ Failed to store in localStorage:', storageError);
             // If localStorage fails, still allow user to navigate manually
           }
         }
@@ -106,6 +140,9 @@ export default function InvitePage() {
   }, [token, navigate]);
 
   const handleGoToEvent = () => {
+    console.log('[InvitePage] ===== User clicked "Go to Event" =====');
+    console.log('[InvitePage] Event ID:', eventId);
+    logLocalStorageState('InvitePage-GoToEvent');
     if (eventId) {
       navigate(`/events/${eventId}`);
     }
