@@ -16,25 +16,9 @@ import {
 } from '@mui/material';
 import {
   Share as ShareIcon,
-  CheckCircle as CheckCircleIcon,
   ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
 import { inviteApi } from '../api/events';
-
-// PWA detection utility
-function isPWA(): boolean {
-  // iOS Safari
-  if ((window.navigator as any).standalone === true) {
-    return true;
-  }
-  
-  // Android Chrome and other browsers
-  if (window.matchMedia('(display-mode: standalone)').matches) {
-    return true;
-  }
-  
-  return false;
-}
 
 const PENDING_INVITE_ROUTE_KEY = 'pending_invite_route';
 
@@ -65,23 +49,12 @@ export default function InvitePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [eventId, setEventId] = useState<number | null>(null);
-  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
     console.log('[InvitePage] ===== Component Mounted =====');
     console.log('[InvitePage] URL:', window.location.href);
     console.log('[InvitePage] Token from URL:', token);
     logLocalStorageState('InvitePage-Mount');
-    
-    // Check if we're in PWA mode
-    const pwaStatus = isPWA();
-    setIsStandalone(pwaStatus);
-    console.log('[InvitePage] PWA Detection:', {
-      isPWA: pwaStatus,
-      standalone: (window.navigator as any).standalone,
-      displayMode: window.matchMedia('(display-mode: standalone)').matches,
-      userAgent: navigator.userAgent,
-    });
   }, []);
 
   useEffect(() => {
@@ -105,24 +78,19 @@ export default function InvitePage() {
 
         const targetRoute = `/events/${response.eventId}`;
         
-        // If already in PWA mode, navigate directly
-        if (isPWA()) {
-          console.log('[InvitePage] Already in PWA mode, navigating directly to:', targetRoute);
-          navigate(targetRoute, { replace: true });
-        } else {
-          // Store the route in localStorage for later (when user opens from home screen)
-          console.log('[InvitePage] ===== Storing Route in localStorage =====');
-          console.log('[InvitePage] Target route:', targetRoute);
-          logLocalStorageState('InvitePage-Before-Store');
-          
-          try {
-            localStorage.setItem(PENDING_INVITE_ROUTE_KEY, targetRoute);
-            console.log('[InvitePage] ✓ Successfully stored route in localStorage');
-            logLocalStorageState('InvitePage-After-Store');
-          } catch (storageError) {
-            console.error('[InvitePage] ✗ Failed to store in localStorage:', storageError);
-            // If localStorage fails, still allow user to navigate manually
-          }
+        // 簡化邏輯：不管是瀏覽器還是 PWA，都存儲到 localStorage
+        // 讓 Events 頁面負責檢查和導航
+        console.log('[InvitePage] ===== Storing Route in localStorage =====');
+        console.log('[InvitePage] Target route:', targetRoute);
+        logLocalStorageState('InvitePage-Before-Store');
+        
+        try {
+          localStorage.setItem(PENDING_INVITE_ROUTE_KEY, targetRoute);
+          console.log('[InvitePage] ✓ Successfully stored route in localStorage');
+          logLocalStorageState('InvitePage-After-Store');
+        } catch (storageError) {
+          console.error('[InvitePage] ✗ Failed to store in localStorage:', storageError);
+          // If localStorage fails, still allow user to navigate manually
         }
       } catch (err: any) {
         console.error('[InvitePage] Error resolving invite token:', err);
@@ -137,7 +105,7 @@ export default function InvitePage() {
     };
 
     resolveToken();
-  }, [token, navigate]);
+  }, [token]);
 
   const handleGoToEvent = () => {
     console.log('[InvitePage] ===== User clicked "Go to Event" =====');
@@ -175,21 +143,6 @@ export default function InvitePage() {
         <Button variant="contained" onClick={() => navigate('/events')} fullWidth>
           返回聚會列表
         </Button>
-      </Container>
-    );
-  }
-
-  // If in PWA mode, this shouldn't be shown (should have navigated already)
-  // But just in case, show a message
-  if (isStandalone) {
-    return (
-      <Container maxWidth="sm" sx={{ py: 4 }}>
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <CheckCircleIcon sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
-          <Typography variant="h6" gutterBottom>
-            正在載入聚會...
-          </Typography>
-        </Paper>
       </Container>
     );
   }
