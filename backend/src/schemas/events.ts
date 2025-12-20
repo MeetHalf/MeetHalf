@@ -24,6 +24,10 @@ export const createEventSchema = z.object({
   meetingPointName: z.string().optional().nullable(),
   meetingPointAddress: z.string().optional().nullable(),
   groupId: z.number().int().positive().optional().nullable(),
+  // 主辦加入活動的信息（可選，如果提供則自動創建 member）
+  ownerNickname: z.string().min(1, 'Owner nickname is required').max(100).optional(),
+  ownerTravelMode: z.enum(['driving', 'transit', 'walking', 'bicycling']).optional(),
+  ownerShareLocation: z.boolean().default(false).optional(),
 }).refine(
   (data) => {
     // Only validate if both times are provided

@@ -69,6 +69,10 @@ export interface CreateEventRequest {
   meetingPointName?: string | null;
   meetingPointAddress?: string | null;
   groupId?: number | null;
+  // 主辦信息（可選，如果提供則自動創建 member）
+  ownerNickname?: string;
+  ownerTravelMode?: TravelMode;
+  ownerShareLocation?: boolean;
 }
 
 export interface UpdateEventRequest {
@@ -159,7 +163,11 @@ export const eventsApi = {
   },
 
   // Create a new event
-  async createEvent(data: CreateEventRequest): Promise<{ event: Event }> {
+  async createEvent(data: CreateEventRequest): Promise<{ 
+    event: Event;
+    member?: Member; // 如果提供了主辦信息，會自動創建 member
+    guestToken?: string; // 如果是匿名用戶，會返回 guestToken
+  }> {
     const response = await api.post('/events', data);
     return response.data;
   },

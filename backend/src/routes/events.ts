@@ -210,7 +210,7 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       return;
     }
 
-    const { name, startTime: providedStartTime, endTime: providedEndTime, ownerId: providedOwnerId, useMeetHalf, status, meetingPointLat, meetingPointLng, meetingPointName, meetingPointAddress, groupId } = validation.data as CreateEventRequest;
+    const { name, startTime: providedStartTime, endTime: providedEndTime, ownerId: providedOwnerId, useMeetHalf, status, meetingPointLat, meetingPointLng, meetingPointName, meetingPointAddress, groupId, ownerNickname, ownerTravelMode, ownerShareLocation } = validation.data as CreateEventRequest;
     
     // Set default startTime and endTime if not provided
     // Default: startTime = 1 hour from now, endTime = 3 hours from now
@@ -288,6 +288,9 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       ownerId = providedOwnerId;
     }
 
+    // 如果提供了主辦信息，自動創建主辦的 member 記錄
+    const shouldCreateOwnerMember = ownerNickname && ownerNickname.trim().length > 0;
+    
     const event = await prisma.event.create({
       data: {
         name,
@@ -301,7 +304,15 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
         meetingPointName,
         meetingPointAddress,
         groupId: validGroupId,
-        // Don't create member automatically - user must join explicitly
+        // 如果提供了主辦信息，自動創建主辦的 member 記錄
+        members: shouldCreateOwnerMember ? {
+          create: {
+            userId: ownerId,
+            nickname: ownerNickname!.trim(),
+            shareLocation: ownerShareLocation ?? false,
+            travelMode: ownerTravelMode || 'driving',
+          }
+        } : undefined,
       },
       include: {
         members: {
@@ -323,7 +334,34 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       // Don't fail the event creation if token generation fails
     }
 
-    res.status(201).json({ event });
+    // 如果創建了主辦的 member，觸發 Pusher 事件
+    if (shouldCreateOwnerMember && event.members.length > 0) {
+      const ownerMember = event.members.find(m => m.userId === ownerId);
+      if (ownerMember) {
+        const { triggerEventChannel } = await import('../lib/pusher');
+        triggerEventChannel(event.id, 'member-joined', {
+          memberId: ownerMember.id,
+          nickname: ownerMember.nickname || ownerMember.userId || 'Unknown',
+          userId: ownerMember.userId,
+          shareLocation: ownerMember.shareLocation,
+          travelMode: ownerMember.travelMode,
+          createdAt: ownerMember.createdAt.toISOString(),
+        });
+      }
+    }
+
+    // 如果創建了主辦的 member，返回 member 信息（用於前端自動加入）
+    const ownerMember = shouldCreateOwnerMember ? event.members.find(m => m.userId === ownerId) : null;
+    const guestToken = ownerMember && !req.user ? generateGuestToken(ownerMember.id, event.id) : null;
+
+    res.status(201).json({ 
+      event,
+      // 如果創建了主辦的 member，返回 member 和 guestToken（如果是匿名用戶）
+      ...(ownerMember ? { 
+        member: ownerMember,
+        ...(guestToken ? { guestToken } : {})
+      } : {})
+    });
   } catch (error: any) {
     console.error('============================================');
     console.error('[CREATE EVENT ERROR] Full error details:');
