@@ -32,7 +32,12 @@ import {
   EmojiEvents as TrophyIcon,
   Notifications as NotificationsIcon,
   NotificationsOff as NotificationsOffIcon,
+  ArrowBack as ArrowBackIcon,
+  Close as CloseIcon,
+  Share as ShareIcon,
 } from '@mui/icons-material';
+import { format } from 'date-fns';
+import { zhTW } from 'date-fns/locale';
 import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type MemberETA } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
@@ -54,6 +59,10 @@ export default function EventRoom() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [memberListExpanded, setMemberListExpanded] = useState(true);
+  
+  // 新 UI 相關狀態
+  const [isInfoExpanded, setIsInfoExpanded] = useState(false);
+  const [isDrawerOpen, setDrawerOpen] = useState(false);
 
   // 加入聚會相關狀態
   const [hasJoined, setHasJoined] = useState(false);
@@ -427,8 +436,22 @@ export default function EventRoom() {
         };
       });
       
-      // 顯示通知（如果不是當前用戶）
-      if (currentMemberId !== data.memberId) {
+      // 如果是當前用戶到達，更新 hasArrived 狀態
+      if (currentMemberId === data.memberId) {
+        setHasArrived(true);
+        
+        // 更新 localStorage
+        if (id) {
+          const storageKey = `event_${id}_member`;
+          const storedMember = localStorage.getItem(storageKey);
+          if (storedMember) {
+            const memberData = JSON.parse(storedMember);
+            memberData.arrivalTime = data.arrivalTime;
+            localStorage.setItem(storageKey, JSON.stringify(memberData));
+          }
+        }
+      } else {
+        // 顯示通知（如果不是當前用戶）
         const statusEmoji = data.status === 'early' ? '⚡' : data.status === 'ontime' ? '✅' : '⏰';
         setSnackbar({
           open: true,
@@ -542,13 +565,28 @@ export default function EventRoom() {
     hasJoined,
     startTime: event?.startTime || '',
     endTime: event?.endTime || '',
-    onError: (error) => {
-      console.error('[EventRoom] Location tracking error:', error);
-      setSnackbar({
-        open: true,
-        message: `位置追蹤錯誤: ${error.message}`,
-        severity: 'error',
-      });
+    onError: (error: any) => {
+      // 只在開發模式或非 400 錯誤時記錄詳細錯誤
+      const isValidationError = error?.response?.status === 400;
+      const errorMessage = error?.response?.data?.message || error?.message || '位置追蹤錯誤';
+      
+      if (!isValidationError || import.meta.env.DEV) {
+        console.error('[EventRoom] Location tracking error:', {
+          error,
+          status: error?.response?.status,
+          message: errorMessage,
+          code: error?.response?.data?.code,
+        });
+      }
+      
+      // 只在非驗證錯誤或開發模式下顯示錯誤提示（避免打擾用戶）
+      if (!isValidationError || import.meta.env.DEV) {
+        setSnackbar({
+          open: true,
+          message: `位置追蹤錯誤: ${errorMessage}`,
+          severity: 'error',
+        });
+      }
     },
     onLocationUpdate: (lat, lng) => {
       // 立即更新当前用户的位置，让地图立即显示
@@ -1008,6 +1046,38 @@ export default function EventRoom() {
     return markers;
   }, [event?.meetingPointLat, event?.meetingPointLng, event?.meetingPointName, members, membersETA]);
 
+  // 計算兩點間距離（公尺）- Haversine 公式
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371e3; // 地球半徑（公尺）
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lng2 - lng1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c;
+  };
+
+  // 計算用戶與集合地點的距離
+  const distanceToMeetingPoint = useMemo(() => {
+    const myMember = members.find(m => m.id === currentMemberId);
+    if (!myMember?.lat || !myMember?.lng || !event?.meetingPointLat || !event?.meetingPointLng) {
+      return null;
+    }
+    return calculateDistance(
+      myMember.lat, myMember.lng,
+      event.meetingPointLat, event.meetingPointLng
+    );
+  }, [members, currentMemberId, event?.meetingPointLat, event?.meetingPointLng]);
+
+  // 距離門檻：100 公尺內才能標記到達
+  const ARRIVAL_THRESHOLD = 100;
+  const canMarkArrival = distanceToMeetingPoint !== null && distanceToMeetingPoint <= ARRIVAL_THRESHOLD;
+
   // Loading 狀態
   if (loading) {
     return (
@@ -1223,600 +1293,556 @@ export default function EventRoom() {
     );
   }
 
-  // 已加入狀態 - 顯示完整 EventRoom
+  // 已加入狀態 - 顯示完整 EventRoom（新 UI）
+  // 取得主揪資訊
+  const ownerMember = event.members?.find(m => m.userId === event.ownerId);
+  const ownerDisplayName = ownerMember?.nickname || 
+    (event.ownerId.includes('_') 
+      ? event.ownerId.split('_')[0] 
+      : event.ownerId);
+
   return (
-    <Box sx={{ bgcolor: '#fafafa', minHeight: 'calc(100vh - 64px)', py: 4, pb: 10 }}>
-      <Container maxWidth="md">
-        {/* 聚會資訊卡片 - 極簡風格 */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 4,
-            mb: 3,
-            borderRadius: 3,
-            bgcolor: 'white',
-            border: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          {/* 狀態標籤和通知權限提示 */}
-          <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Chip
-              label={getStatusText(event.status)}
-              size="small"
-              sx={{
-                bgcolor: event.status === 'ongoing' ? '#e8f5e9' : '#f5f5f5',
-                color: event.status === 'ongoing' ? '#2e7d32' : 'text.secondary',
-                fontWeight: 500,
-                border: 'none',
-                alignSelf: 'flex-start',
-              }}
-            />
-            
-            {/* 通知權限提示 */}
-            {notificationPermission !== 'granted' && (
-              <Alert 
-                severity={notificationPermission === 'denied' ? 'error' : 'info'}
-                sx={{
-                  borderRadius: 2,
-                  '& .MuiAlert-icon': {
-                    alignItems: 'center',
+    <Box sx={{ 
+      position: 'fixed', 
+      inset: 0, 
+      display: 'flex', 
+      flexDirection: 'column',
+      bgcolor: '#f1f5f9',
+      overflow: 'hidden',
+      zIndex: 1200  // 高於 MUI AppBar 的 1100，完全覆蓋 Navbar
+    }}>
+      {/* 全屏地圖背景 */}
+      <Box sx={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+        <MapContainer center={mapCenter} markers={mapMarkers} fullscreen />
+      </Box>
+
+      {/* 浮動 Header */}
+      <Box sx={{ 
+        position: 'absolute', 
+        top: 0, 
+        left: 0, 
+        width: '100%', 
+        p: 2, 
+        zIndex: 20,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}>
+        <Box sx={{ 
+          width: '100%', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'flex-start',
+          mb: 2,
+        }}>
+          {/* 返回按鈕 */}
+          <IconButton
+            onClick={() => navigate('/events')}
+            sx={{
+              width: 48,
+              height: 48,
+              bgcolor: 'rgba(255,255,255,0.8)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: 3,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              border: '1px solid rgba(255,255,255,0.4)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
+              '&:active': { transform: 'scale(0.9)' },
+              transition: 'all 0.2s',
+            }}
+          >
+            <ArrowBackIcon sx={{ color: '#475569' }} />
+          </IconButton>
+
+          {/* 可展開的聚會資訊 Pill */}
+          <Box
+            onClick={() => setIsInfoExpanded(!isInfoExpanded)}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              transition: 'all 0.3s ease-in-out',
+              cursor: 'pointer',
+              width: isInfoExpanded ? '80%' : 'auto',
+              maxWidth: isInfoExpanded ? 400 : 'none',
+              p: isInfoExpanded ? 2.5 : 1.5,
+              px: isInfoExpanded ? 2.5 : 2,
+              bgcolor: isInfoExpanded ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.8)',
+              borderRadius: isInfoExpanded ? 4 : 6,
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.6)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            }}
+          >
+            {!isInfoExpanded ? (
+              // 收合狀態
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ 
+                  width: 8, 
+                  height: 8, 
+                  bgcolor: event.status === 'ongoing' ? '#3b82f6' : '#94a3b8',
+                  borderRadius: '50%',
+                  animation: event.status === 'ongoing' ? 'pulse 2s infinite' : 'none',
+                  '@keyframes pulse': {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: 0.5 },
                   },
-                }}
-                action={
+                }} />
+                <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: '#1e293b' }}>
+                  {event.name}
+                </Typography>
+                <TimeIcon sx={{ fontSize: 14, color: '#94a3b8' }} />
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+                  {format(new Date(event.startTime), 'HH:mm')}
+                </Typography>
+              </Box>
+            ) : (
+              // 展開狀態
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <Box>
+                    <Typography sx={{ 
+                      fontSize: '0.625rem', 
+                      fontWeight: 800, 
+                      textTransform: 'uppercase', 
+                      letterSpacing: '0.1em',
+                      color: '#3b82f6',
+                      mb: 0.5,
+                    }}>
+                      {event.status === 'ongoing' ? '進行中' : event.status === 'upcoming' ? '即將開始' : '已結束'}
+                    </Typography>
+                    <Typography sx={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', lineHeight: 1.2 }}>
+                      {event.name}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: '50%', 
+                    bgcolor: '#f1f5f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#94a3b8',
+                  }}>
+                    <CloseIcon sx={{ fontSize: 16 }} />
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {/* 地點 */}
+                  {event.meetingPointName && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Box sx={{ 
+                        width: 32, height: 32, 
+                        bgcolor: '#dbeafe', 
+                        borderRadius: 2,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <LocationIcon sx={{ fontSize: 16, color: '#3b82f6' }} />
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>
+                          {event.meetingPointName}
+                        </Typography>
+                        {event.meetingPointAddress && (
+                          <Typography sx={{ fontSize: '0.625rem', color: '#94a3b8' }}>
+                            {event.meetingPointAddress}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+                  
+                  {/* 時間 */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box sx={{ 
+                      width: 32, height: 32, 
+                      bgcolor: '#ffedd5', 
+                      borderRadius: 2,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <TimeIcon sx={{ fontSize: 16, color: '#f97316' }} />
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>
+                        {format(new Date(event.startTime), 'HH:mm')} – {format(new Date(event.endTime), 'HH:mm')}
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.625rem', color: '#94a3b8' }}>
+                        {format(new Date(event.startTime), 'yyyy/MM/dd (EEEE)', { locale: zhTW })}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* 主揪 + 分享 */}
+                <Box sx={{ 
+                  pt: 2, 
+                  borderTop: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ 
+                      width: 24, height: 24, 
+                      borderRadius: '50%', 
+                      bgcolor: '#dbeafe',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.5rem', fontWeight: 700,
+                    }}>
+                      {ownerDisplayName.charAt(0).toUpperCase()}
+                    </Box>
+                    <Typography sx={{ fontSize: '0.625rem', fontWeight: 500, color: '#94a3b8' }}>
+                      主揪：{ownerDisplayName}
+                    </Typography>
+                  </Box>
                   <Button
                     size="small"
-                    variant={notificationPermission === 'denied' ? 'outlined' : 'contained'}
-                    onClick={handleRequestNotificationPermission}
-                    disabled={requestingPermission}
-                    sx={{
-                      textTransform: 'none',
-                      fontSize: '0.75rem',
+                    startIcon={<ShareIcon sx={{ fontSize: 12 }} />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(window.location.href);
+                      setSnackbar({ open: true, message: '已複製連結！', severity: 'success' });
+                    }}
+                    sx={{ 
+                      fontSize: '0.625rem', 
+                      fontWeight: 800, 
+                      color: '#3b82f6',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
                       minWidth: 'auto',
-                      px: 2,
+                      p: 0.5,
                     }}
                   >
-                    {requestingPermission ? '請求中...' : notificationPermission === 'denied' ? '再次嘗試' : '啟用通知'}
+                    分享連結
                   </Button>
-                }
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {notificationPermission === 'denied' ? (
-                    <>
-                      <NotificationsOffIcon sx={{ fontSize: 18 }} />
-                      <Typography variant="body2">
-                        通知權限已被拒絕。點擊「再次嘗試」或前往瀏覽器設定中重新啟用通知權限，以接收聚會相關通知。
-                      </Typography>
-                    </>
-                  ) : (
-                    <>
-                      <NotificationsIcon sx={{ fontSize: 18 }} />
-                      <Typography variant="body2">
-                        啟用通知以接收「戳一下」和其他聚會相關的推送通知。
-                      </Typography>
-                    </>
-                  )}
                 </Box>
-              </Alert>
+              </Box>
             )}
           </Box>
 
-          {/* 聚會標題 */}
-          <Typography
-            variant="h3"
-            component="h1"
+          {/* 排行榜按鈕 */}
+          <IconButton
+            onClick={() => setShowResultPopup(true)}
             sx={{
-              fontWeight: 600,
-              mb: 1,
-              fontSize: { xs: '1.75rem', sm: '2.25rem' },
-              color: '#1a1a1a',
-              letterSpacing: '-0.02em',
+              width: 48,
+              height: 48,
+              bgcolor: 'rgba(255,255,255,0.8)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: 3,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              border: '1px solid rgba(255,255,255,0.4)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
+              '&:active': { transform: 'scale(0.9)' },
+              transition: 'all 0.2s',
             }}
           >
-            {event.name}
+            <TrophyIcon sx={{ color: '#3b82f6' }} />
+          </IconButton>
+        </Box>
+      </Box>
+
+      {/* 底部成員抽屜 */}
+      <Box sx={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        width: '100%',
+        bgcolor: 'white',
+        borderRadius: '24px 24px 0 0',
+        boxShadow: '0 -20px 50px rgba(0,0,0,0.1)',
+        transition: 'height 0.5s ease-out',
+        height: isDrawerOpen ? '75%' : 120,
+        zIndex: 30,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* 抽屜手柄 */}
+        <Box 
+          onClick={() => setDrawerOpen(!isDrawerOpen)} 
+          sx={{ 
+            width: '100%', 
+            py: 1.5,
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <Box sx={{ width: 48, height: 4, bgcolor: '#e2e8f0', borderRadius: 2 }} />
+        </Box>
+
+        {/* 抽屜標題區 */}
+        <Box sx={{ 
+          px: 3, 
+          pb: 2,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <Typography sx={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' }}>
+            成員列表
           </Typography>
-
-          {/* 主揪資訊 */}
-          {(() => {
-            // 嘗試從 members 中找到 owner 的 member 記錄
-            const ownerMember = event.members?.find(m => m.userId === event.ownerId);
-            const ownerDisplayName = ownerMember?.nickname || 
-              (event.ownerId.includes('_') 
-                ? event.ownerId.split('_')[0] 
-                : event.ownerId);
-            
-            return (
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: 'text.secondary',
-                  mb: 3,
-                  fontSize: '0.875rem',
-                }}
-              >
-                主揪：{ownerDisplayName}
-              </Typography>
-            );
-          })()}
-
-          {/* 進度條區域 */}
-          {progress && (
-            <Box sx={{ mb: 4 }}>
-              {/* 標籤 */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: 'text.secondary',
-                  mb: 1,
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                }}
-              >
-                {progress.label}
-              </Typography>
-
-              {/* 進度條 */}
+          
+          {/* 頭像預覽 */}
+          <Box sx={{ display: 'flex', ml: 'auto' }}>
+            {members.slice(0, 3).map((m, idx) => (
               <Box
+                key={m.id}
                 sx={{
-                  position: 'relative',
-                  height: 10,
-                  bgcolor: '#e0e0e0',
-                  borderRadius: 10,
-                  overflow: 'hidden',
-                  mb: 0.75,
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  border: '2px solid white',
+                  bgcolor: m.arrivalTime ? '#22c55e' : '#e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.625rem',
+                  fontWeight: 700,
+                  color: m.arrivalTime ? 'white' : '#64748b',
+                  ml: idx > 0 ? -1.5 : 0,
                 }}
               >
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    height: '100%',
-                    width: `${progress.progress * 100}%`,
-                    bgcolor: progress.color,
-                    borderRadius: 10,
-                    transition: 'width 0.5s ease-out',
-                  }}
-                />
+                {m.nickname?.charAt(0)?.toUpperCase() || '?'}
               </Box>
-
-              {/* 時間描述 */}
-              {progress.description && (
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: 'block',
-                    color: 'text.secondary',
-                    fontSize: '0.75rem',
-                    textAlign: 'right',
-                  }}
-                >
-                  {progress.description}
-                </Typography>
-              )}
-            </Box>
-          )}
-
-          {/* 聚會詳情 - 緊湊列表 */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* 聚會時間 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <TimeIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-              <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                {new Date(event.startTime).toLocaleString('zh-TW', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  weekday: 'short',
-                })}
-              </Typography>
-            </Box>
-
-            {/* 集合地點 */}
-            {(event.meetingPointName || event.meetingPointAddress) && (
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                <LocationIcon sx={{ color: 'text.secondary', fontSize: 18, mt: 0.25 }} />
-                <Box>
-                  {event.meetingPointName && (
-                    <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                      {event.meetingPointName}
-                    </Typography>
-                  )}
-                  {event.meetingPointAddress && (
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                      {event.meetingPointAddress}
-                    </Typography>
-                  )}
-                </Box>
+            ))}
+            {members.length > 3 && (
+              <Box sx={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                border: '2px solid white',
+                bgcolor: '#f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.625rem',
+                fontWeight: 700,
+                color: '#94a3b8',
+                ml: -1.5,
+              }}>
+                +{members.length - 3}
               </Box>
             )}
-
-            {/* 成員數量 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <PeopleIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-              <Typography variant="body2" sx={{ color: '#1a1a1a', fontWeight: 500, fontSize: '0.875rem' }}>
-                {members.length} 位成員
-              </Typography>
-            </Box>
           </Box>
-        </Paper>
+        </Box>
 
-        {/* 地圖區塊 */}
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 3,
-            borderRadius: 3,
-            bgcolor: 'white',
-            border: '1px solid',
-            borderColor: 'divider',
-            overflow: 'hidden',
-          }}
-        >
-          <MapContainer center={mapCenter} markers={mapMarkers} />
-        </Paper>
-
-        {/* 成員預覽 - 極簡風格（可收合） */}
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 3,
-            borderRadius: 3,
-            bgcolor: 'white',
-            border: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          {/* 標題列 - 可點擊收合 */}
-          <Box
-            sx={{
-              px: 4,
-              pt: 4,
-              pb: 2,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-            }}
-            onClick={() => setMemberListExpanded(!memberListExpanded)}
-          >
-            <Box>
-              <Typography
-                variant="h5"
-                sx={{
-                  mb: 0.5,
-                  fontWeight: 600,
-                  color: '#1a1a1a',
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                參加成員
-              </Typography>
-              
-              {/* 排序說明 */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: 'text.secondary',
-                  fontSize: '0.75rem',
-                }}
-              >
-                依到達狀態排序：已到達 → 分享位置中 → 前往中
-              </Typography>
-            </Box>
-
-            {/* 展開/收合按鈕 */}
-            <IconButton
-              sx={{
-                transform: memberListExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.3s',
-              }}
-            >
-              <ExpandMoreIcon />
-            </IconButton>
-          </Box>
-
-          {/* 可收合的成員列表 */}
-          <Collapse in={memberListExpanded}>
-            <Box sx={{ px: 4, pb: 4 }}>
-              {members.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
+        {/* 成員列表（可滾動） */}
+        <Box sx={{ flex: 1, overflow: 'auto', px: 3, pb: 2 }}>
+          {members.length === 0 ? (
+            <Typography sx={{ color: '#94a3b8', textAlign: 'center', py: 4 }}>
               目前還沒有成員加入
             </Typography>
           ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {members.map((member, index) => {
-                // 定義狀態
-                const getMemberStatus = () => {
-                  if (member.arrivalTime) {
-                    return { text: '已到達', color: '#4caf50' };
-                  }
-                  if (member.shareLocation) {
-                    return { text: '分享位置中', color: '#2196f3' };
-                  }
-                  return { text: '前往中', color: '#bdbdbd' };
-                };
-                const status = getMemberStatus();
-                const isCurrentUser = member.id === currentMemberId;
-                const isOwner = event && member.userId === event.ownerId;
+            members.map((member) => {
+              const isCurrentUser = member.id === currentMemberId;
+              const isOwner = event && member.userId === event.ownerId;
+              const eta = membersETA.get(member.id);
 
-                return (
-                  <Box
-                    key={member.id}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      py: 2.5,
-                      px: 2,
-                      mx: -2,
-                      borderTop: index === 0 ? 'none' : '1px solid',
-                      borderColor: 'divider',
-                      bgcolor: isOwner && isCurrentUser ? '#fff8e1' : isCurrentUser ? '#e3f2fd' : isOwner ? '#fff8e1' : 'transparent',
-                      borderRadius: isCurrentUser || isOwner ? 2 : 0,
-                    }}
-                  >
-                    {/* Avatar */}
-                    {member.avatar ? (
-                      <Box
-                        component="img"
-                        src={member.avatar}
-                        alt={member.nickname || '成員'}
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: '50%',
-                          border: `2px solid ${isCurrentUser ? status.color : '#e0e0e0'}`,
-                          flexShrink: 0,
-                          objectFit: 'cover',
-                        }}
-                      />
-                    ) : (
-                    <Box
+              return (
+                <Box
+                  key={member.id}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    p: 2,
+                    borderRadius: 3,
+                    border: '1px solid',
+                    borderColor: member.arrivalTime ? '#dcfce7' : '#f1f5f9',
+                    bgcolor: member.arrivalTime ? '#f0fdf4' : 'white',
+                    mb: 1.5,
+                  }}
+                >
+                  {/* 頭像 */}
+                  <Box sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2,
+                    bgcolor: member.arrivalTime ? '#22c55e' : '#e2e8f0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.25rem',
+                    fontWeight: 800,
+                    color: member.arrivalTime ? 'white' : '#64748b',
+                    flexShrink: 0,
+                  }}>
+                    {member.nickname?.charAt(0)?.toUpperCase() || '?'}
+                  </Box>
+
+                  {/* 成員資訊 */}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
+                      <Typography sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9375rem' }}>
+                        {member.nickname}
+                      </Typography>
+                      {isOwner && (
+                        <Chip
+                          label="主揪"
+                          size="small"
+                          sx={{
+                            height: 18,
+                            fontSize: '0.625rem',
+                            bgcolor: '#ff9800',
+                            color: 'white',
+                            fontWeight: 700,
+                          }}
+                        />
+                      )}
+                      {isCurrentUser && (
+                        <Chip
+                          label="你"
+                          size="small"
+                          sx={{
+                            height: 18,
+                            fontSize: '0.625rem',
+                            bgcolor: '#3b82f6',
+                            color: 'white',
+                            fontWeight: 700,
+                          }}
+                        />
+                      )}
+                    </Box>
+                    <Typography sx={{ 
+                      fontSize: '0.625rem', 
+                      fontWeight: 800, 
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      color: '#94a3b8',
+                    }}>
+                      {member.arrivalTime 
+                        ? `已到達 ${format(new Date(member.arrivalTime), 'HH:mm')}`
+                        : eta 
+                          ? `約 ${eta.duration} 抵達`
+                          : '前往中...'
+                      }
+                    </Typography>
+                  </Box>
+
+                  {/* 戳人按鈕（只有已到達的用戶才能戳未到達且非自己的成員） */}
+                  {hasArrived && !member.arrivalTime && !isCurrentUser && (
+                    <IconButton
+                      onClick={() => handlePokeMember(member.id)}
+                      disabled={pokingMemberId === member.id}
                       sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: '50%',
-                        bgcolor: isCurrentUser ? status.color : '#f5f5f5',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: isCurrentUser ? 'white' : '#666',
-                        fontWeight: 600,
-                        fontSize: '1.1rem',
-                        border: `2px solid ${isCurrentUser ? 'white' : '#e0e0e0'}`,
-                        flexShrink: 0,
+                        width: 40,
+                        height: 40,
+                        borderRadius: 2,
+                        bgcolor: pokingMemberId === member.id ? '#f97316' : '#fef3c7',
+                        color: pokingMemberId === member.id ? 'white' : '#f97316',
+                        '&:hover': { bgcolor: '#fed7aa', color: '#ea580c' },
+                        transition: 'all 0.2s',
                       }}
                     >
-                      {member.nickname?.charAt(0) || '?'}
-                    </Box>
-                    )}
-                    
-                    {/* 成員資訊 */}
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography
-                        variant="body1"
-                        sx={{
-                          fontWeight: 500,
-                          color: '#1a1a1a',
-                          mb: 0.3,
-                        }}
-                      >
-                        {member.nickname}
-                        {isOwner && (
-                          <Chip
-                            label="主揪"
-                            size="small"
-                            sx={{
-                              ml: 1,
-                              height: 20,
-                              fontSize: '0.7rem',
-                              bgcolor: '#ff9800',
-                              color: 'white',
-                              fontWeight: 600,
-                            }}
-                          />
-                        )}
-                        {isCurrentUser && (
-                          <Chip
-                            label="你"
-                            size="small"
-                            sx={{
-                              ml: 1,
-                              height: 20,
-                              fontSize: '0.7rem',
-                              bgcolor: '#1976d2',
-                              color: 'white',
-                            }}
-                          />
-                        )}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: 'text.secondary',
-                          fontSize: '0.8125rem',
-                        }}
-                      >
-                        {member.arrivalTime 
-                          ? '已到達'
-                          : (() => {
-                              const eta = membersETA.get(member.id);
-                              if (eta) {
-                                return `約 ${eta.duration} 抵達`;
-                              }
-                              return status.text;
-                            })()}
-                      </Typography>
-                    </Box>
-
-                    {/* 狀態指示器 */}
-                    <Box
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        bgcolor: status.color,
-                        flexShrink: 0,
-                      }}
-                    />
-
-                    {/* 戳人按鈕（不能戳自己） */}
-                    {!isCurrentUser && hasJoined && (
-                      <IconButton
-                        size="small"
-                        onClick={() => handlePokeMember(member.id)}
-                        disabled={pokingMemberId === member.id}
-                        sx={{
-                          color: '#ff6b6b',
-                          '&:hover': {
-                            bgcolor: '#ffe0e0',
-                            transform: 'scale(1.1)',
-                          },
-                          transition: 'all 0.2s',
-                        }}
-                        title="戳一下"
-                      >
-                        <PokeIcon />
-                      </IconButton>
-                    )}
-                  </Box>
-                );
-              })}
-            </Box>
+                      <PokeIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  )}
+                </Box>
+              );
+            })
           )}
-            </Box>
-          </Collapse>
-        </Paper>
+        </Box>
 
-        {/* 「我到了」按鈕 - 成員列表下方 */}
-        {!hasArrived && !isEventEnded && (
-          <Paper
-            elevation={0}
-            sx={{
-              mt: 3,
-              p: 3,
-              borderRadius: 3,
-              bgcolor: 'white',
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-          >
+        {/* 「我到了」按鈕（固定在抽屜底部） */}
+        <Box sx={{ 
+          p: 3, 
+          pt: 2,
+          borderTop: '1px solid #e2e8f0',
+          bgcolor: 'white',
+        }}>
+          {!hasArrived && !isEventEnded ? (
             <Button
+              fullWidth
               variant="contained"
               size="large"
-              fullWidth
+              disabled={!canMarkArrival || marking}
               onClick={handleMarkArrival}
-              disabled={marking}
-              startIcon={marking ? <CircularProgress size={20} sx={{ color: 'white' }} /> : <CheckIcon />}
               sx={{
                 py: 2,
-                borderRadius: 2,
+                borderRadius: 3,
+                bgcolor: canMarkArrival ? '#2563eb' : '#94a3b8',
+                fontWeight: 700,
+                fontSize: '1rem',
                 textTransform: 'none',
-                fontSize: '1.125rem',
-                fontWeight: 600,
-                bgcolor: '#4caf50',
+                boxShadow: canMarkArrival ? '0 8px 24px rgba(37, 99, 235, 0.4)' : 'none',
+                border: '4px solid white',
                 '&:hover': {
-                  bgcolor: '#45a049',
+                  bgcolor: canMarkArrival ? '#1d4ed8' : '#94a3b8',
                 },
-                boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
+                '&:active': { transform: 'scale(0.98)' },
+                '&.Mui-disabled': {
+                  bgcolor: '#94a3b8',
+                  color: 'white',
+                },
               }}
             >
-              {marking ? '標記中...' : '我到了！'}
+              {marking ? (
+                <CircularProgress size={24} sx={{ color: 'white' }} />
+              ) : canMarkArrival ? (
+                "I'M HERE 🏁"
+              ) : distanceToMeetingPoint !== null ? (
+                `距離 ${Math.round(distanceToMeetingPoint)}m`
+              ) : (
+                '等待位置資訊...'
+              )}
             </Button>
-          </Paper>
-        )}
-
-        {/* 「查看結果」按鈕 - 聚會結束後顯示 */}
-        {isEventEnded && (
-          <Paper
-            elevation={0}
-            sx={{
-              mt: 3,
-              p: 2.5,
-              borderRadius: 2,
-              bgcolor: 'white',
-              border: '1px solid',
-              borderColor: '#E5E9F0',
-            }}
-          >
+          ) : hasArrived ? (
+            <Box sx={{
+              py: 2,
+              px: 4,
+              borderRadius: 3,
+              bgcolor: '#22c55e',
+              color: 'white',
+              textAlign: 'center',
+              fontWeight: 700,
+              fontSize: '1rem',
+            }}>
+              ✓ 已到達
+            </Box>
+          ) : isEventEnded ? (
             <Button
+              fullWidth
               variant="outlined"
               size="large"
-              fullWidth
               onClick={() => setShowResultPopup(true)}
-              startIcon={<TrophyIcon sx={{ fontSize: 20 }} />}
+              startIcon={<TrophyIcon />}
               sx={{
                 py: 1.5,
-                borderRadius: 2,
-                textTransform: 'none',
+                borderRadius: 3,
+                fontWeight: 700,
                 fontSize: '1rem',
-                fontWeight: 600,
-                borderColor: 'primary.main',
-                color: 'primary.main',
+                textTransform: 'none',
                 borderWidth: 2,
-                '&:hover': {
-                  borderWidth: 2,
-                  borderColor: 'primary.dark',
-                  bgcolor: 'primary.light',
-                  color: 'primary.dark',
-                },
+                '&:hover': { borderWidth: 2 },
               }}
             >
               查看排行榜結果
             </Button>
-          </Paper>
-        )}
+          ) : null}
+        </Box>
+      </Box>
 
-        {/* 底部提示 - 卡片樣式 */}
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 3,
-            py: 2,
-            px: 3,
-            borderRadius: 2,
-            bgcolor: '#f5f5f5',
-            border: '1px solid',
-            borderColor: '#e0e0e0',
-            textAlign: 'center',
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              color: 'text.secondary',
-              fontSize: '0.75rem',
-              fontWeight: 500,
-            }}
-          >
-            📍 EventRoom 完整版 • Guest 加入 + 地圖顯示 + 到達標記
-          </Typography>
-        </Paper>
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        message={snackbar.message}
+        sx={{ zIndex: 1300 }}
+      />
 
-        {/* Snackbar */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={3000}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          message={snackbar.message}
+      {/* EventResultPopup */}
+      {id && (
+        <EventResultPopup
+          open={showResultPopup}
+          onClose={() => setShowResultPopup(false)}
+          eventId={Number(id)}
         />
-
-        {/* EventResultPopup */}
-        {id && (
-          <EventResultPopup
-            open={showResultPopup}
-            onClose={() => setShowResultPopup(false)}
-            eventId={Number(id)}
-          />
-        )}
-      </Container>
+      )}
     </Box>
   );
 }
-

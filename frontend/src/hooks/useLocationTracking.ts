@@ -69,15 +69,18 @@ export function useLocationTracking({
       windowEnd = new Date(end.getTime() + LOCATION_CONFIG.TIME_WINDOW_AFTER);
     }
 
-    console.log('[useLocationTracking] Time window check', {
-      now: now.toISOString(),
-      windowStart: windowStart.toISOString(),
-      windowEnd: windowEnd.toISOString(),
-      isWithinWindow: now >= windowStart && now <= windowEnd,
-      isDevelopment,
-      eventStart: start.toISOString(),
-      eventEnd: end.toISOString(),
-    });
+    // 只在開發模式且首次檢查時記錄，避免過多日誌
+    if (isDevelopment && !watchIdRef.current) {
+      console.log('[useLocationTracking] Time window check', {
+        now: now.toISOString(),
+        windowStart: windowStart.toISOString(),
+        windowEnd: windowEnd.toISOString(),
+        isWithinWindow: now >= windowStart && now <= windowEnd,
+        isDevelopment,
+        eventStart: start.toISOString(),
+        eventEnd: end.toISOString(),
+      });
+    }
 
     // 檢查是否在時間窗內（開發模式下，只要不超過活動結束後 30 分鐘即可）
     if (now > windowEnd) {
@@ -115,28 +118,27 @@ export function useLocationTracking({
 
         // 立即更新本地状态，让地图立即显示位置
         if (onLocationUpdate) {
-          console.log('[useLocationTracking] Immediately updating local state', {
-            lat: latitude,
-            lng: longitude,
-          });
           onLocationUpdate(latitude, longitude);
         }
 
         try {
-          console.log('[useLocationTracking] Updating location to backend', {
-            lat: latitude,
-            lng: longitude,
-            eventId,
-          });
-
           await eventsApi.updateLocation(eventId, {
             lat: latitude,
             lng: longitude,
           });
-
-          console.log('[useLocationTracking] Location updated successfully');
-        } catch (error) {
-          console.error('[useLocationTracking] Failed to update location:', error);
+        } catch (error: any) {
+          // 只在開發模式或非 400 錯誤時記錄詳細錯誤
+          const isValidationError = error?.response?.status === 400;
+          if (!isValidationError || import.meta.env.DEV) {
+            console.error('[useLocationTracking] Failed to update location:', {
+              error,
+              status: error?.response?.status,
+              message: error?.response?.data?.message || error?.message,
+              eventId,
+              lat: latitude,
+              lng: longitude,
+            });
+          }
           onError?.(error instanceof Error ? error : new Error('Failed to update location'));
         }
       },

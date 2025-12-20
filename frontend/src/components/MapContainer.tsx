@@ -20,6 +20,8 @@ interface MapContainerProps {
   }>;
   showRoutes?: boolean;
   onMarkerDragEnd?: (id: number, lat: number, lng: number) => void;
+  /** 是否全屏顯示（隱藏地圖控制項） */
+  fullscreen?: boolean;
 }
 
 const DEFAULT_CENTER = { lat: 25.033, lng: 121.565 }; // 台北
@@ -38,7 +40,7 @@ function createCircleMarkerIcon(label: string, color: string = '#2196f3'): strin
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], showRoutes = false, onMarkerDragEnd }: MapContainerProps) {
+function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], showRoutes = false, onMarkerDragEnd, fullscreen = false }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -59,9 +61,12 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
         const mapInstance = new google.maps.Map(mapRef.current, {
           center: center || DEFAULT_CENTER,
           zoom: 13,
-          mapTypeControl: true,
+          // 全屏模式下隱藏所有控制項，避免與自定義 UI 重疊
+          mapTypeControl: !fullscreen,
           streetViewControl: false,
-          fullscreenControl: true,
+          fullscreenControl: !fullscreen,
+          zoomControl: !fullscreen,
+          scaleControl: !fullscreen,
         });
 
         setMap(mapInstance);
@@ -195,8 +200,8 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
       ref={mapRef}
       sx={{
         width: '100%',
-        height: '500px',
-        borderRadius: 1,
+        height: fullscreen ? '100%' : '500px',
+        borderRadius: fullscreen ? 0 : 1,
         overflow: 'hidden',
       }}
     />
