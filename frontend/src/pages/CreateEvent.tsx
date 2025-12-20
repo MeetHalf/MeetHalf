@@ -62,7 +62,7 @@ export default function CreateEvent() {
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
-    severity: 'success' as 'success' | 'error' | 'info',
+    severity: 'success' as 'success' | 'error' | 'info' | 'warning',
   });
 
   // Load Google Maps API on mount
