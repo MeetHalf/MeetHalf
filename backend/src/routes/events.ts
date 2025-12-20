@@ -27,6 +27,8 @@ import { createCache, makeCacheKey } from '../lib/cache';
 import { memberService } from '../services/MemberService';
 import { pokeService } from '../services/PokeService';
 import { eventService } from '../services/EventService';
+import { etaService } from '../services/ETAService';
+import { TravelMode } from '../config/eta';
 import { eventRepository } from '../repositories/EventRepository';
 import { memberRepository } from '../repositories/MemberRepository';
 import { generateGuestToken } from '../utils/jwt';
@@ -2116,8 +2118,15 @@ router.post('/:id/join', optionalAuthMiddleware, async (req: Request, res: Respo
 // POST /events/:id/location - Update member location
 router.post('/:id/location', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log('[Events Route] Received location update request:', {
+      eventId: req.params.id,
+      body: req.body,
+      user: req.user,
+    });
+
     const paramsValidation = eventParamsSchema.safeParse(req.params);
     if (!paramsValidation.success) {
+      console.warn('[Events Route] Invalid event ID:', paramsValidation.error.errors);
       res.status(400).json({
         code: 'VALIDATION_ERROR',
         message: 'Invalid event ID',
@@ -2128,6 +2137,7 @@ router.post('/:id/location', optionalAuthMiddleware, async (req: Request, res: R
 
     const bodyValidation = updateLocationSchema.safeParse(req.body);
     if (!bodyValidation.success) {
+      console.warn('[Events Route] Invalid request body:', bodyValidation.error.errors);
       res.status(400).json({
         code: 'VALIDATION_ERROR',
         message: 'Invalid input',
@@ -2157,12 +2167,19 @@ router.post('/:id/location', optionalAuthMiddleware, async (req: Request, res: R
     }
 
     if (!memberId) {
+      console.warn('[Events Route] No memberId found, unauthorized');
       res.status(401).json({
         code: 'UNAUTHORIZED',
         message: 'Authentication required',
       });
       return;
     }
+
+    console.log('[Events Route] Calling memberService.updateLocation:', {
+      memberId,
+      eventId: id,
+      location: { lat: bodyValidation.data.lat, lng: bodyValidation.data.lng },
+    });
 
     const updatedMember = await memberService.updateLocation(memberId, bodyValidation.data);
 
@@ -2235,6 +2252,7 @@ router.post('/:id/location', optionalAuthMiddleware, async (req: Request, res: R
  *         description: Event not found
  */
 // GET /events/:id/members/eta - Get ETA for all members
+// This now uses ETAService which caches ETA data and handles throttling
 router.get('/:id/members/eta', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const paramsValidation = eventParamsSchema.safeParse(req.params);
@@ -2272,53 +2290,40 @@ router.get('/:id/members/eta', optionalAuthMiddleware, async (req: Request, res:
       (m) => m.shareLocation && m.lat && m.lng && !m.arrivalTime
     );
 
-    // Calculate ETA for each member
-
-    const etaResults = await Promise.all(
-      membersWithLocation.map(async (member) => {
-        try {
-          const directionsResult = await gmapsClient.directions({
-            params: {
-              origin: `${member.lat},${member.lng}`,
-              destination: `${event.meetingPointLat},${event.meetingPointLng}`,
-              mode: (member.travelMode || 'driving') as any,
-              departure_time: Math.floor(Date.now() / 1000),
-              key: GMAPS_KEY,
-            },
-          });
-
-          if (directionsResult.data.status === 'OK' && directionsResult.data.routes.length > 0) {
-            const route = directionsResult.data.routes[0];
-            const leg = route.legs[0];
-
-            return {
-              memberId: member.id,
-              nickname: member.nickname || member.userId || 'Unknown',
-              eta: {
-                duration: leg.duration.text,
-                durationValue: leg.duration.value, // in seconds
-                distance: leg.distance.text,
-              },
-            };
-          }
-        } catch (error) {
-          console.error(`Error calculating ETA for member ${member.id}:`, error);
-        }
-
+    // Get ETA from ETAService (uses cached data with movement detection and throttling)
+    const etaResults = membersWithLocation.map((member) => {
+      const cachedETA = etaService.getMemberETA(member.id);
+      
+      if (cachedETA && cachedETA.movementStarted) {
         return {
           memberId: member.id,
           nickname: member.nickname || member.userId || 'Unknown',
-          eta: null,
+          eta: cachedETA.etaSeconds !== null ? {
+            duration: cachedETA.etaText,
+            durationValue: cachedETA.etaSeconds,
+            distance: cachedETA.distance,
+          } : null,
+          movementStarted: cachedETA.movementStarted,
+          isCountdown: cachedETA.isCountdown,
         };
-      })
-    );
+      }
+
+      // No cached ETA or movement not started yet
+      return {
+        memberId: member.id,
+        nickname: member.nickname || member.userId || 'Unknown',
+        eta: null,
+        movementStarted: cachedETA?.movementStarted ?? false,
+        isCountdown: false,
+      };
+    });
 
     res.json({ members: etaResults });
   } catch (error: any) {
-    console.error('Error calculating ETA:', error);
+    console.error('Error getting ETA:', error);
     res.status(500).json({
       code: 'INTERNAL_ERROR',
-      message: 'Failed to calculate ETA',
+      message: 'Failed to get ETA',
     });
   }
 });

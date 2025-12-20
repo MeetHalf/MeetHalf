@@ -1,8 +1,10 @@
 import { memberRepository } from '../repositories/MemberRepository';
 import { eventRepository } from '../repositories/EventRepository';
 import { eventService } from './EventService';
+import { etaService } from './ETAService';
 import { triggerEventChannel } from '../lib/pusher';
 import { getAnonymousUserId } from '../lib/userUtils';
+import { TravelMode } from '../config/eta';
 
 export class MemberService {
   /**
@@ -73,7 +75,7 @@ export class MemberService {
       travelMode: data.travelMode,
     });
 
-    // Trigger Pusher event
+    // Trigger Pusher event for location update
     triggerEventChannel(event.id, 'location-update', {
       memberId: updatedMember.id,
       nickname: updatedMember.nickname || updatedMember.userId || 'Unknown',
@@ -81,6 +83,39 @@ export class MemberService {
       lng: updatedMember.lng,
       timestamp: new Date().toISOString(),
     });
+
+    // Calculate and broadcast ETA update (if event has meeting point)
+    if (event.meetingPointLat && event.meetingPointLng && updatedMember.shareLocation) {
+      const travelMode = (updatedMember.travelMode || 'driving') as TravelMode;
+      const nickname = updatedMember.nickname || updatedMember.userId || 'Unknown';
+      
+      console.log('[MemberService] Calling ETA service for location update:', {
+        memberId: updatedMember.id,
+        eventId: event.id,
+        lat: data.lat,
+        lng: data.lng,
+        travelMode,
+        meetingPoint: `${event.meetingPointLat},${event.meetingPointLng}`,
+      });
+      
+      // ETAService will handle movement detection, throttling, and Pusher broadcast
+      await etaService.handleLocationUpdate(
+        updatedMember.id,
+        event.id,
+        data.lat,
+        data.lng,
+        travelMode,
+        event.meetingPointLat,
+        event.meetingPointLng,
+        nickname
+      );
+    } else {
+      console.log('[MemberService] Skipping ETA calculation:', {
+        memberId: updatedMember.id,
+        hasMeetingPoint: !!(event.meetingPointLat && event.meetingPointLng),
+        shareLocation: updatedMember.shareLocation,
+      });
+    }
 
     return updatedMember;
   }
@@ -107,6 +142,9 @@ export class MemberService {
     const arrivalStatus = eventService.calculateArrivalStatus(event, arrivalTime);
 
     const updatedMember = await memberRepository.updateArrivalTime(memberId, arrivalTime);
+
+    // Clear ETA state for this member (no longer needed)
+    etaService.clearMemberState(memberId);
 
     // Trigger Pusher event
     triggerEventChannel(event.id, 'member-arrived', {

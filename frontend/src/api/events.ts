@@ -55,6 +55,21 @@ export interface MemberETA {
     durationValue: number; // seconds
     distance: string; // "2.5 公里"
   } | null;
+  movementStarted?: boolean; // 是否已開始移動
+  isCountdown?: boolean; // 是否為倒數模式（transit）
+}
+
+// ETA 更新事件（來自 Pusher）
+export interface ETAUpdateEvent {
+  memberId: number;
+  nickname: string;
+  eta: number | null; // ETA in seconds
+  etaText: string | null;
+  distance: string | null;
+  distanceValue: number | null;
+  movementStarted: boolean;
+  isCountdown: boolean;
+  timestamp: number;
 }
 
 export interface CreateEventRequest {

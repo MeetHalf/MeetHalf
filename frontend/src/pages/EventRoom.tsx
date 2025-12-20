@@ -38,7 +38,7 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
-import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type MemberETA } from '../api/events';
+import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type MemberETA, type ETAUpdateEvent } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
 import { useLocationTracking } from '../hooks/useLocationTracking';
@@ -84,8 +84,14 @@ export default function EventRoom() {
   // 結果彈出視窗
   const [showResultPopup, setShowResultPopup] = useState(false);
   
-  // ETA 相關狀態
-  const [membersETA, setMembersETA] = useState<Map<number, MemberETA['eta']>>(new Map());
+  // ETA 相關狀態（包含移動狀態和倒數模式）
+  interface ETAState {
+    eta: MemberETA['eta'];
+    movementStarted: boolean;
+    isCountdown: boolean;
+    lastUpdated: number; // timestamp for countdown calculation
+  }
+  const [membersETA, setMembersETA] = useState<Map<number, ETAState>>(new Map());
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -631,57 +637,115 @@ export default function EventRoom() {
     },
   });
 
-  // 定期更新 ETA
+  // 初始化 ETA（只獲取一次，之後依賴 Pusher 推送）
   useEffect(() => {
     if (!event || !id || !event.meetingPointLat || !event.meetingPointLng) {
       return;
     }
 
-    let consecutiveFailures = 0;
-    const MAX_CONSECUTIVE_FAILURES = 3;
-
-    const updateETA = async () => {
+    const fetchInitialETA = async () => {
       try {
         const response = await eventsApi.getMembersETA(Number(id));
-        const etaMap = new Map<number, MemberETA['eta']>();
+        const etaMap = new Map<number, ETAState>();
+        const now = Date.now();
         response.members.forEach((member) => {
-          etaMap.set(member.memberId, member.eta);
+          etaMap.set(member.memberId, {
+            eta: member.eta,
+            movementStarted: member.movementStarted ?? false,
+            isCountdown: member.isCountdown ?? false,
+            lastUpdated: now,
+          });
         });
         setMembersETA(etaMap);
-        consecutiveFailures = 0; // 重置失敗計數
       } catch (error: any) {
-        consecutiveFailures++;
-        
-        // 檢查是否為網絡錯誤（後端不可用）
-        const isNetworkError = 
-          error?.code === 'ERR_NETWORK' ||
-          error?.code === 'ERR_CONNECTION_REFUSED' ||
-          error?.code === 'ERR_EMPTY_RESPONSE' ||
-          error?.message?.includes('Network Error') ||
-          error?.message?.includes('Connection refused');
-        
-        // 如果是網絡錯誤且連續失敗次數較少，靜默處理（避免 Console 噪音）
-        if (isNetworkError && consecutiveFailures <= MAX_CONSECUTIVE_FAILURES) {
-          // 只在開發模式下記錄第一次失敗
-          if (consecutiveFailures === 1 && import.meta.env.DEV) {
-            console.warn('[EventRoom] Backend unavailable, ETA updates paused');
-          }
-          return;
+        if (import.meta.env.DEV) {
+          console.warn('[EventRoom] Failed to fetch initial ETA:', error);
         }
-        
-        // 其他錯誤或連續失敗過多時才記錄
-        console.error('[EventRoom] Failed to update ETA:', error);
       }
     };
 
-    // 立即更新一次
-    updateETA();
+    fetchInitialETA();
+  }, [event, id]);
 
-    // 定期更新
-    const interval = setInterval(updateETA, LOCATION_CONFIG.ETA_UPDATE_INTERVAL);
+  // 訂閱 Pusher eta-update 事件
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'eta-update',
+    onEvent: (data: ETAUpdateEvent) => {
+      if (import.meta.env.DEV) {
+        console.log('[EventRoom] Received eta-update event:', {
+          memberId: data.memberId,
+          eta: data.eta,
+          etaText: data.etaText,
+          movementStarted: data.movementStarted,
+          isCountdown: data.isCountdown,
+        });
+      }
+      setMembersETA(prev => {
+        const newMap = new Map(prev);
+        newMap.set(data.memberId, {
+          eta: data.eta !== null ? {
+            duration: data.etaText || '',
+            durationValue: data.eta,
+            distance: data.distance || '',
+          } : null,
+          movementStarted: data.movementStarted,
+          isCountdown: data.isCountdown,
+          lastUpdated: data.timestamp,
+        });
+        return newMap;
+      });
+    },
+  });
+
+  // Transit 模式本地倒數（每秒更新一次）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMembersETA(prev => {
+        let hasChanges = false;
+        const newMap = new Map(prev);
+        
+        prev.forEach((state, memberId) => {
+          // 只對 isCountdown 模式且有有效 ETA 的成員進行倒數
+          if (state.isCountdown && state.eta && state.eta.durationValue > 0) {
+            const elapsed = Math.floor((Date.now() - state.lastUpdated) / 1000);
+            const newDurationValue = Math.max(0, state.eta.durationValue - elapsed);
+            
+            // 只有當值有變化時才更新
+            if (newDurationValue !== state.eta.durationValue) {
+              hasChanges = true;
+              newMap.set(memberId, {
+                ...state,
+                eta: {
+                  ...state.eta,
+                  durationValue: newDurationValue,
+                  duration: formatDuration(newDurationValue),
+                },
+                lastUpdated: Date.now(), // 重置時間戳
+              });
+            }
+          }
+        });
+        
+        return hasChanges ? newMap : prev;
+      });
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [event, id]);
+  }, []);
+
+  // 格式化秒數為可讀文字
+  const formatDuration = (seconds: number): string => {
+    if (seconds <= 0) return '即將到達';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours} 小時 ${minutes} 分鐘`;
+    }
+    return `${minutes} 分鐘`;
+  };
 
   // 載入 Event 數據
   useEffect(() => {
@@ -1028,8 +1092,15 @@ export default function EventRoom() {
     members
       .filter((m) => m.lat && m.lng && m.shareLocation)
       .forEach((m) => {
-        const eta = membersETA.get(m.id);
-        const etaText = eta ? `約 ${eta.duration}` : '';
+        const etaState = membersETA.get(m.id);
+        const eta = etaState?.eta;
+        // 顯示 ETA 或「等待出發」
+        let etaText = '';
+        if (etaState && !etaState.movementStarted) {
+          etaText = '等待出發...';
+        } else if (eta) {
+          etaText = `約 ${eta.duration}`;
+        }
         const title = m.arrivalTime 
           ? `${m.nickname || '成員'} - 已到達`
           : `${m.nickname || '成員'}${etaText ? ` - ${etaText}` : ''}`;
@@ -1541,6 +1612,68 @@ export default function EventRoom() {
             <TrophyIcon sx={{ color: '#3b82f6' }} />
           </IconButton>
         </Box>
+
+        {/* 通知權限提示（僅在未啟用時顯示） */}
+        {notificationPermission !== 'granted' && (
+          <Box
+            onClick={handleRequestNotificationPermission}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              mt: 2,
+              px: 2,
+              py: 1.5,
+              bgcolor: notificationPermission === 'denied' 
+                ? 'rgba(239, 68, 68, 0.9)' 
+                : 'rgba(59, 130, 246, 0.9)',
+              borderRadius: 3,
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.3)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              '&:hover': { 
+                transform: 'scale(1.02)',
+                boxShadow: '0 6px 16px rgba(0,0,0,0.2)',
+              },
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
+            {notificationPermission === 'denied' ? (
+              <NotificationsOffIcon sx={{ fontSize: 18, color: 'white' }} />
+            ) : (
+              <NotificationsIcon sx={{ fontSize: 18, color: 'white' }} />
+            )}
+            <Typography sx={{ 
+              fontSize: '0.75rem', 
+              fontWeight: 600, 
+              color: 'white',
+              flex: 1,
+            }}>
+              {notificationPermission === 'denied' 
+                ? '通知已被拒絕，點擊再次嘗試' 
+                : '點擊啟用通知，接收戳一下提醒'}
+            </Typography>
+            {requestingPermission ? (
+              <CircularProgress size={16} sx={{ color: 'white' }} />
+            ) : (
+              <Box sx={{ 
+                px: 1.5, 
+                py: 0.5, 
+                bgcolor: 'rgba(255,255,255,0.2)', 
+                borderRadius: 2,
+                fontSize: '0.625rem',
+                fontWeight: 800,
+                color: 'white',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}>
+                {notificationPermission === 'denied' ? '再試一次' : '啟用'}
+              </Box>
+            )}
+          </Box>
+        )}
       </Box>
 
       {/* 底部成員抽屜 */}
@@ -1640,7 +1773,9 @@ export default function EventRoom() {
             members.map((member) => {
               const isCurrentUser = member.id === currentMemberId;
               const isOwner = event && member.userId === event.ownerId;
-              const eta = membersETA.get(member.id);
+              const etaState = membersETA.get(member.id);
+              const eta = etaState?.eta;
+              const movementStarted = etaState?.movementStarted ?? true; // 預設顯示「前往中」
 
               return (
                 <Box
@@ -1716,9 +1851,11 @@ export default function EventRoom() {
                     }}>
                       {member.arrivalTime 
                         ? `已到達 ${format(new Date(member.arrivalTime), 'HH:mm')}`
-                        : eta 
-                          ? `約 ${eta.duration} 抵達`
-                          : '前往中...'
+                        : !movementStarted
+                          ? '等待出發...'
+                          : eta 
+                            ? `約 ${eta.duration} 抵達`
+                            : '前往中...'
                       }
                     </Typography>
                   </Box>
