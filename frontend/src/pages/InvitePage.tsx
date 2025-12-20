@@ -47,12 +47,18 @@ export default function InvitePage() {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    console.log('[InvitePage] Component mounted, token:', token);
     // Check if we're in PWA mode
-    setIsStandalone(isPWA());
+    const pwaStatus = isPWA();
+    setIsStandalone(pwaStatus);
+    console.log('[InvitePage] PWA status:', pwaStatus);
   }, []);
 
   useEffect(() => {
+    console.log('[InvitePage] Token effect triggered, token:', token);
+    
     if (!token) {
+      console.error('[InvitePage] No token provided');
       setError('無效的邀請連結');
       setLoading(false);
       return;
@@ -60,8 +66,10 @@ export default function InvitePage() {
 
     // Resolve token to event ID
     const resolveToken = async () => {
+      console.log('[InvitePage] Starting to resolve token:', token);
       try {
         const response = await inviteApi.resolveInviteToken(token);
+        console.log('[InvitePage] Token resolved successfully:', response);
         setEventId(response.eventId);
         setLoading(false);
 
@@ -83,8 +91,13 @@ export default function InvitePage() {
           }
         }
       } catch (err: any) {
-        console.error('Error resolving invite token:', err);
-        setError(err.response?.data?.message || '無法解析邀請連結，請確認連結是否正確');
+        console.error('[InvitePage] Error resolving invite token:', err);
+        console.error('[InvitePage] Error details:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status,
+        });
+        setError(err.response?.data?.message || err.message || '無法解析邀請連結，請確認連結是否正確');
         setLoading(false);
       }
     };
