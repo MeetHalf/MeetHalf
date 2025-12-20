@@ -249,6 +249,27 @@ export const eventsApi = {
     const response = await api.get(`/events/${eventId}/result`);
     return response.data;
   },
+
+  // Get share token for event
+  async getShareToken(eventId: number): Promise<{ token: string }> {
+    const response = await api.get(`/events/${eventId}/share-token`);
+    return response.data;
+  },
+
+  // Generate or regenerate share token for event
+  async createShareToken(eventId: number): Promise<{ token: string }> {
+    const response = await api.post(`/events/${eventId}/share-token`);
+    return response.data;
+  },
+};
+
+// Invite API
+export const inviteApi = {
+  // Resolve invite token to event ID
+  async resolveInviteToken(token: string): Promise<{ eventId: number }> {
+    const response = await api.get(`/invite/${token}`);
+    return response.data;
+  },
 };
 
 // Members API

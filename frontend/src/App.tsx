@@ -4,6 +4,22 @@ import { CssBaseline, ThemeProvider, Box, CircularProgress } from '@mui/material
 import { AuthProvider } from './hooks/useAuth';
 import { router } from './router';
 import { theme } from './theme';
+import { PENDING_INVITE_ROUTE_KEY } from './pages/InvitePage';
+
+// PWA detection utility
+function isPWA(): boolean {
+  // iOS Safari
+  if ((window.navigator as any).standalone === true) {
+    return true;
+  }
+  
+  // Android Chrome and other browsers
+  if (window.matchMedia('(display-mode: standalone)').matches) {
+    return true;
+  }
+  
+  return false;
+}
 
 // Handle temporary auth token from URL (mobile fallback for when cookies are blocked)
 // This uses a secure one-time token exchange mechanism
@@ -79,6 +95,20 @@ function App() {
         // We keep isExchangingToken true because handleTempAuthTokenFromURL 
         // will trigger a reload or auth refresh shortly
       });
+      return;
+    }
+
+    // Handle PWA navigation from localStorage
+    // If user is in PWA mode and has a pending invite route, navigate to it
+    if (isPWA()) {
+      const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
+      if (pendingRoute && pendingRoute !== window.location.pathname) {
+        console.log('[App] Found pending invite route in PWA mode, navigating to:', pendingRoute);
+        localStorage.removeItem(PENDING_INVITE_ROUTE_KEY);
+        // Use window.location to navigate (works outside RouterProvider)
+        window.location.href = pendingRoute;
+        return;
+      }
     }
   }, []);
 
@@ -114,4 +144,3 @@ function App() {
 }
 
 export default App;
-

@@ -41,6 +41,7 @@ model Event {
   
   members             Member[]
   pokeRecords         PokeRecord[]
+  shareTokens         ShareToken[]
   group               Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
   
   @@index([ownerId])
@@ -98,5 +99,18 @@ model PokeRecord {
   
   @@index([eventId])
   @@index([toMemberId])
+}
+
+model ShareToken {
+  id        String   @id @default(cuid())
+  eventId   Int      // 關聯到 Event
+  token     String   @unique // 32字元 NanoID token
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([eventId])
 }
 

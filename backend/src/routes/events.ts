@@ -30,6 +30,7 @@ import { eventService } from '../services/EventService';
 import { eventRepository } from '../repositories/EventRepository';
 import { memberRepository } from '../repositories/MemberRepository';
 import { generateGuestToken } from '../utils/jwt';
+import { shareTokenService } from '../services/ShareTokenService';
 
 const router = Router();
 
@@ -313,6 +314,14 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
         }
       }
     });
+
+    // Automatically generate share token for the event
+    try {
+      await shareTokenService.ensureToken(event.id);
+    } catch (error) {
+      console.error('Error generating share token for new event:', error);
+      // Don't fail the event creation if token generation fails
+    }
 
     res.status(201).json({ event });
   } catch (error: any) {
@@ -701,6 +710,226 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
     res.status(500).json({
       code: 'INTERNAL_ERROR',
       message: 'Failed to delete event'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/share-token:
+ *   get:
+ *     summary: Get share token for event (owner or member only)
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Share token retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   description: Share token for the event
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Only owner or members can access
+ *       404:
+ *         description: Event not found
+ */
+// GET /events/:id/share-token - Get share token for event
+router.get('/:id/share-token', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    // Check authentication
+    if (!req.user || !('userId' in req.user)) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const jwtPayload = req.user as { userId: number };
+    const userUserId = await getUserUserId(jwtPayload.userId);
+
+    if (!userUserId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'User not found',
+      });
+      return;
+    }
+
+    // Check if event exists and user is owner or member
+    const event = await prisma.event.findUnique({
+      where: { id },
+      include: {
+        members: true,
+      },
+    });
+
+    if (!event) {
+      res.status(404).json({
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found',
+      });
+      return;
+    }
+
+    const isOwner = event.ownerId === userUserId;
+    const isMember = event.members.some(m => m.userId === userUserId);
+
+    if (!isOwner && !isMember) {
+      res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'Only event owner or members can access share token',
+      });
+      return;
+    }
+
+    // Get or generate token
+    const token = await shareTokenService.ensureToken(id);
+
+    res.json({ token });
+  } catch (error) {
+    console.error('Error getting share token:', error);
+    res.status(500).json({
+      code: 'INTERNAL_ERROR',
+      message: 'Failed to get share token',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /events/{id}/share-token:
+ *   post:
+ *     summary: Generate or regenerate share token for event (owner or member only)
+ *     tags: [Events]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Share token generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   description: New share token for the event
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Only owner or members can generate token
+ *       404:
+ *         description: Event not found
+ */
+// POST /events/:id/share-token - Generate or regenerate share token
+router.post('/:id/share-token', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const paramsValidation = eventParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid event ID',
+        errors: paramsValidation.error.errors,
+      });
+      return;
+    }
+
+    const { id } = paramsValidation.data as EventParams;
+
+    // Check authentication
+    if (!req.user || !('userId' in req.user)) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const jwtPayload = req.user as { userId: number };
+    const userUserId = await getUserUserId(jwtPayload.userId);
+
+    if (!userUserId) {
+      res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'User not found',
+      });
+      return;
+    }
+
+    // Check if event exists and user is owner or member
+    const event = await prisma.event.findUnique({
+      where: { id },
+      include: {
+        members: true,
+      },
+    });
+
+    if (!event) {
+      res.status(404).json({
+        code: 'EVENT_NOT_FOUND',
+        message: 'Event not found',
+      });
+      return;
+    }
+
+    const isOwner = event.ownerId === userUserId;
+    const isMember = event.members.some(m => m.userId === userUserId);
+
+    if (!isOwner && !isMember) {
+      res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'Only event owner or members can generate share token',
+      });
+      return;
+    }
+
+    // Regenerate token (this will delete old token if exists and create new one)
+    const token = await shareTokenService.regenerateToken(id);
+
+    res.json({ token });
+  } catch (error) {
+    console.error('Error generating share token:', error);
+    res.status(500).json({
+      code: 'INTERNAL_ERROR',
+      message: 'Failed to generate share token',
     });
   }
 });

@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Events from './pages/Events';
 import EventDetail from './pages/EventDetail';
 import CreateEvent from './pages/CreateEvent';
+import InvitePage from './pages/InvitePage';
 import { Box, CircularProgress } from '@mui/material';
 
 // Redirect helper that preserves query parameters
@@ -50,6 +51,10 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <Login />,
+  },
+  {
+    path: '/invite/:token',
+    element: <InvitePage />,
   },
   {
     path: '/events',

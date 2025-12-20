@@ -11,6 +11,7 @@ import eventsRouter from './routes/events';
 import membersRouter from './routes/members';
 import mapsRouter from './routes/maps';
 import usersRouter from './routes/users';
+import inviteRouter from './routes/invite';
 import { mapsRateLimiter } from './middleware/rateLimit';
 
 // Load environment variables
@@ -235,6 +236,8 @@ app.use('/maps', mapsRateLimiter, mapsRouter);
 console.log('[ROUTES] ✓ /maps registered');
 app.use('/users', usersRouter);
 console.log('[ROUTES] ✓ /users registered');
+app.use('/invite', inviteRouter);
+console.log('[ROUTES] ✓ /invite registered');
 console.log('[ROUTES] All routes registered successfully');
 
 // 404 handler
