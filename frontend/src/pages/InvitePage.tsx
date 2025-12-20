@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import {
   Share as ShareIcon,
-  Smartphone as SmartphoneIcon,
   CheckCircle as CheckCircleIcon,
   ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
@@ -66,12 +65,22 @@ export default function InvitePage() {
         setEventId(response.eventId);
         setLoading(false);
 
+        const targetRoute = `/events/${response.eventId}`;
+        
         // If already in PWA mode, navigate directly
         if (isPWA()) {
-          navigate(`/events/${response.eventId}`, { replace: true });
+          console.log('[InvitePage] Already in PWA mode, navigating directly to:', targetRoute);
+          navigate(targetRoute, { replace: true });
         } else {
-          // Store the route in localStorage for later
-          localStorage.setItem(PENDING_INVITE_ROUTE_KEY, `/events/${response.eventId}`);
+          // Store the route in localStorage for later (when user opens from home screen)
+          console.log('[InvitePage] Not in PWA mode, storing route in localStorage:', targetRoute);
+          try {
+            localStorage.setItem(PENDING_INVITE_ROUTE_KEY, targetRoute);
+            console.log('[InvitePage] Successfully stored route in localStorage');
+          } catch (storageError) {
+            console.error('[InvitePage] Failed to store in localStorage:', storageError);
+            // If localStorage fails, still allow user to navigate manually
+          }
         }
       } catch (err: any) {
         console.error('Error resolving invite token:', err);

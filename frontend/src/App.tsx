@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RouterProvider } from 'react-router-dom';
+import { RouterProvider, useNavigate, useLocation } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './hooks/useAuth';
 import { router } from './router';
@@ -7,7 +7,7 @@ import { theme } from './theme';
 import { PENDING_INVITE_ROUTE_KEY } from './pages/InvitePage';
 
 // PWA detection utility
-function isPWA(): boolean {
+export function isPWA(): boolean {
   // iOS Safari
   if ((window.navigator as any).standalone === true) {
     return true;
@@ -19,6 +19,62 @@ function isPWA(): boolean {
   }
   
   return false;
+}
+
+// Component to handle PWA navigation from localStorage
+// This must be inside RouterProvider to use navigate
+function PWANavigationHandler() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [hasChecked, setHasChecked] = useState(false);
+
+  useEffect(() => {
+    // Only check once after component mounts
+    if (hasChecked) return;
+    
+    // Small delay to ensure router is ready
+    const timer = setTimeout(() => {
+      // Check if we're in PWA mode and have a pending invite route
+      if (isPWA()) {
+        const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
+        console.log('[PWA Navigation] Checking localStorage:', {
+          isPWA: true,
+          pendingRoute,
+          currentPath: location.pathname,
+          timestamp: new Date().toISOString(),
+        });
+        
+        if (pendingRoute && pendingRoute !== location.pathname && !location.pathname.startsWith('/invite/')) {
+          console.log('[PWA Navigation] Found pending route, navigating to:', pendingRoute);
+          localStorage.removeItem(PENDING_INVITE_ROUTE_KEY);
+          navigate(pendingRoute, { replace: true });
+        } else if (pendingRoute) {
+          console.log('[PWA Navigation] Skipping navigation:', {
+            reason: pendingRoute === location.pathname ? 'already on target route' : 'on invite page',
+            pendingRoute,
+            currentPath: location.pathname,
+          });
+        }
+      } else {
+        console.log('[PWA Navigation] Not in PWA mode, skipping check');
+      }
+      setHasChecked(true);
+    }, 200); // Increased delay to ensure router is fully ready
+
+    return () => clearTimeout(timer);
+  }, [navigate, location.pathname, hasChecked]);
+
+  return null;
+}
+
+// Wrapper component that includes RouterProvider and PWA handler
+function AppRouter() {
+  return (
+    <>
+      <RouterProvider router={router} />
+      <PWANavigationHandler />
+    </>
+  );
 }
 
 // Handle temporary auth token from URL (mobile fallback for when cookies are blocked)
@@ -97,19 +153,6 @@ function App() {
       });
       return;
     }
-
-    // Handle PWA navigation from localStorage
-    // If user is in PWA mode and has a pending invite route, navigate to it
-    if (isPWA()) {
-      const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
-      if (pendingRoute && pendingRoute !== window.location.pathname) {
-        console.log('[App] Found pending invite route in PWA mode, navigating to:', pendingRoute);
-        localStorage.removeItem(PENDING_INVITE_ROUTE_KEY);
-        // Use window.location to navigate (works outside RouterProvider)
-        window.location.href = pendingRoute;
-        return;
-      }
-    }
   }, []);
 
   if (isExchangingToken) {
@@ -137,7 +180,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <RouterProvider router={router} />
+        <AppRouter />
       </AuthProvider>
     </ThemeProvider>
   );
