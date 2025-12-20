@@ -157,19 +157,6 @@ export default function Events() {
     }
   };
 
-  const fetchEvents = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await eventsApi.getEvents();
-      setEvents(response.events);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load events');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCreateEvent = async () => {
     if (!newEventName.trim()) return;
 
