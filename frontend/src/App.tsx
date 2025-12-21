@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, Box, CircularProgress } from '@mui/material';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 import { router } from './router';
 import { theme } from './theme';
+import { subscribeToInterest } from './lib/pusherBeams';
 
 // Handle temporary auth token from URL (mobile fallback for when cookies are blocked)
 async function handleTempAuthTokenFromURL(): Promise<boolean> {
@@ -110,10 +111,38 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
+        <PusherBeamsSubscriber />
         <RouterProvider router={router} />
       </AuthProvider>
     </ThemeProvider>
   );
+}
+
+// Component to handle Pusher Beams subscription
+function PusherBeamsSubscriber() {
+  const { user } = useAuth();
+  
+  useEffect(() => {
+    if (user?.userId) {
+      // Subscribe to user-specific interest for push notifications
+      const interest = `user-${user.userId}`;
+      console.log('[PusherBeams] Subscribing to interest:', interest);
+      
+      subscribeToInterest(interest)
+        .then((success) => {
+          if (success) {
+            console.log('[PusherBeams] Successfully subscribed to interest:', interest);
+          } else {
+            console.warn('[PusherBeams] Failed to subscribe to interest:', interest);
+          }
+        })
+        .catch((error) => {
+          console.error('[PusherBeams] Error subscribing to interest:', error);
+        });
+    }
+  }, [user?.userId]);
+  
+  return null;
 }
 
 export default App;
