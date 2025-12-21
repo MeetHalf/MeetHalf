@@ -91,8 +91,26 @@ export class FriendRepository {
 
   /**
    * Create friend request
+   * If a request already exists (even if accepted/rejected), update it to pending
    */
   async createFriendRequest(fromUserId: string, toUserId: string) {
+    // Try to find existing request
+    const existing = await prisma.friendRequest.findFirst({
+      where: {
+        fromUserId,
+        toUserId,
+      },
+    });
+
+    if (existing) {
+      // Update existing request to pending
+      return prisma.friendRequest.update({
+        where: { id: existing.id },
+        data: { status: 'pending' },
+      });
+    }
+
+    // Create new request
     return prisma.friendRequest.create({
       data: {
         fromUserId,

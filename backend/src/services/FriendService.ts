@@ -20,7 +20,8 @@ export class FriendService {
       throw new Error('Friend request already exists');
     }
 
-    // Create friend request
+    // Create or update friend request
+    // This will update existing request to pending if it exists (e.g., after deleting a friend)
     const request = await friendRepository.createFriendRequest(fromUserId, toUserId);
 
     // Create notification
