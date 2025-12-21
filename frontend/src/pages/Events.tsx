@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -15,31 +15,9 @@ import {
   CircularProgress,
   Snackbar,
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, Login as LoginIcon } from '@mui/icons-material';
 import GroupCard from '../components/EventCard';
-import { eventsApi, Event } from '../api/events';
-import { PENDING_INVITE_ROUTE_KEY } from './InvitePage';
-
-// Helper function to log localStorage state
-function logLocalStorageState(context: string) {
-  try {
-    const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
-    const allLocalStorage: Record<string, string> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key) {
-        allLocalStorage[key] = localStorage.getItem(key) || '';
-      }
-    }
-    console.log(`[${context}] localStorage State:`, {
-      pending_invite_route: pendingRoute,
-      allItems: allLocalStorage,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error(`[${context}] Failed to read localStorage:`, error);
-  }
-}
+import { eventsApi, Event, inviteApi } from '../api/events';
 
 export default function Events() {
   const navigate = useNavigate();
@@ -51,9 +29,11 @@ export default function Events() {
   const [creating, setCreating] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const hasCheckedPendingRoute = useRef(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteToken, setInviteToken] = useState('');
+  const [resolving, setResolving] = useState(false);
 
-  // Define fetchEvents with useCallback for stable reference
+  // Fetch events on component mount
   const fetchEvents = useCallback(async () => {
     try {
       setLoading(true);
@@ -67,76 +47,9 @@ export default function Events() {
     }
   }, []);
 
-  // Check for pending invite route (from localStorage)
   useEffect(() => {
-    console.log('[Events] ===== Component Mounted =====');
-    console.log('[Events] Current path:', window.location.pathname);
-    console.log('[Events] Has checked before:', hasCheckedPendingRoute.current);
-    
-    // Only check once when component mounts
-    if (hasCheckedPendingRoute.current) {
-      console.log('[Events] Already checked pending route, fetching events directly');
-      fetchEvents();
-      return;
-    }
-
-    // Small delay to ensure everything is initialized
-    const timer = setTimeout(() => {
-      console.log('[Events] ===== Checking for Pending Route =====');
-      logLocalStorageState('Events-Check');
-      
-      const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
-      console.log('[Events] Checking localStorage for pending route:', {
-        pendingRoute,
-        currentPath: '/events',
-      });
-
-      if (pendingRoute && pendingRoute !== '/events' && !pendingRoute.startsWith('/invite/')) {
-        console.log('[Events] ===== NAVIGATING TO PENDING ROUTE =====');
-        console.log('[Events] From: /events');
-        console.log('[Events] To:', pendingRoute);
-        logLocalStorageState('Events-Before-Remove');
-        
-        // Mark as checked BEFORE removing and navigating
-        hasCheckedPendingRoute.current = true;
-        
-        localStorage.removeItem(PENDING_INVITE_ROUTE_KEY);
-        console.log('[Events] ✓ Removed pending route from localStorage');
-        logLocalStorageState('Events-After-Remove');
-        
-        console.log('[Events] ✓ Calling navigate...');
-        navigate(pendingRoute, { replace: true });
-        console.log('[Events] ✓ Navigate called');
-        return; // Don't fetch events if we're navigating away
-      } else if (pendingRoute) {
-        console.log('[Events] ===== Skipping Navigation =====');
-        console.log('[Events] Reason:', {
-          pendingRoute,
-          isSamePath: pendingRoute === '/events',
-          isInvitePage: pendingRoute.startsWith('/invite/'),
-        });
-        // Clear invalid pending route
-        if (pendingRoute === '/events' || pendingRoute.startsWith('/invite/')) {
-          localStorage.removeItem(PENDING_INVITE_ROUTE_KEY);
-          console.log('[Events] ✓ Removed invalid pending route');
-        }
-      } else {
-        console.log('[Events] No pending route found in localStorage');
-      }
-
-      hasCheckedPendingRoute.current = true;
-      console.log('[Events] ===== Pending Route Check Complete =====');
-      console.log('[Events] Starting to fetch events...');
-      
-      // Fetch events after checking (only if we didn't navigate away)
-      fetchEvents();
-    }, 200);
-
-    return () => {
-      console.log('[Events] Cleanup: clearing timer');
-      clearTimeout(timer);
-    };
-  }, [navigate, fetchEvents]);
+    fetchEvents();
+  }, [fetchEvents]);
 
   const handleCreateEvent = async () => {
     if (!newEventName.trim()) return;
@@ -160,6 +73,23 @@ export default function Events() {
 
   const handleEventClick = (eventId: number) => {
     navigate(`/events/${eventId}`);
+  };
+
+  const handleJoinWithToken = async () => {
+    if (!inviteToken.trim()) return;
+    
+    try {
+      setResolving(true);
+      const response = await inviteApi.resolveInviteToken(inviteToken.trim());
+      setInviteDialogOpen(false);
+      setInviteToken('');
+      navigate(`/events/${response.eventId}`);
+    } catch (err) {
+      setSnackbarMessage('無效的邀請碼，請確認後重試');
+      setSnackbarOpen(true);
+    } finally {
+      setResolving(false);
+    }
   };
 
   if (loading) {
@@ -205,24 +135,38 @@ export default function Events() {
                   管理您的活動，規劃完美的聚會地點
                 </Typography>
               </Box>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<AddIcon />}
-                onClick={() => navigate('/events/new')}
-                sx={{
-                  px: 3,
-                  py: 1.5,
-                  boxShadow: 2,
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: 4,
-                  },
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                建立新活動
-              </Button>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Button
+                  variant="outlined"
+                  size="large"
+                  startIcon={<LoginIcon />}
+                  onClick={() => setInviteDialogOpen(true)}
+                  sx={{
+                    px: 3,
+                    py: 1.5,
+                  }}
+                >
+                  輸入邀請碼
+                </Button>
+                <Button
+                  variant="contained"
+                  size="large"
+                  startIcon={<AddIcon />}
+                  onClick={() => navigate('/events/new')}
+                  sx={{
+                    px: 3,
+                    py: 1.5,
+                    boxShadow: 2,
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: 4,
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  建立新活動
+                </Button>
+              </Box>
             </Box>
 
             {/* Error Alert */}
@@ -391,6 +335,50 @@ export default function Events() {
             startIcon={creating ? <CircularProgress size={20} /> : <AddIcon />}
           >
             {creating ? '建立中...' : '建立'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Invite Token Input Dialog */}
+      <Dialog 
+        open={inviteDialogOpen} 
+        onClose={() => setInviteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>輸入邀請碼</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            請輸入您收到的邀請碼來加入活動
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="邀請碼"
+            placeholder="例如：abc123xyz..."
+            fullWidth
+            variant="outlined"
+            value={inviteToken}
+            onChange={(e) => setInviteToken(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && inviteToken.trim()) {
+                handleJoinWithToken();
+              }
+            }}
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInviteDialogOpen(false)}>
+            取消
+          </Button>
+          <Button 
+            onClick={handleJoinWithToken}
+            variant="contained"
+            disabled={!inviteToken.trim() || resolving}
+            startIcon={resolving ? <CircularProgress size={20} /> : <LoginIcon />}
+          >
+            {resolving ? '驗證中...' : '加入活動'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -13,35 +13,15 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  IconButton,
+  Snackbar,
 } from '@mui/material';
 import {
   Share as ShareIcon,
   ArrowForward as ArrowForwardIcon,
+  ContentCopy as CopyIcon,
 } from '@mui/icons-material';
 import { inviteApi } from '../api/events';
-
-const PENDING_INVITE_ROUTE_KEY = 'pending_invite_route';
-
-// Helper function to log localStorage state
-function logLocalStorageState(context: string) {
-  try {
-    const pendingRoute = localStorage.getItem(PENDING_INVITE_ROUTE_KEY);
-    const allLocalStorage: Record<string, string> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key) {
-        allLocalStorage[key] = localStorage.getItem(key) || '';
-      }
-    }
-    console.log(`[${context}] localStorage State:`, {
-      pending_invite_route: pendingRoute,
-      allItems: allLocalStorage,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error(`[${context}] Failed to read localStorage:`, error);
-  }
-}
 
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
@@ -49,19 +29,12 @@ export default function InvitePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [eventId, setEventId] = useState<number | null>(null);
+  const [shareToken, setShareToken] = useState<string>('');
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
-    console.log('[InvitePage] ===== Component Mounted =====');
-    console.log('[InvitePage] URL:', window.location.href);
-    console.log('[InvitePage] Token from URL:', token);
-    logLocalStorageState('InvitePage-Mount');
-  }, []);
-
-  useEffect(() => {
-    console.log('[InvitePage] Token effect triggered, token:', token);
-    
     if (!token) {
-      console.error('[InvitePage] No token provided');
       setError('無效的邀請連結');
       setLoading(false);
       return;
@@ -69,36 +42,13 @@ export default function InvitePage() {
 
     // Resolve token to event ID
     const resolveToken = async () => {
-      console.log('[InvitePage] Starting to resolve token:', token);
       try {
         const response = await inviteApi.resolveInviteToken(token);
-        console.log('[InvitePage] Token resolved successfully:', response);
         setEventId(response.eventId);
+        setShareToken(token); // Store the share token for display
         setLoading(false);
-
-        const targetRoute = `/events/${response.eventId}`;
-        
-        // 簡化邏輯：不管是瀏覽器還是 PWA，都存儲到 localStorage
-        // 讓 Events 頁面負責檢查和導航
-        console.log('[InvitePage] ===== Storing Route in localStorage =====');
-        console.log('[InvitePage] Target route:', targetRoute);
-        logLocalStorageState('InvitePage-Before-Store');
-        
-        try {
-          localStorage.setItem(PENDING_INVITE_ROUTE_KEY, targetRoute);
-          console.log('[InvitePage] ✓ Successfully stored route in localStorage');
-          logLocalStorageState('InvitePage-After-Store');
-        } catch (storageError) {
-          console.error('[InvitePage] ✗ Failed to store in localStorage:', storageError);
-          // If localStorage fails, still allow user to navigate manually
-        }
       } catch (err: any) {
         console.error('[InvitePage] Error resolving invite token:', err);
-        console.error('[InvitePage] Error details:', {
-          message: err.message,
-          response: err.response?.data,
-          status: err.response?.status,
-        });
         setError(err.response?.data?.message || err.message || '無法解析邀請連結，請確認連結是否正確');
         setLoading(false);
       }
@@ -108,11 +58,19 @@ export default function InvitePage() {
   }, [token]);
 
   const handleGoToEvent = () => {
-    console.log('[InvitePage] ===== User clicked "Go to Event" =====');
-    console.log('[InvitePage] Event ID:', eventId);
-    logLocalStorageState('InvitePage-GoToEvent');
     if (eventId) {
       navigate(`/events/${eventId}`);
+    }
+  };
+
+  const handleCopyToken = async () => {
+    try {
+      await navigator.clipboard.writeText(shareToken);
+      setSnackbarMessage('邀請碼已複製！');
+      setSnackbarOpen(true);
+    } catch (err) {
+      setSnackbarMessage('複製失敗');
+      setSnackbarOpen(true);
     }
   };
 
@@ -233,6 +191,62 @@ export default function InvitePage() {
           </Box>
         )}
 
+        {/* PWA 使用說明 */}
+        <Alert severity="info" sx={{ mt: 3 }}>
+          <Typography variant="body2" gutterBottom sx={{ fontWeight: 600 }}>
+            加入主畫面後的使用方式：
+          </Typography>
+          <Typography variant="body2" component="div" sx={{ mb: 1 }}>
+            • 首次打開 PWA 後，請在主頁面輸入邀請碼：
+          </Typography>
+          <Box
+            sx={{
+              p: 1.5,
+              bgcolor: 'background.paper',
+              borderRadius: 1,
+              mb: 1,
+              border: '1px solid',
+              borderColor: 'divider',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            <Typography
+              variant="body1"
+              sx={{
+                fontFamily: 'monospace',
+                fontWeight: 600,
+                color: 'primary.main',
+                letterSpacing: '0.05em',
+                flex: 1,
+              }}
+            >
+              {shareToken}
+            </Typography>
+            <IconButton
+              onClick={handleCopyToken}
+              size="small"
+              sx={{
+                color: 'primary.main',
+                '&:hover': {
+                  bgcolor: 'primary.light',
+                  color: 'primary.contrastText',
+                },
+              }}
+            >
+              <CopyIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          <Typography variant="body2">
+            • 之後即可接收即時通知，並通過通知直接打開活動
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1.5, color: 'text.secondary', fontStyle: 'italic' }}>
+            提示：也可以不安裝 PWA，直接點擊下方按鈕立即加入活動
+          </Typography>
+        </Alert>
+
         <Box sx={{ mt: 4, display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
           <Button
             variant="outlined"
@@ -252,15 +266,16 @@ export default function InvitePage() {
             立即前往聚會
           </Button>
         </Box>
-
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 3, textAlign: 'center' }}>
-          提示：加入主畫面後，從主畫面打開應用程式可以獲得更好的體驗並接收即時通知
-        </Typography>
       </Paper>
+
+      {/* Snackbar for copy feedback */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        message={snackbarMessage}
+      />
     </Container>
   );
 }
-
-// Export the localStorage key for use in App.tsx
-export { PENDING_INVITE_ROUTE_KEY };
 

@@ -35,7 +35,6 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { zhTW } from 'date-fns/locale';
-import axios from 'axios';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
 
 export default function CreateEvent() {
@@ -62,6 +61,7 @@ export default function CreateEvent() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [eventId, setEventId] = useState<number | null>(null);
+  const [shareToken, setShareToken] = useState('');
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -219,6 +219,7 @@ export default function CreateEvent() {
         
         setEventId(createdEventId);
         setShareUrl(createdShareUrl);
+        setShareToken(tokenResponse.token);
         setShareDialogOpen(true);
         setSnackbar({ open: true, message: '聚會創建成功！', severity: 'success' });
       } catch (tokenError: any) {
@@ -227,6 +228,7 @@ export default function CreateEvent() {
         const createdShareUrl = `${window.location.origin}/events/${createdEventId}`;
         setEventId(createdEventId);
         setShareUrl(createdShareUrl);
+        setShareToken('');
         setShareDialogOpen(true);
         setSnackbar({ 
           open: true, 
@@ -259,13 +261,23 @@ export default function CreateEvent() {
     }
   };
 
+  // Copy token to clipboard
+  const handleCopyToken = async () => {
+    try {
+      await navigator.clipboard.writeText(shareToken);
+      setSnackbar({ open: true, message: '邀請碼已複製！', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: '複製失敗', severity: 'error' });
+    }
+  };
+
   // Share using Web Share API
   const handleShare = async () => {
     if (navigator.share) {
       try {
         await navigator.share({
           title: formData.name,
-          text: `加入我的聚會：${formData.name}`,
+          text: `加入我的聚會：${formData.name}\n邀請碼：${shareToken}`,
           url: shareUrl,
         });
       } catch (err) {
@@ -546,6 +558,49 @@ export default function CreateEvent() {
               <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
                 分享以下連結給朋友，讓他們加入聚會：
               </Typography>
+
+              {/* 邀請碼顯示 */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  bgcolor: '#e3f2fd',
+                  borderRadius: 2,
+                  mb: 2,
+                  border: '1px solid #90caf9',
+                }}
+              >
+                <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                  邀請碼
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontFamily: 'monospace',
+                      color: '#1976d2',
+                      fontWeight: 600,
+                      letterSpacing: '0.05em',
+                      flex: 1,
+                    }}
+                  >
+                    {shareToken}
+                  </Typography>
+                  <IconButton
+                    onClick={handleCopyToken}
+                    size="small"
+                    sx={{
+                      color: '#1976d2',
+                      '&:hover': {
+                        bgcolor: '#1976d2',
+                        color: '#fff',
+                      },
+                    }}
+                  >
+                    <CopyIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              </Paper>
 
               {/* 連結顯示 */}
               <Paper
