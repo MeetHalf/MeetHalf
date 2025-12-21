@@ -7,13 +7,7 @@ import {
   Button,
   CircularProgress,
 } from '@mui/material';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  AnimatedArrowLeft,
-  AnimatedTrash,
-  AnimatedCalendar,
-  AnimatedZap,
-} from '../components/AnimatedIcons';
+import { ArrowLeft, Trash2, Calendar, Zap } from 'lucide-react';
 import { UserPlus, Megaphone, Check, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
@@ -27,7 +21,7 @@ const getNotificationIcon = (type: string) => {
     case 'event_invite':
     case 'EVENT_INVITE':
     case 'EVENT_UPDATE':
-      return <AnimatedCalendar size={18} />;
+      return <Calendar size={18} />;
     case 'event_update':
       return <Megaphone size={18} />;
     case 'friend_request':
@@ -36,9 +30,9 @@ const getNotificationIcon = (type: string) => {
       return <UserPlus size={18} />;
     case 'poke':
     case 'POKE':
-      return <AnimatedZap size={18} animate />;
+      return <Zap size={18} />;
     default:
-      return <AnimatedCalendar size={18} />;
+      return <Calendar size={18} />;
   }
 };
 
@@ -62,24 +56,6 @@ const getNotificationColor = (type: string) => {
   }
 };
 
-const listItemVariants = {
-  hidden: { opacity: 0, x: -20 },
-  visible: (i: number) => ({
-    opacity: 1,
-    x: 0,
-    transition: {
-      delay: i * 0.05,
-      type: 'spring' as const,
-      stiffness: 300,
-      damping: 24,
-    },
-  }),
-  exit: {
-    opacity: 0,
-    x: -100,
-    transition: { duration: 0.2 },
-  },
-};
 
 const formatTimestamp = (dateString: string) => {
   try {
@@ -191,7 +167,7 @@ export default function Notifications() {
             cursor: 'pointer',
           }}
         >
-          <AnimatedArrowLeft size={20} />
+          <ArrowLeft size={20} />
         </motion.div>
         <Box sx={{ flex: 1 }}>
           <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '1.25rem' }}>
@@ -351,7 +327,7 @@ export default function Notifications() {
                       cursor: 'pointer',
                     }}
                   >
-                    <AnimatedTrash size={16} />
+                    <Trash2 size={16} />
                   </motion.div>
                 </motion.div>
               );

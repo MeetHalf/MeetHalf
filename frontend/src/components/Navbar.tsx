@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Avatar, Badge } from '@mui/material';
-import { motion } from 'framer-motion';
-import { AnimatedBell } from './AnimatedIcons';
+import { Bell } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 
@@ -12,10 +11,6 @@ export default function Navbar() {
 
   return (
     <Box
-      component={motion.div}
-      initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       sx={{
         bgcolor: 'white',
         borderBottom: '1px solid',
@@ -27,11 +22,15 @@ export default function Navbar() {
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {/* Logo */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <Box
           onClick={() => navigate('/events')}
-          style={{ cursor: 'pointer' }}
+          sx={{
+            cursor: 'pointer',
+            transition: 'transform 0.2s ease',
+            '&:active': {
+              transform: 'scale(0.98)',
+            },
+          }}
         >
           <Typography
             sx={{
@@ -52,15 +51,19 @@ export default function Navbar() {
           >
             Where's the squad?
           </Typography>
-        </motion.div>
+        </Box>
 
         {/* 右側：通知 + 頭像 */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+          <Box
             onClick={() => navigate('/notifications')}
-            style={{ cursor: 'pointer' }}
+            sx={{
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease',
+              '&:active': {
+                transform: 'scale(0.9)',
+              },
+            }}
           >
             <Badge
               badgeContent={unreadCount}
@@ -73,15 +76,19 @@ export default function Navbar() {
                 },
               }}
             >
-              <AnimatedBell size={22} animate={unreadCount > 0} />
+              <Bell size={22} />
             </Badge>
-          </motion.div>
+          </Box>
 
-          <motion.div
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+          <Box
             onClick={() => navigate('/profile')}
-            style={{ cursor: 'pointer' }}
+            sx={{
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease',
+              '&:active': {
+                transform: 'scale(0.95)',
+              },
+            }}
           >
             <Avatar
               sx={{
@@ -97,7 +104,7 @@ export default function Navbar() {
             >
               {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '👤'}
             </Avatar>
-          </motion.div>
+          </Box>
         </Box>
       </Box>
     </Box>

@@ -1,41 +1,34 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
-import { motion } from 'framer-motion';
-import {
-  AnimatedHome,
-  AnimatedUsers,
-  AnimatedPlus,
-  AnimatedMap,
-  AnimatedUser,
-} from './AnimatedIcons';
+import { Home, Users, Plus, Map, User } from 'lucide-react';
 
 interface NavItem {
   path: string;
-  icon: (active: boolean) => React.ReactNode;
+  icon: React.ReactNode;
   isCreate?: boolean;
 }
 
 const navItems: NavItem[] = [
   {
     path: '/events',
-    icon: (active) => <AnimatedHome size={20} animate={active} />,
+    icon: <Home size={20} />,
   },
   {
     path: '/social',
-    icon: (active) => <AnimatedUsers size={20} animate={active} />,
+    icon: <Users size={20} />,
   },
   {
     path: '/events/new',
-    icon: () => <AnimatedPlus size={24} />,
+    icon: <Plus size={24} />,
     isCreate: true,
   },
   {
     path: '/map',
-    icon: (active) => <AnimatedMap size={20} animate={active} />,
+    icon: <Map size={20} />,
   },
   {
     path: '/profile',
-    icon: () => <AnimatedUser size={20} />,
+    icon: <User size={20} />,
   },
 ];
 
@@ -52,10 +45,6 @@ export default function BottomNav() {
 
   return (
     <Box
-      component={motion.div}
-      initial={{ y: 100 }}
-      animate={{ y: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       sx={{
         position: 'fixed',
         bottom: 0,
@@ -79,40 +68,40 @@ export default function BottomNav() {
 
         if (item.isCreate) {
           return (
-            <motion.div
+            <Box
               key={item.path}
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.95 }}
               onClick={() => navigate(item.path)}
-              style={{
+              sx={{
                 width: 48,
                 height: 48,
-                borderRadius: 16,
-                backgroundColor: '#2563eb',
+                borderRadius: 4,
+                bgcolor: '#2563eb',
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.4)',
                 cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
               }}
             >
-              {item.icon(false)}
-            </motion.div>
+              {item.icon}
+            </Box>
           );
         }
 
         return (
-          <motion.div
+          <Box
             key={item.path}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.9 }}
             onClick={() => navigate(item.path)}
-            style={{
+            sx={{
               width: 48,
               height: 48,
-              borderRadius: 16,
-              backgroundColor: active ? '#2563eb' : 'white',
+              borderRadius: 4,
+              bgcolor: active ? '#2563eb' : 'white',
               color: active ? 'white' : '#64748b',
               boxShadow: active
                 ? '0 4px 12px rgba(37, 99, 235, 0.3)'
@@ -122,10 +111,14 @@ export default function BottomNav() {
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              '&:active': {
+                transform: 'scale(0.9)',
+              },
             }}
           >
-            {item.icon(active)}
-          </motion.div>
+            {item.icon}
+          </Box>
         );
       })}
     </Box>

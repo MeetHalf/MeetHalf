@@ -13,12 +13,10 @@ import {
   CircularProgress,
   Snackbar,
 } from '@mui/material';
-import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn } from 'lucide-react';
+import { LogIn, Plus, ChevronRight, Trophy, Clock } from 'lucide-react';
 import { format, isAfter, isBefore, isToday } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { eventsApi, Event, inviteApi } from '../api/events';
-import { AnimatedPlus, AnimatedChevronRight, AnimatedTrophy, AnimatedClock } from '../components/AnimatedIcons';
 
 type EventStatus = 'ongoing' | 'upcoming' | 'ended';
 
@@ -39,22 +37,6 @@ const mockSquads = [
   { id: 4, name: '讀書會', avatar: '📚' },
 ];
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08 },
-  },
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring' as const, stiffness: 300, damping: 24 },
-  },
-};
 
 export default function Events() {
   const navigate = useNavigate();
@@ -131,12 +113,7 @@ export default function Events() {
           minHeight: 'calc(100vh - 200px)',
         }}
       >
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-        >
-          <CircularProgress />
-        </motion.div>
+        <CircularProgress />
       </Box>
     );
   }
@@ -145,36 +122,30 @@ export default function Events() {
     <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
       {/* Squads 水平滾動列表 */}
       <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #f1f5f9', px: 3, pb: 3 }}>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          style={{
+        <Box
+          sx={{
             display: 'flex',
-            gap: 16,
+            gap: 2,
             overflowX: 'auto',
-            paddingTop: 8,
-            paddingBottom: 8,
-            marginLeft: -8,
-            marginRight: -8,
-            paddingLeft: 8,
-            paddingRight: 8,
+            py: 1,
+            mx: -1,
+            px: 1,
+            '&::-webkit-scrollbar': { display: 'none' },
+            scrollbarWidth: 'none',
           }}
         >
           {/* New Meet 按鈕 */}
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 300 }}
-            whileHover={{ scale: 1.05, y: -4 }}
-            whileTap={{ scale: 0.95 }}
+          <Box
             onClick={() => navigate('/events/new')}
-            style={{
+            sx={{
               flexShrink: 0,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 8,
+              gap: 1,
               cursor: 'pointer',
+              transition: 'transform 0.2s ease',
+              '&:active': { transform: 'scale(0.95)' },
             }}
           >
             <Box
@@ -190,29 +161,26 @@ export default function Events() {
                 boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.4)',
               }}
             >
-              <AnimatedPlus size={24} />
+              <Plus size={24} />
             </Box>
             <Typography sx={{ fontSize: '0.625rem', fontWeight: 700, color: '#64748b' }}>
               New Meet
             </Typography>
-          </motion.div>
+          </Box>
 
           {/* Squads */}
-          {mockSquads.map((squad, index) => (
-            <motion.div
+          {mockSquads.map((squad) => (
+            <Box
               key={squad.id}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.05 * (index + 1), type: 'spring' }}
-              whileHover={{ scale: 1.05, y: -4 }}
-              whileTap={{ scale: 0.95 }}
-              style={{
+              sx={{
                 flexShrink: 0,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 8,
+                gap: 1,
                 cursor: 'pointer',
+                transition: 'transform 0.2s ease',
+                '&:active': { transform: 'scale(0.95)' },
               }}
             >
               <Box
@@ -245,237 +213,206 @@ export default function Events() {
               >
                 {squad.name}
               </Typography>
-            </motion.div>
+            </Box>
           ))}
-        </motion.div>
+        </Box>
       </Box>
 
       {/* Main Content */}
       <Box sx={{ p: 3 }}>
-        <AnimatePresence>
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <Alert severity="error" sx={{ mb: 3, borderRadius: 4 }} onClose={() => setError(null)}>
-                {error}
-              </Alert>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {error && (
+          <Alert severity="error" sx={{ mb: 3, borderRadius: 4 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
 
         {/* 輸入邀請碼 */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                variant="text"
-                size="small"
-                startIcon={<LogIn size={16} />}
-                onClick={() => setInviteDialogOpen(true)}
-                sx={{
-                  color: '#64748b',
-                  fontWeight: 700,
-                  fontSize: '0.75rem',
-                  textTransform: 'none',
-                  '&:hover': { bgcolor: '#f1f5f9' },
-                }}
-              >
-                輸入邀請碼
-              </Button>
-            </motion.div>
-          </Box>
-        </motion.div>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+          <Button
+            variant="text"
+            size="small"
+            startIcon={<LogIn size={16} />}
+            onClick={() => setInviteDialogOpen(true)}
+            sx={{
+              color: '#64748b',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#f1f5f9' },
+            }}
+          >
+            輸入邀請碼
+          </Button>
+        </Box>
 
         {/* Active Events Section */}
-        <motion.div variants={containerVariants} initial="hidden" animate="visible">
-          <Box sx={{ mb: 4 }}>
-            <motion.div variants={itemVariants}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography sx={{ fontWeight: 700, color: '#1e293b' }}>Active Gatherings</Typography>
-                {activeEvents.length > 0 && (
-                  <motion.div
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    <Box
-                      sx={{
-                        bgcolor: '#dcfce7',
-                        color: '#15803d',
-                        fontSize: '0.625rem',
-                        fontWeight: 900,
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: 10,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      Live
-                    </Box>
-                  </motion.div>
-                )}
-              </Box>
-            </motion.div>
-
-            {activeEvents.length > 0 ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {activeEvents.map((event) => {
-                  const status = getEventStatus(event);
-                  const memberCount = event._count?.members || event.members?.length || 0;
-                  const startTime = new Date(event.startTime);
-
-                  return (
-                    <motion.div
-                      key={event.id}
-                      variants={itemVariants}
-                      whileHover={{ scale: 1.01, x: 4 }}
-                      whileTap={{ scale: 0.99 }}
-                      onClick={() => handleEventClick(event.id)}
-                      style={{
-                        backgroundColor: 'white',
-                        padding: 20,
-                        borderRadius: 32,
-                        border: '1px solid #f1f5f9',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <motion.div
-                          animate={status === 'ongoing' ? { scale: [1, 1.1, 1] } : {}}
-                          transition={{ duration: 1.5, repeat: Infinity }}
-                        >
-                          <Box
-                            sx={{
-                              width: 48,
-                              height: 48,
-                              bgcolor: status === 'ongoing' ? '#fee2e2' : '#dbeafe',
-                              borderRadius: 4,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '1.5rem',
-                            }}
-                          >
-                            {status === 'ongoing' ? '🔴' : '📍'}
-                          </Box>
-                        </motion.div>
-                        <Box>
-                          <Typography
-                            sx={{
-                              fontWeight: 700,
-                              color: '#0f172a',
-                              transition: 'color 0.2s ease',
-                            }}
-                          >
-                            {event.name}
-                          </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8' }}>
-                            <AnimatedClock size={12} />
-                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                              {isToday(startTime)
-                                ? format(startTime, 'h:mm a', { locale: zhTW })
-                                : format(startTime, 'MM/dd h:mm a', { locale: zhTW })}
-                            </Typography>
-                            <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
-                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                              {memberCount} friends
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Box>
-                      <AnimatedChevronRight size={18} className="text-slate-300" />
-                    </motion.div>
-                  );
-                })}
-              </Box>
-            ) : (
-              <motion.div
-                variants={itemVariants}
-                style={{
-                  backgroundColor: 'white',
-                  padding: 32,
-                  borderRadius: 32,
-                  border: '1px solid #f1f5f9',
-                  textAlign: 'center',
+        <Box sx={{ mb: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography sx={{ fontWeight: 700, color: '#1e293b' }}>Active Gatherings</Typography>
+            {activeEvents.length > 0 && (
+              <Box
+                sx={{
+                  bgcolor: '#dcfce7',
+                  color: '#15803d',
+                  fontSize: '0.625rem',
+                  fontWeight: 900,
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
                 }}
               >
-                <motion.div
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  <Typography sx={{ fontSize: '2rem', mb: 1 }}>📭</Typography>
-                </motion.div>
-                <Typography sx={{ fontWeight: 700, color: '#64748b', mb: 0.5 }}>
-                  No active gatherings
-                </Typography>
-                <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                  Tap "New Meet" to create one
-                </Typography>
-              </motion.div>
+                Live
+              </Box>
             )}
           </Box>
 
-          {/* Past Events Section */}
-          {pastEvents.length > 0 && (
-            <motion.div variants={itemVariants}>
-              <Typography sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>History</Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {pastEvents.slice(0, 5).map((event, index) => {
-                  const startTime = new Date(event.startTime);
+          {activeEvents.length > 0 ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {activeEvents.map((event) => {
+                const status = getEventStatus(event);
+                const memberCount = event._count?.members || event.members?.length || 0;
+                const startTime = new Date(event.startTime);
 
-                  return (
-                    <motion.div
-                      key={event.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.05 * index }}
-                      whileHover={{ opacity: 1, x: 4 }}
-                      onClick={() => handleEventClick(event.id)}
-                      style={{
-                        backgroundColor: 'rgba(241, 245, 249, 0.5)',
-                        padding: 16,
-                        borderRadius: 16,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        opacity: 0.8,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Typography sx={{ fontSize: '1.25rem', filter: 'grayscale(100%)' }}>🕒</Typography>
-                        <Box>
-                          <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: '#475569' }}>
-                            {event.name}
+                return (
+                  <Box
+                    key={event.id}
+                    onClick={() => handleEventClick(event.id)}
+                    sx={{
+                      bgcolor: 'white',
+                      p: 2.5,
+                      borderRadius: '2rem',
+                      border: '1px solid #f1f5f9',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:active': { transform: 'scale(0.98)' },
+                      '&:hover': {
+                        '& .event-title': { color: '#2563eb' },
+                      },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          bgcolor: status === 'ongoing' ? '#fee2e2' : '#dbeafe',
+                          borderRadius: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '1.5rem',
+                        }}
+                      >
+                        {status === 'ongoing' ? '🔴' : '📍'}
+                      </Box>
+                      <Box>
+                        <Typography
+                          className="event-title"
+                          sx={{
+                            fontWeight: 700,
+                            color: '#0f172a',
+                            transition: 'color 0.2s ease',
+                          }}
+                        >
+                          {event.name}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8' }}>
+                          <Clock size={12} />
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                            {isToday(startTime)
+                              ? format(startTime, 'h:mm a', { locale: zhTW })
+                              : format(startTime, 'MM/dd h:mm a', { locale: zhTW })}
                           </Typography>
-                          <Typography
-                            sx={{
-                              fontSize: '0.625rem',
-                              color: '#94a3b8',
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.03em',
-                            }}
-                          >
-                            {format(startTime, 'MMM d', { locale: zhTW })}
+                          <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                            {memberCount} friends
                           </Typography>
                         </Box>
                       </Box>
-                      <AnimatedTrophy size={14} className="text-slate-300" />
-                    </motion.div>
-                  );
-                })}
-              </Box>
-            </motion.div>
+                    </Box>
+                    <ChevronRight size={18} style={{ color: '#cbd5e1' }} />
+                  </Box>
+                );
+              })}
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                bgcolor: 'white',
+                p: 4,
+                borderRadius: '2rem',
+                border: '1px solid #f1f5f9',
+                textAlign: 'center',
+              }}
+            >
+              <Typography sx={{ fontSize: '2rem', mb: 1 }}>📭</Typography>
+              <Typography sx={{ fontWeight: 700, color: '#64748b', mb: 0.5 }}>
+                No active gatherings
+              </Typography>
+              <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8' }}>
+                Tap "New Meet" to create one
+              </Typography>
+            </Box>
           )}
-        </motion.div>
+        </Box>
+
+        {/* Past Events Section */}
+        {pastEvents.length > 0 && (
+          <Box>
+            <Typography sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>History</Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {pastEvents.slice(0, 5).map((event) => {
+                const startTime = new Date(event.startTime);
+
+                return (
+                  <Box
+                    key={event.id}
+                    onClick={() => handleEventClick(event.id)}
+                    sx={{
+                      bgcolor: 'rgba(241, 245, 249, 0.5)',
+                      p: 2,
+                      borderRadius: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      opacity: 0.8,
+                      cursor: 'pointer',
+                      transition: 'opacity 0.2s ease',
+                      '&:hover': { opacity: 1 },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Typography sx={{ fontSize: '1.25rem', filter: 'grayscale(100%)' }}>🕒</Typography>
+                      <Box>
+                        <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: '#475569' }}>
+                          {event.name}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: '0.625rem',
+                            color: '#94a3b8',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.03em',
+                          }}
+                        >
+                          {format(startTime, 'MMM d', { locale: zhTW })}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Trophy size={14} style={{ color: '#cbd5e1' }} />
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+        )}
       </Box>
 
       {/* Invite Token Input Dialog */}

@@ -6,16 +6,7 @@ import {
   Avatar,
   Divider,
 } from '@mui/material';
-import { motion } from 'framer-motion';
-import {
-  AnimatedSettings,
-  AnimatedChevronRight,
-  AnimatedBell,
-  AnimatedLock,
-  AnimatedInfo,
-  AnimatedLogOut,
-  AnimatedCalendar,
-} from '../components/AnimatedIcons';
+import { Settings, ChevronRight, Bell, Lock, Info, LogOut, Calendar } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { eventsApi, Event } from '../api/events';
 import { format } from 'date-fns';

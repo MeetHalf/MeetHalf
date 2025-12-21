@@ -6,8 +6,7 @@ import {
   InputAdornment,
   Avatar,
 } from '@mui/material';
-import { motion, AnimatePresence } from 'framer-motion';
-import { AnimatedSearch, AnimatedMessageCircle } from '../components/AnimatedIcons';
+import { Search, MessageCircle } from 'lucide-react';
 
 // 模擬好友數據
 const mockFriends = [
@@ -64,7 +63,7 @@ export default function Social() {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <AnimatedSearch size={20} className="text-slate-400" />
+                <Search size={20} style={{ color: '#94a3b8' }} />
               </InputAdornment>
             ),
           }}
@@ -184,7 +183,7 @@ export default function Social() {
                       color: '#64748b',
                     }}
                   >
-                    <AnimatedMessageCircle size={18} />
+                    <MessageCircle size={18} />
                   </motion.div>
                 </motion.div>
               ))}
