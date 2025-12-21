@@ -1,31 +1,72 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
   TextField,
   InputAdornment,
   Avatar,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import { Search, MessageCircle } from 'lucide-react';
-
-// 模擬好友數據
-const mockFriends = [
-  { id: 1, name: '小明', avatar: '🧑', status: 'online', lastSeen: '剛剛' },
-  { id: 2, name: '小華', avatar: '👩', status: 'offline', lastSeen: '30 分鐘前' },
-  { id: 3, name: '阿強', avatar: '👨', status: 'online', lastSeen: '剛剛' },
-  { id: 4, name: '小美', avatar: '👧', status: 'online', lastSeen: '5 分鐘前' },
-];
-
-// 模擬聊天數據
-const mockChats = [
-  { id: 1, name: '週五火鍋聚會', type: 'event', lastMessage: '小明：我快到了！', time: '5 分鐘前', unread: 2 },
-  { id: 2, name: '小華', type: 'private', lastMessage: '明天見！', time: '1 小時前', unread: 0 },
-  { id: 3, name: '大學同學群', type: 'group', lastMessage: '阿強：+1', time: '昨天', unread: 5 },
-];
+import { useAuth } from '../hooks/useAuth';
+import { useChat } from '../hooks/useChat';
+import { useFriends } from '../hooks/useFriends';
+import { formatDistanceToNow } from 'date-fns';
+import { zhTW } from 'date-fns/locale';
 
 export default function Social() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'friends' | 'chats'>('friends');
+
+  // 使用真實 API
+  const { friends, loading: friendsLoading, error: friendsError, loadFriends } = useFriends();
+  const {
+    conversations,
+    loading: chatsLoading,
+    error: chatsError,
+    loadConversations,
+  } = useChat(user?.userId);
+
+  // 載入資料
+  useEffect(() => {
+    if (user) {
+      if (activeTab === 'friends') {
+        loadFriends();
+      } else {
+        loadConversations();
+      }
+    }
+  }, [user, activeTab, loadFriends, loadConversations]);
+
+  const formatTime = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), {
+        addSuffix: true,
+        locale: zhTW,
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  const handleFriendClick = (friendUserId: string) => {
+    navigate(`/chat/user/${friendUserId}`);
+  };
+
+  const handleChatClick = (conversation: { type: 'user' | 'group'; id: string | number }) => {
+    if (conversation.type === 'user') {
+      navigate(`/chat/user/${conversation.id}`);
+    } else {
+      navigate(`/chat/group/${conversation.id}`);
+    }
+  };
+
+  const loading = activeTab === 'friends' ? friendsLoading : chatsLoading;
+  const error = activeTab === 'friends' ? friendsError : chatsError;
 
   return (
     <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
@@ -86,156 +127,188 @@ export default function Social() {
 
       {/* Content */}
       <Box sx={{ p: 3 }}>
-        {activeTab === 'friends' ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            {mockFriends.map((friend) => (
-              <Box
-                key={friend.id}
-                sx={{
-                  bgcolor: 'white',
-                  p: 2,
-                  borderRadius: '1.5rem',
-                  border: '1px solid #f1f5f9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  '&:active': { transform: 'scale(0.99)' },
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Box sx={{ position: 'relative' }}>
-                    <Avatar
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        bgcolor: friend.status === 'online' ? '#dcfce7' : '#f1f5f9',
-                        fontSize: '1.5rem',
-                        borderRadius: 4,
-                      }}
-                    >
-                      {friend.avatar}
-                    </Avatar>
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        bottom: 0,
-                        right: 0,
-                        width: 12,
-                        height: 12,
-                        borderRadius: '50%',
-                        bgcolor: friend.status === 'online' ? '#22c55e' : '#94a3b8',
-                        border: '2px solid white',
-                      }}
-                    />
-                  </Box>
-                  <Box>
-                    <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>
-                      {friend.name}
-                    </Typography>
-                    <Typography sx={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-                      {friend.lastSeen}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Box
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 3,
-                    bgcolor: '#f8fafc',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#64748b',
-                    transition: 'all 0.2s ease',
-                    '&:hover': { bgcolor: '#dbeafe', color: '#2563eb' },
-                  }}
-                >
-                  <MessageCircle size={18} />
-                </Box>
-              </Box>
-            ))}
+        {/* Error Alert */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, borderRadius: 4 }} onClose={() => {}}>
+            {error}
+          </Alert>
+        )}
+
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress />
           </Box>
-        ) : (
+        ) : activeTab === 'friends' ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            {mockChats.map((chat) => (
-              <Box
-                key={chat.id}
-                sx={{
-                  bgcolor: 'white',
-                  p: 2,
-                  borderRadius: '1.5rem',
-                  border: '1px solid #f1f5f9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  '&:active': { transform: 'scale(0.99)' },
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar
+            {friends.length > 0 ? (
+              friends
+                .filter((friend) =>
+                  searchQuery
+                    ? friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      friend.email.toLowerCase().includes(searchQuery.toLowerCase())
+                    : true
+                )
+                .map((friend) => (
+                  <Box
+                    key={friend.userId}
+                    onClick={() => handleFriendClick(friend.userId)}
                     sx={{
-                      width: 48,
-                      height: 48,
-                      bgcolor:
-                        chat.type === 'event'
-                          ? '#dbeafe'
-                          : chat.type === 'group'
-                          ? '#dcfce7'
-                          : '#f1f5f9',
-                      fontSize: '1.25rem',
-                      borderRadius: 4,
+                      bgcolor: 'white',
+                      p: 2,
+                      borderRadius: '1.5rem',
+                      border: '1px solid #f1f5f9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:active': { transform: 'scale(0.99)' },
                     }}
                   >
-                    {chat.type === 'event' ? '📍' : chat.type === 'group' ? '👥' : chat.name[0]}
-                  </Avatar>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>{chat.name}</Typography>
-                    <Typography
-                      sx={{
-                        fontSize: '0.75rem',
-                        color: '#94a3b8',
-                        fontWeight: 500,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: 180,
-                      }}
-                    >
-                      {chat.lastMessage}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
-                  <Typography sx={{ fontSize: '0.625rem', color: '#94a3b8', fontWeight: 600 }}>
-                    {chat.time}
-                  </Typography>
-                  {chat.unread > 0 && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Avatar
+                        src={friend.avatar || undefined}
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          bgcolor: '#dbeafe',
+                          fontSize: '1.25rem',
+                          borderRadius: 4,
+                        }}
+                      >
+                        {friend.name.charAt(0).toUpperCase()}
+                      </Avatar>
+                      <Box>
+                        <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>
+                          {friend.name}
+                        </Typography>
+                        <Typography sx={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
+                          {friend.email}
+                        </Typography>
+                      </Box>
+                    </Box>
                     <Box
                       sx={{
-                        minWidth: 18,
-                        height: 18,
-                        borderRadius: 10,
-                        bgcolor: '#ef4444',
-                        color: 'white',
-                        fontSize: '0.625rem',
-                        fontWeight: 700,
+                        width: 40,
+                        height: 40,
+                        borderRadius: 3,
+                        bgcolor: '#f8fafc',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        px: 0.5,
+                        color: '#64748b',
+                        transition: 'all 0.2s ease',
+                        '&:hover': { bgcolor: '#dbeafe', color: '#2563eb' },
                       }}
                     >
-                      {chat.unread}
+                      <MessageCircle size={18} />
                     </Box>
-                  )}
-                </Box>
+                  </Box>
+                ))
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 12 }}>
+                <Typography sx={{ fontSize: '4rem', mb: 2 }}>👥</Typography>
+                <Typography sx={{ fontWeight: 700, color: '#64748b' }}>No friends yet</Typography>
+                <Typography sx={{ color: '#94a3b8', mt: 1 }}>
+                  Add friends to start chatting
+                </Typography>
               </Box>
-            ))}
+            )}
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {conversations.length > 0 ? (
+              conversations
+                .filter((chat) =>
+                  searchQuery
+                    ? chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      chat.lastMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase())
+                    : true
+                )
+                .map((chat) => (
+                  <Box
+                    key={`${chat.type}-${chat.id}`}
+                    onClick={() => handleChatClick(chat)}
+                    sx={{
+                      bgcolor: 'white',
+                      p: 2,
+                      borderRadius: '1.5rem',
+                      border: '1px solid #f1f5f9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:active': { transform: 'scale(0.99)' },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Avatar
+                        src={chat.avatar || undefined}
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          bgcolor: chat.type === 'group' ? '#dcfce7' : '#dbeafe',
+                          fontSize: '1.25rem',
+                          borderRadius: 4,
+                        }}
+                      >
+                        {chat.name.charAt(0).toUpperCase()}
+                      </Avatar>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>
+                          {chat.name}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: '0.75rem',
+                            color: '#94a3b8',
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            maxWidth: 180,
+                          }}
+                        >
+                          {chat.lastMessage?.content || 'No messages yet'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                      <Typography sx={{ fontSize: '0.625rem', color: '#94a3b8', fontWeight: 600 }}>
+                        {chat.lastMessage ? formatTime(chat.lastMessage.createdAt) : ''}
+                      </Typography>
+                      {chat.unreadCount > 0 && (
+                        <Box
+                          sx={{
+                            minWidth: 18,
+                            height: 18,
+                            borderRadius: 10,
+                            bgcolor: '#ef4444',
+                            color: 'white',
+                            fontSize: '0.625rem',
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            px: 0.5,
+                          }}
+                        >
+                          {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                ))
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 12 }}>
+                <Typography sx={{ fontSize: '4rem', mb: 2 }}>💬</Typography>
+                <Typography sx={{ fontWeight: 700, color: '#64748b' }}>No conversations yet</Typography>
+                <Typography sx={{ color: '#94a3b8', mt: 1 }}>
+                  Start a chat with your friends
+                </Typography>
+              </Box>
+            )}
           </Box>
         )}
       </Box>
