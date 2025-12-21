@@ -22,6 +22,7 @@ import {
   type PokeMemberRequest,
   type MyEventsQuery,
 } from '../schemas/eventActions';
+import { calculateMidpointSchema, type CalculateMidpointRequest } from '../schemas/midpoint';
 import { gmapsClient, GMAPS_KEY } from '../lib/gmaps';
 import { createCache, makeCacheKey } from '../lib/cache';
 import { memberService } from '../services/MemberService';
@@ -212,7 +213,7 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
       return;
     }
 
-    const { name, startTime: providedStartTime, endTime: providedEndTime, ownerId: providedOwnerId, useMeetHalf, status, meetingPointLat, meetingPointLng, meetingPointName, meetingPointAddress, groupId, ownerNickname, ownerTravelMode, ownerShareLocation } = validation.data as CreateEventRequest;
+    const { name, startTime: providedStartTime, endTime: providedEndTime, ownerId: providedOwnerId, useMeetHalf, status, meetingPointLat, meetingPointLng, meetingPointName, meetingPointAddress, groupId, ownerNickname, ownerTravelMode, ownerShareLocation, invitedFriendIds } = validation.data as CreateEventRequest;
     
     // Set default startTime and endTime if not provided
     // Default: startTime = 1 hour from now, endTime = 3 hours from now
@@ -293,6 +294,28 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
     // 如果提供了主辦信息，自動創建主辦的 member 記錄
     const shouldCreateOwnerMember = ownerNickname && ownerNickname.trim().length > 0;
     
+    // 自動建立 Group（如果沒有提供 groupId）
+    let finalGroupId = validGroupId;
+    if (!finalGroupId && req.user && 'userId' in req.user) {
+      // 只有認證用戶才自動建立 Group
+      try {
+        const group = await prisma.group.create({
+          data: {
+            name: name, // 群組名稱 = 活動名稱
+            ownerId: ownerId,
+            members: {
+              connect: { userId: ownerId }
+            }
+          }
+        });
+        finalGroupId = group.id;
+        console.log(`[EVENTS] Auto-created group ${group.id} for event "${name}"`);
+      } catch (error) {
+        console.error('[EVENTS] Error creating group:', error);
+        // 不影響 Event 創建，繼續執行
+      }
+    }
+    
     const event = await prisma.event.create({
       data: {
         name,
@@ -305,7 +328,7 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
         meetingPointLng,
         meetingPointName,
         meetingPointAddress,
-        groupId: validGroupId,
+        groupId: finalGroupId,
         // 如果提供了主辦信息，自動創建主辦的 member 記錄
         members: shouldCreateOwnerMember ? {
           create: {
@@ -349,6 +372,66 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
           travelMode: ownerMember.travelMode,
           createdAt: ownerMember.createdAt.toISOString(),
         });
+      }
+    }
+
+    // 處理好友邀請
+    if (invitedFriendIds && invitedFriendIds.length > 0 && req.user && 'userId' in req.user) {
+      try {
+        const { notificationService } = await import('../services/NotificationService');
+        const inviter = await prisma.user.findUnique({
+          where: { userId: ownerId },
+          select: { name: true, userId: true },
+        });
+
+        if (inviter) {
+          for (const friendId of invitedFriendIds) {
+            try {
+              // Check if user exists
+              const targetUser = await prisma.user.findUnique({
+                where: { userId: friendId },
+              });
+
+              if (!targetUser) {
+                console.warn(`[EVENTS] User ${friendId} not found, skipping invitation`);
+                continue;
+              }
+
+              // Create invitation
+              const invitation = await prisma.eventInvitation.create({
+                data: {
+                  eventId: event.id,
+                  fromUserId: ownerId,
+                  toUserId: friendId,
+                },
+              });
+
+              // Send notification
+              await notificationService.createNotification({
+                userId: friendId,
+                type: 'EVENT_INVITE',
+                title: '活動邀請',
+                body: `${inviter.name} 邀請你參加活動「${event.name}」`,
+                data: {
+                  eventId: event.id,
+                  eventName: event.name,
+                  invitationId: invitation.id,
+                  fromUserId: inviter.userId,
+                  fromUserName: inviter.name,
+                },
+                sendPush: true,
+              });
+
+              console.log(`[EVENTS] Invited ${friendId} to event ${event.id}`);
+            } catch (error) {
+              console.error(`[EVENTS] Error inviting ${friendId}:`, error);
+              // Continue with other invitations
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[EVENTS] Error processing invitations:', error);
+        // Don't fail event creation if invitations fail
       }
     }
 
@@ -2904,6 +2987,186 @@ router.get('/my-events', optionalAuthMiddleware, async (req: Request, res: Respo
     res.status(500).json({
       code: 'INTERNAL_ERROR',
       message: 'Failed to fetch events',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /events/calculate-midpoint:
+ *   post:
+ *     summary: Calculate midpoint for temporary locations (no event required)
+ *     tags: [Events]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - locations
+ *             properties:
+ *               locations:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     lat:
+ *                       type: number
+ *                     lng:
+ *                       type: number
+ *                     travelMode:
+ *                       type: string
+ *                       enum: [driving, transit, walking, bicycling]
+ *               useMeetHalf:
+ *                 type: boolean
+ *                 default: true
+ *     responses:
+ *       200:
+ *         description: Midpoint calculation result
+ *       400:
+ *         description: Validation error
+ */
+// POST /events/calculate-midpoint - Calculate temporary midpoint
+router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const validation = calculateMidpointSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid input',
+        errors: validation.error.errors,
+      });
+      return;
+    }
+
+    const { locations, useMeetHalf } = validation.data as CalculateMidpointRequest;
+
+    if (locations.length < 2) {
+      res.status(400).json({
+        code: 'INSUFFICIENT_LOCATIONS',
+        message: 'At least 2 locations are required',
+      });
+      return;
+    }
+
+    // Create cache key
+    const cacheKey = makeCacheKey('temp_midpoint', { locations, useMeetHalf });
+    const cached = midpointCache.get(cacheKey);
+    if (cached) {
+      res.json({ ...cached, cached: true });
+      return;
+    }
+
+    // Calculate geometric midpoint
+    const totalLat = locations.reduce((sum, loc) => sum + loc.lat, 0);
+    const totalLng = locations.reduce((sum, loc) => sum + loc.lng, 0);
+    const midpoint = {
+      lat: totalLat / locations.length,
+      lng: totalLng / locations.length,
+    };
+
+    // Get address for midpoint using reverse geocoding
+    let address = 'Unknown location';
+    let suggestedPlaces: any[] = [];
+    let travelTimes: any[] = [];
+
+    try {
+      // Reverse geocode the midpoint
+      const reverseResult = await gmapsClient.reverseGeocode({
+        params: {
+          latlng: `${midpoint.lat},${midpoint.lng}`,
+          key: GMAPS_KEY,
+        },
+      });
+
+      if (reverseResult.data.status === 'OK' && reverseResult.data.results.length > 0) {
+        address = reverseResult.data.results[0].formatted_address;
+      }
+
+      // Calculate travel times for each location to the midpoint
+      const travelTimePromises = locations.map(async (location, index) => {
+        try {
+          const directionsResult = await gmapsClient.directions({
+            params: {
+              origin: `${location.lat},${location.lng}`,
+              destination: `${midpoint.lat},${midpoint.lng}`,
+              mode: location.travelMode as any,
+              key: GMAPS_KEY,
+            },
+          });
+
+          if (directionsResult.data.status === 'OK' && directionsResult.data.routes.length > 0) {
+            const route = directionsResult.data.routes[0];
+            const leg = route.legs[0];
+            return {
+              locationIndex: index,
+              travelMode: location.travelMode,
+              duration: leg.duration?.text || 'N/A',
+              durationValue: leg.duration?.value || null,
+              distance: leg.distance?.text || 'N/A',
+              distanceValue: leg.distance?.value || null,
+            };
+          }
+        } catch (error) {
+          console.error(`Error calculating travel time for location ${index}:`, error);
+        }
+        return {
+          locationIndex: index,
+          travelMode: location.travelMode,
+          duration: 'N/A',
+          durationValue: null,
+          distance: 'N/A',
+          distanceValue: null,
+        };
+      });
+
+      travelTimes = await Promise.all(travelTimePromises);
+
+      // Find nearby places
+      const nearbyResult = await gmapsClient.placesNearby({
+        params: {
+          location: `${midpoint.lat},${midpoint.lng}`,
+          radius: 1000, // 1km radius
+          type: 'restaurant|cafe|bar',
+          key: GMAPS_KEY,
+        },
+      });
+
+      if (nearbyResult.data.status === 'OK') {
+        suggestedPlaces = nearbyResult.data.results.slice(0, 5).map((place) => ({
+          name: place.name,
+          address: place.vicinity,
+          rating: place.rating,
+          types: place.types,
+          place_id: place.place_id,
+          lat: place.geometry?.location.lat,
+          lng: place.geometry?.location.lng,
+        }));
+      }
+    } catch (error) {
+      console.error('Error calling Google Maps API:', error);
+      // Continue with basic midpoint data even if Maps API fails
+    }
+
+    const result = {
+      midpoint,
+      address,
+      suggested_places: suggestedPlaces,
+      travel_times: travelTimes,
+      location_count: locations.length,
+      cached: false,
+    };
+
+    // Cache the result
+    midpointCache.set(cacheKey, result);
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error calculating temporary midpoint:', error);
+    res.status(500).json({
+      code: 'INTERNAL_ERROR',
+      message: 'Failed to calculate midpoint',
     });
   }
 });
