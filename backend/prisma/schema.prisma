@@ -82,8 +82,9 @@ model Group {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
-  members   User[]   // 群組成員（多對多關聯）
-  events    Event[]  // 關聯的所有聚會
+  members      User[]        // 群組成員（多對多關聯）
+  events       Event[]       // 關聯的所有聚會
+  chatMessages ChatMessage[] // 群組聊天訊息
   
   @@index([ownerId])
 }
@@ -112,5 +113,78 @@ model ShareToken {
   
   @@index([token])
   @@index([eventId])
+}
+
+model Friend {
+  id        Int      @id @default(autoincrement())
+  userId    String   // 發起方 userId
+  friendId  String   // 對方 userId
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, friendId]) // 確保唯一關係
+  @@index([userId])
+  @@index([friendId])
+}
+
+model FriendRequest {
+  id         Int                @id @default(autoincrement())
+  fromUserId String             // 邀請方 userId
+  toUserId   String             // 被邀請方 userId
+  status     FriendRequestStatus @default(pending)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  
+  @@unique([fromUserId, toUserId]) // 避免重複邀請
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([status])
+}
+
+enum FriendRequestStatus {
+  pending
+  accepted
+  rejected
+}
+
+model ChatMessage {
+  id         Int      @id @default(autoincrement())
+  content    String   @db.Text // 訊息內容
+  senderId   String   // 發送者 userId
+  receiverId String?  // 個人聊天對象 userId（可選）
+  groupId    Int?     // 群組聊天（可選）
+  readBy     Json     @default("[]") // 已讀列表 userId[]
+  createdAt  DateTime @default(now())
+  
+  group      Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([groupId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    String           // 接收者 userId
+  type      NotificationType // 通知類型
+  title     String           // 標題
+  body      String           @db.Text // 內容
+  data      Json?            // 額外資料（如 requestId, eventId）
+  read      Boolean          @default(false) // 是否已讀
+  createdAt DateTime         @default(now())
+  
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  FRIEND_REJECTED
+  EVENT_INVITE
+  POKE
+  NEW_MESSAGE
+  EVENT_UPDATE
 }
 
