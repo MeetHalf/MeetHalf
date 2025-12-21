@@ -13,6 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 import { useFriends } from '../hooks/useFriends';
 import { Notification } from '../types/notification';
+import { eventInvitationsApi } from '../api/eventInvitations';
 import { formatDistanceToNow } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 
@@ -123,6 +124,35 @@ export default function Notifications() {
     }
   };
 
+  const handleAcceptEventInvite = async (notification: Notification) => {
+    if (notification.data?.eventId && notification.data?.invitationId) {
+      try {
+        await eventInvitationsApi.acceptInvitation(
+          notification.data.eventId,
+          notification.data.invitationId
+        );
+        loadNotifications();
+        navigate(`/events/${notification.data.eventId}`);
+      } catch (error) {
+        console.error('Failed to accept event invitation:', error);
+      }
+    }
+  };
+
+  const handleRejectEventInvite = async (notification: Notification) => {
+    if (notification.data?.eventId && notification.data?.invitationId) {
+      try {
+        await eventInvitationsApi.rejectInvitation(
+          notification.data.eventId,
+          notification.data.invitationId
+        );
+        loadNotifications();
+      } catch (error) {
+        console.error('Failed to reject event invitation:', error);
+      }
+    }
+  };
+
   if (!user) {
     return null;
   }
@@ -201,11 +231,13 @@ export default function Notifications() {
             {notifications.map((notification) => {
               const colors = getNotificationColor(notification.type);
               const isFriendRequest = notification.type === 'FRIEND_REQUEST';
+              const isEventInvite = notification.type === 'EVENT_INVITE';
+              const hasActions = isFriendRequest || isEventInvite;
               
               return (
                 <Box
                   key={notification.id}
-                  onClick={() => !isFriendRequest && handleNotificationClick(notification)}
+                  onClick={() => !hasActions && handleNotificationClick(notification)}
                   sx={{
                     bgcolor: notification.read ? 'white' : 'rgba(37, 99, 235, 0.03)',
                     p: 2,
@@ -214,7 +246,7 @@ export default function Notifications() {
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: 2,
-                    cursor: isFriendRequest ? 'default' : 'pointer',
+                    cursor: hasActions ? 'default' : 'pointer',
                     transition: 'all 0.2s ease',
                     '&:active': { transform: 'scale(0.99)' },
                   }}
@@ -294,6 +326,55 @@ export default function Notifications() {
                           }}
                         >
                           拒絕
+                        </Button>
+                      </Box>
+                    )}
+
+                    {/* Event Invite Actions */}
+                    {isEventInvite && (
+                      <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<Check size={16} />}
+                          onClick={() => handleAcceptEventInvite(notification)}
+                          sx={{
+                            borderRadius: 3,
+                            bgcolor: '#2563eb',
+                            '&:hover': { bgcolor: '#1d4ed8' },
+                            textTransform: 'none',
+                            fontWeight: 700,
+                          }}
+                        >
+                          接受並加入
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<X size={16} />}
+                          onClick={() => handleRejectEventInvite(notification)}
+                          sx={{
+                            borderRadius: 3,
+                            borderColor: '#e2e8f0',
+                            color: '#64748b',
+                            textTransform: 'none',
+                            fontWeight: 700,
+                          }}
+                        >
+                          拒絕
+                        </Button>
+                        <Button
+                          variant="text"
+                          size="small"
+                          onClick={() => handleNotificationClick(notification)}
+                          sx={{
+                            borderRadius: 3,
+                            color: '#2563eb',
+                            textTransform: 'none',
+                            fontWeight: 700,
+                          }}
+                        >
+                          查看詳情
                         </Button>
                       </Box>
                     )}
