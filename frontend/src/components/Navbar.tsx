@@ -1,21 +1,12 @@
-import { AppBar, Toolbar, Typography, Button, Box, Avatar } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { Logout as LogoutIcon, Group as GroupIcon } from '@mui/icons-material';
+import { useState } from 'react';
+import { AppBar, Toolbar, Typography, Box, IconButton, Badge } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { Notifications as NotificationsIcon } from '@mui/icons-material';
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
-  };
+  // 模擬未讀通知數量
+  const [unreadCount] = useState(3);
 
   return (
     <AppBar 
@@ -27,23 +18,24 @@ export default function Navbar() {
         borderColor: 'divider',
       }}
     >
-      <Toolbar sx={{ px: { xs: 2, md: 4 }, py: 1.5 }}>
+      <Toolbar sx={{ px: { xs: 2, md: 4 }, py: 1 }}>
         {/* Logo */}
         <Box 
           sx={{ 
             display: 'flex', 
-            alignItems: 'center', 
+            flexDirection: 'column',
             cursor: 'pointer',
             flexGrow: 1
           }}
-          onClick={() => navigate(user ? '/groups' : '/')}
+          onClick={() => navigate('/events')}
         >
           <Typography 
             variant="h5" 
             sx={{ 
-              fontWeight: 'bold', 
-              color: 'primary.main',
-              letterSpacing: '-0.5px'
+              fontWeight: 900, 
+              color: '#1e293b',
+              letterSpacing: '-0.5px',
+              lineHeight: 1.2,
             }}
           >
             MeetHalf
@@ -51,102 +43,40 @@ export default function Navbar() {
           <Typography 
             variant="body2" 
             sx={{ 
-              ml: 2, 
-              color: 'text.secondary',
-              display: { xs: 'none', sm: 'block' }
+              color: '#94a3b8',
+              fontSize: '0.75rem',
+              fontWeight: 500,
             }}
           >
-            找到完美的聚會地點
+            Where's the squad?
           </Typography>
         </Box>
 
-        {/* Navigation Buttons */}
-        {user ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {/* User Email */}
-            <Box 
-              sx={{ 
-                display: { xs: 'none', md: 'flex' }, 
-                alignItems: 'center', 
-                gap: 1,
-                px: 2,
-                py: 0.5,
-                bgcolor: 'grey.50',
-                borderRadius: 2
-              }}
-            >
-              <Avatar 
-                sx={{ 
-                  width: 28, 
-                  height: 28, 
-                  bgcolor: 'primary.main',
-                  fontSize: '0.875rem'
-                }}
-              >
-                {user.email.charAt(0).toUpperCase()}
-              </Avatar>
-              <Typography variant="body2" sx={{ color: 'text.primary' }}>
-                {user.email}
-              </Typography>
-            </Box>
-
-            {/* Events Button */}
-            {location.pathname !== '/groups' && (
-              <Button 
-                variant="outlined" 
-                size="medium"
-                startIcon={<GroupIcon />}
-                onClick={() => navigate('/groups')}
-                sx={{
-                  borderColor: 'divider',
-                  color: 'text.primary',
-                  '&:hover': {
-                    borderColor: 'primary.main',
-                    bgcolor: 'primary.50',
-                  }
-                }}
-              >
-                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>活動</Box>
-              </Button>
-            )}
-
-            {/* Logout Button */}
-            <Button 
-              variant="contained" 
-              size="medium"
-              startIcon={<LogoutIcon />}
-              onClick={handleLogout}
-              sx={{
-                bgcolor: 'primary.main',
-                '&:hover': { 
-                  bgcolor: 'primary.dark',
-                  transform: 'translateY(-1px)',
-                  boxShadow: 2
-                },
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <Box sx={{ display: { xs: 'none', sm: 'block' } }}>登出</Box>
-            </Button>
-          </Box>
-        ) : (
-          location.pathname !== '/login' && (
-            <Button 
-              variant="contained" 
-              size="medium"
-              onClick={() => navigate('/login')}
-              sx={{
-                bgcolor: 'primary.main',
-                '&:hover': { bgcolor: 'primary.dark' }
-              }}
-            >
-              登入
-            </Button>
-          )
-        )}
+        {/* 通知圖標 */}
+        <IconButton 
+          onClick={() => navigate('/notifications')}
+          sx={{ 
+            color: '#64748b',
+            '&:hover': {
+              bgcolor: '#f1f5f9',
+            },
+          }}
+        >
+          <Badge 
+            badgeContent={unreadCount} 
+            color="error"
+            sx={{
+              '& .MuiBadge-badge': {
+                fontSize: '0.65rem',
+                minWidth: 18,
+                height: 18,
+              },
+            }}
+          >
+            <NotificationsIcon />
+          </Badge>
+        </IconButton>
       </Toolbar>
     </AppBar>
   );
 }
-
-

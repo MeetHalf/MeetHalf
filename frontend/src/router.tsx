@@ -6,6 +6,10 @@ import Events from './pages/Events';
 import EventDetail from './pages/EventDetail';
 import CreateEvent from './pages/CreateEvent';
 import InvitePage from './pages/InvitePage';
+import Social from './pages/Social';
+import MapView from './pages/MapView';
+import Profile from './pages/Profile';
+import Notifications from './pages/Notifications';
 import { Box, CircularProgress } from '@mui/material';
 
 // Root layout that wraps all routes
@@ -89,6 +93,38 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: '/social',
+        element: (
+          <LoadingRoute>
+            <Social />
+          </LoadingRoute>
+        ),
+      },
+      {
+        path: '/map',
+        element: (
+          <LoadingRoute>
+            <MapView />
+          </LoadingRoute>
+        ),
+      },
+      {
+        path: '/profile',
+        element: (
+          <LoadingRoute>
+            <Profile />
+          </LoadingRoute>
+        ),
+      },
+      {
+        path: '/notifications',
+        element: (
+          <LoadingRoute>
+            <Notifications />
+          </LoadingRoute>
+        ),
+      },
+      {
         path: '/groups',
         element: <Navigate to="/events" replace />,
       },
@@ -99,5 +135,3 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
-
-
