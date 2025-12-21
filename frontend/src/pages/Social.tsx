@@ -33,12 +33,20 @@ export default function Social() {
 
   // 載入資料
   useEffect(() => {
+    console.log('[Social] useEffect triggered', { user: user?.userId, activeTab });
     if (user) {
+      console.log('[Social] User exists, loading data...', { activeTab });
       if (activeTab === 'friends') {
-        loadFriends();
+        loadFriends().catch((err) => {
+          console.error('[Social] Failed to load friends:', err);
+        });
       } else {
-        loadConversations();
+        loadConversations().catch((err) => {
+          console.error('[Social] Failed to load conversations:', err);
+        });
       }
+    } else {
+      console.warn('[Social] No user found, skipping API calls');
     }
   }, [user, activeTab, loadFriends, loadConversations]);
 
@@ -127,6 +135,13 @@ export default function Social() {
 
       {/* Content */}
       <Box sx={{ p: 3 }}>
+        {/* 未登入提示 */}
+        {!user && (
+          <Alert severity="info" sx={{ mb: 2, borderRadius: 4 }}>
+            請先登入以查看好友和聊天記錄
+          </Alert>
+        )}
+
         {/* Error Alert */}
         {error && (
           <Alert severity="error" sx={{ mb: 2, borderRadius: 4 }} onClose={() => {}}>

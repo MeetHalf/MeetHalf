@@ -14,11 +14,19 @@ export function useFriends() {
     try {
       setLoading(true);
       setError(null);
+      console.log('[useFriends] Loading friends...');
       const { friends: data } = await friendsApi.getFriends();
+      console.log('[useFriends] Friends loaded:', data);
       setFriends(data);
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load friends');
-      console.error('Error loading friends:', err);
+      const errorMessage = err?.response?.data?.message || err?.message || 'Failed to load friends';
+      console.error('[useFriends] Error loading friends:', {
+        message: errorMessage,
+        status: err?.response?.status,
+        data: err?.response?.data,
+        fullError: err,
+      });
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

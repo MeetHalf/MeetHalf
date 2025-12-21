@@ -15,11 +15,19 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     try {
       setLoading(true);
       setError(null);
+      console.log('[useChat] Loading conversations...');
       const { conversations: data } = await chatApi.getConversations();
+      console.log('[useChat] Conversations loaded:', data);
       setConversations(data);
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load conversations');
-      console.error('Error loading conversations:', err);
+      const errorMessage = err?.response?.data?.message || err?.message || 'Failed to load conversations';
+      console.error('[useChat] Error loading conversations:', {
+        message: errorMessage,
+        status: err?.response?.status,
+        data: err?.response?.data,
+        fullError: err,
+      });
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
