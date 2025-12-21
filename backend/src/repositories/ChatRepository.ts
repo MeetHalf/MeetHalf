@@ -120,6 +120,7 @@ export class ChatRepository {
    * Get conversation list for a user (recent chats)
    */
   async getConversations(userId: string) {
+    console.log('[ChatRepository] Getting conversations for user:', userId);
     // Get all messages where user is sender or receiver
     const messages = await prisma.chatMessage.findMany({
       where: {
@@ -250,9 +251,20 @@ export class ChatRepository {
       }
     }
 
-    return Array.from(conversationMap.values()).sort(
-      (a, b) => b.lastMessage.createdAt.getTime() - a.lastMessage.createdAt.getTime()
+    const conversations = Array.from(conversationMap.values()).sort(
+      (a, b) => {
+        if (!a.lastMessage || !b.lastMessage) return 0;
+        const timeA = a.lastMessage.createdAt instanceof Date 
+          ? a.lastMessage.createdAt.getTime() 
+          : new Date(a.lastMessage.createdAt).getTime();
+        const timeB = b.lastMessage.createdAt instanceof Date 
+          ? b.lastMessage.createdAt.getTime() 
+          : new Date(b.lastMessage.createdAt).getTime();
+        return timeB - timeA;
+      }
     );
+    console.log('[ChatRepository] Conversations found:', conversations.length);
+    return conversations;
   }
 
   /**

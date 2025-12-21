@@ -151,9 +151,14 @@ router.get('/conversations', authMiddleware, async (req: Request, res: Response)
     }
 
     const conversations = await chatService.getConversations(userUserId);
+    console.log('[Chat] Conversations fetched:', { count: conversations.length, userId: userUserId });
     res.json({ conversations });
   } catch (error) {
-    console.error('Error fetching conversations:', error);
+    console.error('[Chat] Error fetching conversations:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      userId: userUserId,
+    });
     res.status(500).json({ code: 'INTERNAL_ERROR', message: 'Failed to fetch conversations' });
   }
 });
