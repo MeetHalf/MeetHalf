@@ -96,11 +96,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '/social',
-        element: (
-          <LoadingRoute>
-            <Social />
-          </LoadingRoute>
-        ),
+        element: <Navigate to="/friends" replace />,
       },
       {
         path: '/friends',

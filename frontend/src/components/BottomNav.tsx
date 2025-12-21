@@ -14,7 +14,7 @@ const navItems: NavItem[] = [
     icon: <Home size={20} />,
   },
   {
-    path: '/social',
+    path: '/friends',
     icon: <Users size={20} />,
   },
   {
