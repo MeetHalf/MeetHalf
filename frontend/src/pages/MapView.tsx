@@ -3,16 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
-  Paper,
-  Chip,
-  IconButton,
   CircularProgress,
 } from '@mui/material';
 import {
   Close as CloseIcon,
   AccessTime as TimeIcon,
-  People as PeopleIcon,
   ChevronRight as ChevronRightIcon,
+  ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
@@ -29,7 +26,6 @@ export default function MapView() {
     const fetchEvents = async () => {
       try {
         const response = await eventsApi.getEvents();
-        // 只顯示有集合地點的進行中或即將開始的活動
         const eventsWithLocation = response.events.filter(
           (e) => e.meetingPointLat && e.meetingPointLng && e.status !== 'ended'
         );
@@ -43,25 +39,22 @@ export default function MapView() {
     fetchEvents();
   }, []);
 
-  // 計算地圖中心（所有活動的中心點）
   const mapCenter = useMemo(() => {
     if (events.length === 0) {
-      // 預設台北市中心
       return { lat: 25.033, lng: 121.5654 };
     }
-    
-    const validEvents = events.filter(e => e.meetingPointLat && e.meetingPointLng);
+
+    const validEvents = events.filter((e) => e.meetingPointLat && e.meetingPointLng);
     if (validEvents.length === 0) {
       return { lat: 25.033, lng: 121.5654 };
     }
 
     const avgLat = validEvents.reduce((sum, e) => sum + (e.meetingPointLat || 0), 0) / validEvents.length;
     const avgLng = validEvents.reduce((sum, e) => sum + (e.meetingPointLng || 0), 0) / validEvents.length;
-    
+
     return { lat: avgLat, lng: avgLng };
   }, [events]);
 
-  // 地圖標記
   const markers = useMemo(() => {
     return events.map((event) => ({
       id: event.id,
@@ -73,7 +66,7 @@ export default function MapView() {
   }, [events]);
 
   const handleMarkerClick = (markerId: number) => {
-    const event = events.find(e => e.id === markerId);
+    const event = events.find((e) => e.id === markerId);
     if (event) {
       setSelectedEvent(event);
     }
@@ -81,64 +74,100 @@ export default function MapView() {
 
   if (loading) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: 'calc(100vh - 140px)' 
-      }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: 'calc(100vh - 140px)',
+        }}
+      >
         <CircularProgress />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ 
-      position: 'relative', 
-      height: 'calc(100vh - 140px)',
-      bgcolor: '#f8fafc',
-    }}>
-      {/* Header */}
-      <Box sx={{ 
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-        p: 2,
-      }}>
-        <Paper sx={{ 
-          px: 3, 
-          py: 2, 
-          borderRadius: 4,
-          bgcolor: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(12px)',
+    <Box
+      sx={{
+        position: 'relative',
+        height: 'calc(100vh - 140px)',
+        bgcolor: '#f1f5f9',
+      }}
+    >
+      {/* Floating Header */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 20,
+          p: 2,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-        }}>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: '#1e293b' }}>
-              活動地圖
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#64748b' }}>
-              {events.length} 個活動進行中
-            </Typography>
-          </Box>
-          <Chip 
-            label="Live" 
-            size="small"
-            sx={{ 
-              bgcolor: '#dcfce7', 
-              color: '#16a34a', 
-              fontWeight: 700,
-              '& .MuiChip-label': { px: 1.5 },
+        }}
+      >
+        <Box
+          onClick={() => navigate(-1)}
+          sx={{
+            width: 48,
+            height: 48,
+            bgcolor: 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 4,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#475569',
+            cursor: 'pointer',
+            '&:active': { transform: 'scale(0.9)' },
+          }}
+        >
+          <ArrowBackIcon sx={{ fontSize: 20 }} />
+        </Box>
+
+        <Box
+          sx={{
+            bgcolor: 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 10,
+            px: 3,
+            py: 1.5,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            border: '1px solid rgba(255, 255, 255, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+          }}
+        >
+          <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '0.875rem' }}>
+            {events.length} Active
+          </Typography>
+          <Box
+            sx={{
+              bgcolor: '#dcfce7',
+              color: '#15803d',
+              fontSize: '0.625rem',
+              fontWeight: 900,
+              px: 1,
+              py: 0.25,
+              borderRadius: 10,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
             }}
-          />
-        </Paper>
+          >
+            Live
+          </Box>
+        </Box>
+
+        <Box sx={{ width: 48 }} /> {/* Spacer */}
       </Box>
 
-      {/* 地圖 */}
+      {/* Map */}
       <Box sx={{ height: '100%' }}>
         {events.length > 0 ? (
           <MapContainer
@@ -148,102 +177,122 @@ export default function MapView() {
             onMarkerClick={handleMarkerClick}
           />
         ) : (
-          <Box sx={{ 
-            height: '100%', 
-            display: 'flex', 
-            flexDirection: 'column',
-            justifyContent: 'center', 
-            alignItems: 'center',
-            bgcolor: '#f1f5f9',
-          }}>
+          <Box
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              bgcolor: '#f1f5f9',
+            }}
+          >
             <Typography sx={{ fontSize: '4rem', mb: 2 }}>🗺️</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: '#64748b' }}>
-              目前沒有進行中的活動
+            <Typography sx={{ fontWeight: 700, color: '#64748b' }}>
+              No active gatherings
             </Typography>
             <Typography sx={{ color: '#94a3b8', mt: 1 }}>
-              建立新活動後會在地圖上顯示
+              Create one to see it on the map
             </Typography>
           </Box>
         )}
       </Box>
 
-      {/* 選中的活動卡片 */}
+      {/* Selected Event Card */}
       {selectedEvent && (
-        <Box sx={{
-          position: 'absolute',
-          bottom: 16,
-          left: 16,
-          right: 16,
-          zIndex: 20,
-        }}>
-          <Paper sx={{
-            p: 3,
-            borderRadius: 4,
-            bgcolor: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(12px)',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-          }}>
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 100,
+            left: 16,
+            right: 16,
+            zIndex: 20,
+          }}
+        >
+          <Box
+            sx={{
+              bgcolor: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: '2rem',
+              p: 3,
+              boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+              border: '1px solid rgba(255, 255, 255, 0.5)',
+            }}
+          >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box sx={{ flex: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Chip
-                    label={selectedEvent.status === 'ongoing' ? '進行中' : '即將開始'}
-                    size="small"
-                    sx={{
-                      bgcolor: selectedEvent.status === 'ongoing' ? '#dcfce7' : '#dbeafe',
-                      color: selectedEvent.status === 'ongoing' ? '#16a34a' : '#3b82f6',
-                      fontWeight: 600,
-                      fontSize: '0.7rem',
-                    }}
-                  />
+                <Box
+                  sx={{
+                    display: 'inline-block',
+                    bgcolor: selectedEvent.status === 'ongoing' ? '#dcfce7' : '#dbeafe',
+                    color: selectedEvent.status === 'ongoing' ? '#15803d' : '#2563eb',
+                    fontSize: '0.625rem',
+                    fontWeight: 900,
+                    px: 1,
+                    py: 0.25,
+                    borderRadius: 10,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    mb: 1,
+                  }}
+                >
+                  {selectedEvent.status === 'ongoing' ? 'Happening Now' : 'Upcoming'}
                 </Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b', mb: 1 }}>
+                <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '1.125rem', mb: 1 }}>
                   {selectedEvent.name}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, color: '#64748b' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <TimeIcon sx={{ fontSize: 16 }} />
-                    <Typography variant="body2">
-                      {format(new Date(selectedEvent.startTime), 'HH:mm', { locale: zhTW })}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <PeopleIcon sx={{ fontSize: 16 }} />
-                    <Typography variant="body2">
-                      {selectedEvent._count?.members || selectedEvent.members?.length || 0} 人
-                    </Typography>
-                  </Box>
-                </Box>
-                {selectedEvent.meetingPointName && (
-                  <Typography variant="body2" sx={{ color: '#94a3b8', mt: 1 }}>
-                    📍 {selectedEvent.meetingPointName}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#64748b' }}>
+                  <TimeIcon sx={{ fontSize: 14 }} />
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                    {format(new Date(selectedEvent.startTime), 'h:mm a')}
                   </Typography>
-                )}
+                  <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                    {selectedEvent._count?.members || selectedEvent.members?.length || 0} friends
+                  </Typography>
+                </Box>
               </Box>
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-                <IconButton 
-                  size="small" 
+                <Box
                   onClick={() => setSelectedEvent(null)}
-                  sx={{ color: '#94a3b8' }}
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    bgcolor: '#f1f5f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    '&:active': { transform: 'scale(0.9)' },
+                  }}
                 >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-                <IconButton
+                  <CloseIcon sx={{ fontSize: 16 }} />
+                </Box>
+                <Box
                   onClick={() => navigate(`/events/${selectedEvent.id}`)}
                   sx={{
-                    bgcolor: '#3b82f6',
+                    width: 40,
+                    height: 40,
+                    borderRadius: 3,
+                    bgcolor: '#2563eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     color: 'white',
-                    '&:hover': { bgcolor: '#2563eb' },
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                    '&:active': { transform: 'scale(0.9)' },
                   }}
                 >
                   <ChevronRightIcon />
-                </IconButton>
+                </Box>
               </Box>
             </Box>
-          </Paper>
+          </Box>
         </Box>
       )}
     </Box>
   );
 }
-

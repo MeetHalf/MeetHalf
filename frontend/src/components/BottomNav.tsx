@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Box, IconButton, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 import {
   Home as HomeIcon,
   People as PeopleIcon,
@@ -10,17 +10,16 @@ import {
 
 interface NavItem {
   path: string;
-  label: string;
   icon: React.ReactNode;
   isCreate?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { path: '/events', label: '首頁', icon: <HomeIcon /> },
-  { path: '/social', label: '社交', icon: <PeopleIcon /> },
-  { path: '/events/new', label: '建立', icon: <AddIcon />, isCreate: true },
-  { path: '/map', label: '地圖', icon: <MapIcon /> },
-  { path: '/profile', label: '個人', icon: <PersonIcon /> },
+  { path: '/events', icon: <HomeIcon sx={{ fontSize: 20 }} /> },
+  { path: '/social', icon: <PeopleIcon sx={{ fontSize: 20 }} /> },
+  { path: '/events/new', icon: <AddIcon sx={{ fontSize: 24 }} />, isCreate: true },
+  { path: '/map', icon: <MapIcon sx={{ fontSize: 20 }} /> },
+  { path: '/profile', icon: <PersonIcon sx={{ fontSize: 20 }} /> },
 ];
 
 export default function BottomNav() {
@@ -41,55 +40,47 @@ export default function BottomNav() {
         bottom: 0,
         left: 0,
         right: 0,
-        bgcolor: 'rgba(255, 255, 255, 0.85)',
+        bgcolor: 'rgba(255, 255, 255, 0.8)',
         backdropFilter: 'blur(12px)',
-        borderTop: '1px solid rgba(0, 0, 0, 0.05)',
-        px: 2,
-        py: 1,
-        zIndex: 1000,
+        borderTop: '1px solid',
+        borderColor: 'rgba(241, 245, 249, 1)', // slate-100
+        px: 4,
+        py: 2,
+        zIndex: 50,
         display: 'flex',
         justifyContent: 'space-around',
         alignItems: 'center',
         // Safe area for iOS
-        paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+        paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
       }}
     >
       {navItems.map((item) => {
         const active = isActive(item.path);
 
         if (item.isCreate) {
-          // 中間的「建立」按鈕 - 突出顯示
+          // 中間的「建立」按鈕 - 藍色圓角方形
           return (
             <Box
               key={item.path}
+              onClick={() => navigate(item.path)}
               sx={{
+                width: 48,
+                height: 48,
+                borderRadius: 4, // rounded-2xl
+                bgcolor: '#2563eb', // blue-600
+                color: 'white',
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                mt: -2, // 稍微上浮
+                justifyContent: 'center',
+                boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.4)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                '&:active': {
+                  transform: 'scale(0.9)',
+                },
               }}
             >
-              <IconButton
-                onClick={() => navigate(item.path)}
-                sx={{
-                  width: 56,
-                  height: 56,
-                  bgcolor: '#3b82f6',
-                  color: 'white',
-                  borderRadius: 4,
-                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
-                  '&:hover': {
-                    bgcolor: '#2563eb',
-                    transform: 'scale(1.05)',
-                  },
-                  '&:active': {
-                    transform: 'scale(0.95)',
-                  },
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                {item.icon}
-              </IconButton>
+              {item.icon}
             </Box>
           );
         }
@@ -99,49 +90,28 @@ export default function BottomNav() {
             key={item.path}
             onClick={() => navigate(item.path)}
             sx={{
+              width: 48,
+              height: 48,
+              borderRadius: 4, // rounded-2xl
+              bgcolor: active ? '#2563eb' : 'white',
+              color: active ? 'white' : '#64748b', // slate-500
+              boxShadow: active ? '0 4px 12px rgba(37, 99, 235, 0.3)' : '0 1px 3px rgba(0,0,0,0.05)',
+              border: active ? 'none' : '1px solid',
+              borderColor: '#f1f5f9', // slate-100
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
+              justifyContent: 'center',
               cursor: 'pointer',
-              py: 0.5,
-              px: 1.5,
-              borderRadius: 2,
               transition: 'all 0.2s ease',
               '&:active': {
                 transform: 'scale(0.9)',
               },
             }}
           >
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: 3,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor: active ? '#3b82f6' : 'transparent',
-                color: active ? 'white' : '#94a3b8',
-                transition: 'all 0.2s ease',
-                boxShadow: active ? '0 2px 8px rgba(59, 130, 246, 0.3)' : 'none',
-              }}
-            >
-              {item.icon}
-            </Box>
-            <Typography
-              sx={{
-                fontSize: '0.65rem',
-                fontWeight: active ? 700 : 500,
-                color: active ? '#3b82f6' : '#94a3b8',
-                mt: 0.25,
-              }}
-            >
-              {item.label}
-            </Typography>
+            {item.icon}
           </Box>
         );
       })}
     </Box>
   );
 }
-

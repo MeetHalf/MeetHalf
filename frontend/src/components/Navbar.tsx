@@ -1,50 +1,45 @@
-import { useState } from 'react';
-import { AppBar, Toolbar, Typography, Box, IconButton, Badge } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { Box, Typography, Avatar, Badge, IconButton } from '@mui/material';
 import { Notifications as NotificationsIcon } from '@mui/icons-material';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   // 模擬未讀通知數量
-  const [unreadCount] = useState(3);
+  const unreadCount = 3;
 
   return (
-    <AppBar 
-      position="sticky" 
-      elevation={0}
-      sx={{ 
+    <Box
+      sx={{
         bgcolor: 'white',
         borderBottom: '1px solid',
-        borderColor: 'divider',
+        borderColor: '#f1f5f9', // slate-100
+        px: 3,
+        pt: 5,
+        pb: 3,
       }}
     >
-      <Toolbar sx={{ px: { xs: 2, md: 4 }, py: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {/* Logo */}
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            flexDirection: 'column',
-            cursor: 'pointer',
-            flexGrow: 1
-          }}
+        <Box
+          sx={{ cursor: 'pointer' }}
           onClick={() => navigate('/events')}
         >
-          <Typography 
-            variant="h5" 
-            sx={{ 
-              fontWeight: 900, 
-              color: '#1e293b',
-              letterSpacing: '-0.5px',
-              lineHeight: 1.2,
+          <Typography
+            sx={{
+              fontSize: '1.5rem',
+              fontWeight: 900,
+              color: '#0f172a', // slate-900
+              letterSpacing: '-0.025em',
             }}
           >
             MeetHalf
           </Typography>
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              color: '#94a3b8',
-              fontSize: '0.75rem',
+          <Typography
+            sx={{
+              color: '#94a3b8', // slate-400
+              fontSize: '0.875rem',
               fontWeight: 500,
             }}
           >
@@ -52,31 +47,48 @@ export default function Navbar() {
           </Typography>
         </Box>
 
-        {/* 通知圖標 */}
-        <IconButton 
-          onClick={() => navigate('/notifications')}
-          sx={{ 
-            color: '#64748b',
-            '&:hover': {
-              bgcolor: '#f1f5f9',
-            },
-          }}
-        >
-          <Badge 
-            badgeContent={unreadCount} 
-            color="error"
+        {/* 右側：通知 + 頭像 */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <IconButton
+            onClick={() => navigate('/notifications')}
             sx={{
-              '& .MuiBadge-badge': {
-                fontSize: '0.65rem',
-                minWidth: 18,
-                height: 18,
-              },
+              color: '#64748b',
+              '&:hover': { bgcolor: '#f8fafc' },
             }}
           >
-            <NotificationsIcon />
-          </Badge>
-        </IconButton>
-      </Toolbar>
-    </AppBar>
+            <Badge
+              badgeContent={unreadCount}
+              color="error"
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.65rem',
+                  minWidth: 16,
+                  height: 16,
+                },
+              }}
+            >
+              <NotificationsIcon sx={{ fontSize: 22 }} />
+            </Badge>
+          </IconButton>
+          
+          <Avatar
+            onClick={() => navigate('/profile')}
+            sx={{
+              width: 40,
+              height: 40,
+              bgcolor: '#dbeafe', // blue-100
+              border: '2px solid white',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 700,
+              color: '#3b82f6',
+            }}
+          >
+            {user?.name?.[0]?.toUpperCase() || '👤'}
+          </Avatar>
+        </Box>
+      </Box>
+    </Box>
   );
 }

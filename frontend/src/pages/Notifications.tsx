@@ -3,26 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
-  Paper,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
   Avatar,
-  IconButton,
-  Chip,
-  Button,
-  Divider,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Event as EventIcon,
   PersonAdd as PersonAddIcon,
   Campaign as CampaignIcon,
-  TouchApp as PokeIcon,
-  Check as CheckIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
+import { Zap as ZapIcon } from 'lucide-react';
 
 interface Notification {
   id: number;
@@ -34,7 +24,6 @@ interface Notification {
   eventId?: number;
 }
 
-// 模擬通知數據
 const mockNotifications: Notification[] = [
   {
     id: 1,
@@ -71,46 +60,37 @@ const mockNotifications: Notification[] = [
     time: '2 小時前',
     read: true,
   },
-  {
-    id: 5,
-    type: 'reminder',
-    title: '活動提醒',
-    message: '「週五火鍋聚會」將在 30 分鐘後開始',
-    time: '昨天',
-    read: true,
-    eventId: 1,
-  },
 ];
 
 const getNotificationIcon = (type: Notification['type']) => {
   switch (type) {
     case 'event_invite':
-      return <EventIcon />;
+      return <EventIcon sx={{ fontSize: 18 }} />;
     case 'event_update':
-      return <CampaignIcon />;
+      return <CampaignIcon sx={{ fontSize: 18 }} />;
     case 'friend_request':
-      return <PersonAddIcon />;
+      return <PersonAddIcon sx={{ fontSize: 18 }} />;
     case 'poke':
-      return <PokeIcon />;
+      return <ZapIcon size={18} />;
     case 'reminder':
-      return <EventIcon />;
+      return <EventIcon sx={{ fontSize: 18 }} />;
     default:
-      return <EventIcon />;
+      return <EventIcon sx={{ fontSize: 18 }} />;
   }
 };
 
 const getNotificationColor = (type: Notification['type']) => {
   switch (type) {
     case 'event_invite':
-      return { bg: '#dbeafe', color: '#3b82f6' };
+      return { bg: '#dbeafe', color: '#2563eb' };
     case 'event_update':
-      return { bg: '#fef3c7', color: '#f59e0b' };
+      return { bg: '#fef3c7', color: '#d97706' };
     case 'friend_request':
-      return { bg: '#dcfce7', color: '#22c55e' };
+      return { bg: '#dcfce7', color: '#16a34a' };
     case 'poke':
-      return { bg: '#fee2e2', color: '#ef4444' };
+      return { bg: '#fee2e2', color: '#dc2626' };
     case 'reminder':
-      return { bg: '#e0e7ff', color: '#6366f1' };
+      return { bg: '#e0e7ff', color: '#4f46e5' };
     default:
       return { bg: '#f1f5f9', color: '#64748b' };
   }
@@ -120,20 +100,18 @@ export default function Notifications() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState(mockNotifications);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleMarkAsRead = (id: number) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   };
 
   const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
   const handleDelete = (id: number) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const handleNotificationClick = (notification: Notification) => {
@@ -146,125 +124,160 @@ export default function Notifications() {
   };
 
   return (
-    <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)' }}>
+    <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
       {/* Header */}
-      <Box sx={{ 
-        bgcolor: 'white', 
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        px: 2, 
-        py: 2,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 2,
-      }}>
-        <IconButton onClick={() => navigate(-1)}>
-          <ArrowBackIcon />
-        </IconButton>
+      <Box
+        sx={{
+          bgcolor: 'white',
+          borderBottom: '1px solid #f1f5f9',
+          px: 2,
+          py: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+        }}
+      >
+        <Box
+          onClick={() => navigate(-1)}
+          sx={{
+            width: 48,
+            height: 48,
+            borderRadius: 4,
+            bgcolor: '#f8fafc',
+            border: '1px solid #f1f5f9',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#64748b',
+            cursor: 'pointer',
+            '&:active': { transform: 'scale(0.9)' },
+          }}
+        >
+          <ArrowBackIcon sx={{ fontSize: 20 }} />
+        </Box>
         <Box sx={{ flex: 1 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
-            通知中心
+          <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '1.25rem' }}>
+            Notifications
           </Typography>
           {unreadCount > 0 && (
-            <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
-              {unreadCount} 則未讀通知
+            <Typography sx={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 500 }}>
+              {unreadCount} unread
             </Typography>
           )}
         </Box>
         {unreadCount > 0 && (
-          <Button 
-            size="small" 
+          <Typography
             onClick={handleMarkAllAsRead}
-            sx={{ color: '#3b82f6', fontWeight: 600 }}
+            sx={{
+              color: '#2563eb',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
           >
-            全部標為已讀
-          </Button>
+            Mark all read
+          </Typography>
         )}
       </Box>
 
       {/* Notifications List */}
       <Box sx={{ p: 2 }}>
         {notifications.length > 0 ? (
-          <Paper sx={{ borderRadius: 4, overflow: 'hidden' }}>
-            <List disablePadding>
-              {notifications.map((notification, index) => {
-                const colors = getNotificationColor(notification.type);
-                return (
-                  <Box key={notification.id}>
-                    <ListItem
-                      onClick={() => handleNotificationClick(notification)}
-                      sx={{
-                        py: 2,
-                        cursor: 'pointer',
-                        bgcolor: notification.read ? 'transparent' : 'rgba(59, 130, 246, 0.05)',
-                        '&:hover': { bgcolor: '#f8fafc' },
-                      }}
-                      secondaryAction={
-                        <IconButton 
-                          edge="end" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(notification.id);
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {notifications.map((notification) => {
+              const colors = getNotificationColor(notification.type);
+              return (
+                <Box
+                  key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
+                  sx={{
+                    bgcolor: notification.read ? 'white' : 'rgba(37, 99, 235, 0.03)',
+                    p: 2,
+                    borderRadius: '1.5rem',
+                    border: '1px solid',
+                    borderColor: notification.read ? '#f1f5f9' : 'rgba(37, 99, 235, 0.1)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 2,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    '&:active': { transform: 'scale(0.98)' },
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      bgcolor: colors.bg,
+                      color: colors.color,
+                      borderRadius: 3,
+                    }}
+                  >
+                    {getNotificationIcon(notification.type)}
+                  </Avatar>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Typography sx={{ fontWeight: 700, color: '#0f172a', fontSize: '0.875rem' }}>
+                        {notification.title}
+                      </Typography>
+                      {!notification.read && (
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: '#2563eb',
                           }}
-                          sx={{ color: '#94a3b8' }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      }
+                        />
+                      )}
+                    </Box>
+                    <Typography
+                      sx={{
+                        color: '#64748b',
+                        fontSize: '0.8rem',
+                        mb: 0.5,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
                     >
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: colors.bg, color: colors.color }}>
-                          {getNotificationIcon(notification.type)}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography sx={{ fontWeight: 600, color: '#1e293b' }}>
-                              {notification.title}
-                            </Typography>
-                            {!notification.read && (
-                              <Box sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: '#3b82f6',
-                              }} />
-                            )}
-                          </Box>
-                        }
-                        secondary={
-                          <Box>
-                            <Typography 
-                              sx={{ 
-                                color: '#64748b', 
-                                fontSize: '0.875rem',
-                                mb: 0.5,
-                              }}
-                            >
-                              {notification.message}
-                            </Typography>
-                            <Typography sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                              {notification.time}
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                    </ListItem>
-                    {index < notifications.length - 1 && <Divider />}
+                      {notification.message}
+                    </Typography>
+                    <Typography sx={{ color: '#94a3b8', fontSize: '0.625rem', fontWeight: 600 }}>
+                      {notification.time}
+                    </Typography>
                   </Box>
-                );
-              })}
-            </List>
-          </Paper>
+                  <Box
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(notification.id);
+                    }}
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#cbd5e1',
+                      '&:hover': { bgcolor: '#fee2e2', color: '#ef4444' },
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 16 }} />
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
         ) : (
           <Box sx={{ textAlign: 'center', py: 12 }}>
             <Typography sx={{ fontSize: '4rem', mb: 2 }}>🔔</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: '#64748b' }}>
-              沒有通知
+            <Typography sx={{ fontWeight: 700, color: '#64748b' }}>
+              No notifications
             </Typography>
             <Typography sx={{ color: '#94a3b8', mt: 1 }}>
-              當有新活動或好友申請時會在這裡顯示
+              We'll let you know when something happens
             </Typography>
           </Box>
         )}
@@ -272,4 +285,3 @@ export default function Notifications() {
     </Box>
   );
 }
-
