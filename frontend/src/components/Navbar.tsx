@@ -1,20 +1,24 @@
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Avatar, Badge, IconButton } from '@mui/material';
-import { Notifications as NotificationsIcon } from '@mui/icons-material';
+import { Box, Typography, Avatar, Badge } from '@mui/material';
+import { motion } from 'framer-motion';
+import { AnimatedBell } from './AnimatedIcons';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  // 模擬未讀通知數量
-  const unreadCount = 3;
+  const unreadCount = 3; // 模擬未讀通知
 
   return (
     <Box
+      component={motion.div}
+      initial={{ y: -20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       sx={{
         bgcolor: 'white',
         borderBottom: '1px solid',
-        borderColor: '#f1f5f9', // slate-100
+        borderColor: '#f1f5f9',
         px: 3,
         pt: 5,
         pb: 3,
@@ -22,15 +26,17 @@ export default function Navbar() {
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {/* Logo */}
-        <Box
-          sx={{ cursor: 'pointer' }}
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => navigate('/events')}
+          style={{ cursor: 'pointer' }}
         >
           <Typography
             sx={{
               fontSize: '1.5rem',
               fontWeight: 900,
-              color: '#0f172a', // slate-900
+              color: '#0f172a',
               letterSpacing: '-0.025em',
             }}
           >
@@ -38,23 +44,22 @@ export default function Navbar() {
           </Typography>
           <Typography
             sx={{
-              color: '#94a3b8', // slate-400
+              color: '#94a3b8',
               fontSize: '0.875rem',
               fontWeight: 500,
             }}
           >
             Where's the squad?
           </Typography>
-        </Box>
+        </motion.div>
 
         {/* 右側：通知 + 頭像 */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
             onClick={() => navigate('/notifications')}
-            sx={{
-              color: '#64748b',
-              '&:hover': { bgcolor: '#f8fafc' },
-            }}
+            style={{ cursor: 'pointer' }}
           >
             <Badge
               badgeContent={unreadCount}
@@ -67,26 +72,31 @@ export default function Navbar() {
                 },
               }}
             >
-              <NotificationsIcon sx={{ fontSize: 22 }} />
+              <AnimatedBell size={22} animate={unreadCount > 0} />
             </Badge>
-          </IconButton>
-          
-          <Avatar
+          </motion.div>
+
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => navigate('/profile')}
-            sx={{
-              width: 40,
-              height: 40,
-              bgcolor: '#dbeafe', // blue-100
-              border: '2px solid white',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: 700,
-              color: '#3b82f6',
-            }}
+            style={{ cursor: 'pointer' }}
           >
-            {user?.name?.[0]?.toUpperCase() || '👤'}
-          </Avatar>
+            <Avatar
+              sx={{
+                width: 40,
+                height: 40,
+                bgcolor: '#dbeafe',
+                border: '2px solid white',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                fontSize: '0.875rem',
+                fontWeight: 700,
+                color: '#3b82f6',
+              }}
+            >
+              {user?.name?.[0]?.toUpperCase() || '👤'}
+            </Avatar>
+          </motion.div>
         </Box>
       </Box>
     </Box>
