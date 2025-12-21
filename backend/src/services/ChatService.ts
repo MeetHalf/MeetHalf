@@ -187,6 +187,30 @@ export class ChatService {
   }
 
   /**
+   * Mark all messages in a conversation as read
+   */
+  async markConversationAsRead(userId: string, receiverId?: string, groupId?: number) {
+    const messages = await chatRepository.markConversationAsRead(userId, receiverId, groupId);
+
+    // Trigger read receipts for all marked messages
+    for (const message of messages) {
+      if (message.receiverId) {
+        triggerChatChannel('user', message.senderId, 'message-read', {
+          messageId: message.id,
+          readBy: userId,
+        });
+      } else if (message.groupId) {
+        triggerChatChannel('group', message.groupId, 'message-read', {
+          messageId: message.id,
+          readBy: userId,
+        });
+      }
+    }
+
+    return messages.length;
+  }
+
+  /**
    * Get conversation list
    */
   async getConversations(userId: string) {

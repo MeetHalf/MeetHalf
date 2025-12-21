@@ -25,7 +25,7 @@ export default function ChatRoom() {
   const { type, id } = useParams<{ type: 'user' | 'group'; id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { messages, loadMessages, sendMessage, loading } = useChat(user?.userId, type, id);
+  const { messages, loadMessages, sendMessage, markConversationAsRead, loading } = useChat(user?.userId, type, id);
   
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -35,17 +35,24 @@ export default function ChatRoom() {
   // Load messages and chat info
   useEffect(() => {
     if (user && type && id) {
-      if (type === 'user') {
-        loadMessages({ receiverId: id });
-        // TODO: Load user info to get name
-        setChatName(id);
-      } else {
-        loadMessages({ groupId: parseInt(id) });
-        // TODO: Load group info to get name
-        setChatName(`群組 ${id}`);
-      }
+      const loadData = async () => {
+        if (type === 'user') {
+          await loadMessages({ receiverId: id });
+          // Mark conversation as read
+          await markConversationAsRead({ receiverId: id });
+          // TODO: Load user info to get name
+          setChatName(id);
+        } else {
+          await loadMessages({ groupId: parseInt(id) });
+          // Mark conversation as read
+          await markConversationAsRead({ groupId: parseInt(id) });
+          // TODO: Load group info to get name
+          setChatName(`群組 ${id}`);
+        }
+      };
+      loadData();
     }
-  }, [user, type, id, loadMessages]);
+  }, [user, type, id, loadMessages, markConversationAsRead]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
