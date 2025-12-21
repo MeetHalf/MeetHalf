@@ -40,6 +40,9 @@ export default function BottomNav() {
     if (path === '/events') {
       return location.pathname === '/events' || location.pathname === '/';
     }
+    if (path === '/friends') {
+      return location.pathname.startsWith('/friends') || location.pathname.startsWith('/social');
+    }
     return location.pathname.startsWith(path);
   };
 
