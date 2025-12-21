@@ -230,7 +230,7 @@ export class ChatRepository {
             ],
             NOT: {
               readBy: {
-                has: userId,
+                array_contains: userId,
               },
             },
           },
@@ -243,7 +243,7 @@ export class ChatRepository {
             groupId: conv.id as number,
             AND: [
               { NOT: { senderId: userId } }, // Don't count own messages
-              { NOT: { readBy: { has: userId } } }, // Don't count read messages
+              { NOT: { readBy: { array_contains: userId } } }, // Don't count read messages
             ],
           },
         });
@@ -277,7 +277,7 @@ export class ChatRepository {
         receiverId: userId,
         NOT: {
           readBy: {
-            has: userId,
+            array_contains: userId,
           },
         },
       },
@@ -295,7 +295,7 @@ export class ChatRepository {
         },
         AND: [
           { NOT: { senderId: userId } }, // Don't count own messages
-          { NOT: { readBy: { has: userId } } }, // Don't count read messages
+          { NOT: { readBy: { array_contains: userId } } }, // Don't count read messages
         ],
       },
     });
