@@ -23,20 +23,6 @@ const mockChats = [
   { id: 3, name: '大學同學群', type: 'group', lastMessage: '阿強：+1', time: '昨天', unread: 5 },
 ];
 
-const listItemVariants = {
-  hidden: { opacity: 0, x: -20 },
-  visible: (i: number) => ({
-    opacity: 1,
-    x: 0,
-    transition: {
-      delay: i * 0.05,
-      type: 'spring',
-      stiffness: 300,
-      damping: 24,
-    },
-  }),
-};
-
 export default function Social() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'friends' | 'chats'>('friends');
@@ -45,14 +31,9 @@ export default function Social() {
     <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
       {/* Header */}
       <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #f1f5f9', px: 3, pt: 2, pb: 3 }}>
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <Typography sx={{ fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', mb: 3 }}>
-            Squad
-          </Typography>
-        </motion.div>
+        <Typography sx={{ fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', mb: 3 }}>
+          Squad
+        </Typography>
 
         {/* 搜尋欄 */}
         <TextField
@@ -80,207 +61,183 @@ export default function Social() {
         {/* Tabs */}
         <Box sx={{ display: 'flex', gap: 1 }}>
           {['friends', 'chats'].map((tab) => (
-            <motion.div
+            <Box
               key={tab}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
               onClick={() => setActiveTab(tab as 'friends' | 'chats')}
-              style={{
-                padding: '10px 20px',
-                borderRadius: 16,
-                backgroundColor: activeTab === tab ? '#0f172a' : 'white',
+              sx={{
+                px: 3,
+                py: 1.5,
+                borderRadius: 4,
+                bgcolor: activeTab === tab ? '#0f172a' : 'white',
                 color: activeTab === tab ? 'white' : '#64748b',
                 fontWeight: 700,
                 fontSize: '0.875rem',
                 cursor: 'pointer',
                 border: activeTab === tab ? 'none' : '1px solid #f1f5f9',
+                transition: 'all 0.2s ease',
+                '&:active': { transform: 'scale(0.98)' },
               }}
             >
               {tab === 'friends' ? 'Friends' : 'Chats'}
-            </motion.div>
+            </Box>
           ))}
         </Box>
       </Box>
 
       {/* Content */}
       <Box sx={{ p: 3 }}>
-        <AnimatePresence mode="wait">
-          {activeTab === 'friends' ? (
-            <motion.div
-              key="friends"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-            >
-              {mockFriends.map((friend, index) => (
-                <motion.div
-                  key={friend.id}
-                  custom={index}
-                  variants={listItemVariants}
-                  initial="hidden"
-                  animate="visible"
-                  whileHover={{ scale: 1.01, x: 4 }}
-                  whileTap={{ scale: 0.99 }}
-                  style={{
-                    backgroundColor: 'white',
-                    padding: 16,
-                    borderRadius: 24,
-                    border: '1px solid #f1f5f9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box sx={{ position: 'relative' }}>
-                      <Avatar
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          bgcolor: friend.status === 'online' ? '#dcfce7' : '#f1f5f9',
-                          fontSize: '1.5rem',
-                          borderRadius: 4,
-                        }}
-                      >
-                        {friend.avatar}
-                      </Avatar>
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        style={{
-                          position: 'absolute',
-                          bottom: 0,
-                          right: 0,
-                          width: 12,
-                          height: 12,
-                          borderRadius: '50%',
-                          backgroundColor: friend.status === 'online' ? '#22c55e' : '#94a3b8',
-                          border: '2px solid white',
-                        }}
-                      />
-                    </Box>
-                    <Box>
-                      <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>
-                        {friend.name}
-                      </Typography>
-                      <Typography sx={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-                        {friend.lastSeen}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <motion.div
-                    whileHover={{ scale: 1.1, backgroundColor: '#dbeafe' }}
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 12,
-                      backgroundColor: '#f8fafc',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#64748b',
-                    }}
-                  >
-                    <MessageCircle size={18} />
-                  </motion.div>
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <motion.div
-              key="chats"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-            >
-              {mockChats.map((chat, index) => (
-                <motion.div
-                  key={chat.id}
-                  custom={index}
-                  variants={listItemVariants}
-                  initial="hidden"
-                  animate="visible"
-                  whileHover={{ scale: 1.01, x: 4 }}
-                  whileTap={{ scale: 0.99 }}
-                  style={{
-                    backgroundColor: 'white',
-                    padding: 16,
-                    borderRadius: 24,
-                    border: '1px solid #f1f5f9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {activeTab === 'friends' ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {mockFriends.map((friend) => (
+              <Box
+                key={friend.id}
+                sx={{
+                  bgcolor: 'white',
+                  p: 2,
+                  borderRadius: '1.5rem',
+                  border: '1px solid #f1f5f9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:active': { transform: 'scale(0.99)' },
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ position: 'relative' }}>
                     <Avatar
                       sx={{
                         width: 48,
                         height: 48,
-                        bgcolor:
-                          chat.type === 'event'
-                            ? '#dbeafe'
-                            : chat.type === 'group'
-                            ? '#dcfce7'
-                            : '#f1f5f9',
-                        fontSize: '1.25rem',
+                        bgcolor: friend.status === 'online' ? '#dcfce7' : '#f1f5f9',
+                        fontSize: '1.5rem',
                         borderRadius: 4,
                       }}
                     >
-                      {chat.type === 'event' ? '📍' : chat.type === 'group' ? '👥' : chat.name[0]}
+                      {friend.avatar}
                     </Avatar>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>{chat.name}</Typography>
-                      <Typography
-                        sx={{
-                          fontSize: '0.75rem',
-                          color: '#94a3b8',
-                          fontWeight: 500,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          maxWidth: 180,
-                        }}
-                      >
-                        {chat.lastMessage}
-                      </Typography>
-                    </Box>
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 0,
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        bgcolor: friend.status === 'online' ? '#22c55e' : '#94a3b8',
+                        border: '2px solid white',
+                      }}
+                    />
                   </Box>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
-                    <Typography sx={{ fontSize: '0.625rem', color: '#94a3b8', fontWeight: 600 }}>
-                      {chat.time}
+                  <Box>
+                    <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>
+                      {friend.name}
                     </Typography>
-                    {chat.unread > 0 && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        style={{
-                          minWidth: 18,
-                          height: 18,
-                          borderRadius: 10,
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          fontSize: '0.625rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '0 4px',
-                        }}
-                      >
-                        {chat.unread}
-                      </motion.div>
-                    )}
+                    <Typography sx={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
+                      {friend.lastSeen}
+                    </Typography>
                   </Box>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                </Box>
+                <Box
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 3,
+                    bgcolor: '#f8fafc',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#64748b',
+                    transition: 'all 0.2s ease',
+                    '&:hover': { bgcolor: '#dbeafe', color: '#2563eb' },
+                  }}
+                >
+                  <MessageCircle size={18} />
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {mockChats.map((chat) => (
+              <Box
+                key={chat.id}
+                sx={{
+                  bgcolor: 'white',
+                  p: 2,
+                  borderRadius: '1.5rem',
+                  border: '1px solid #f1f5f9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:active': { transform: 'scale(0.99)' },
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      bgcolor:
+                        chat.type === 'event'
+                          ? '#dbeafe'
+                          : chat.type === 'group'
+                          ? '#dcfce7'
+                          : '#f1f5f9',
+                      fontSize: '1.25rem',
+                      borderRadius: 4,
+                    }}
+                  >
+                    {chat.type === 'event' ? '📍' : chat.type === 'group' ? '👥' : chat.name[0]}
+                  </Avatar>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>{chat.name}</Typography>
+                    <Typography
+                      sx={{
+                        fontSize: '0.75rem',
+                        color: '#94a3b8',
+                        fontWeight: 500,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        maxWidth: 180,
+                      }}
+                    >
+                      {chat.lastMessage}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                  <Typography sx={{ fontSize: '0.625rem', color: '#94a3b8', fontWeight: 600 }}>
+                    {chat.time}
+                  </Typography>
+                  {chat.unread > 0 && (
+                    <Box
+                      sx={{
+                        minWidth: 18,
+                        height: 18,
+                        borderRadius: 10,
+                        bgcolor: '#ef4444',
+                        color: 'white',
+                        fontSize: '0.625rem',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        px: 0.5,
+                      }}
+                    >
+                      {chat.unread}
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        )}
       </Box>
     </Box>
   );

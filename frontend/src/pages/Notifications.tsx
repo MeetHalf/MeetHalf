@@ -138,37 +138,35 @@ export default function Notifications() {
   return (
     <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
       {/* Header */}
-      <motion.div
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        style={{
-          backgroundColor: 'white',
+      <Box
+        sx={{
+          bgcolor: 'white',
           borderBottom: '1px solid #f1f5f9',
-          padding: '16px',
+          p: 2,
           display: 'flex',
           alignItems: 'center',
-          gap: 16,
+          gap: 2,
         }}
       >
-        <motion.div
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
+        <Box
           onClick={() => navigate(-1)}
-          style={{
+          sx={{
             width: 48,
             height: 48,
-            borderRadius: 16,
-            backgroundColor: '#f8fafc',
+            borderRadius: 4,
+            bgcolor: '#f8fafc',
             border: '1px solid #f1f5f9',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#64748b',
             cursor: 'pointer',
+            transition: 'transform 0.2s ease',
+            '&:active': { transform: 'scale(0.9)' },
           }}
         >
           <ArrowLeft size={20} />
-        </motion.div>
+        </Box>
         <Box sx={{ flex: 1 }}>
           <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '1.25rem' }}>
             Notifications
@@ -180,52 +178,45 @@ export default function Notifications() {
           )}
         </Box>
         {unreadCount > 0 && (
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Typography
-              onClick={markAllAsRead}
-              sx={{
-                color: '#2563eb',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              Mark all read
-            </Typography>
-          </motion.div>
+          <Typography
+            onClick={markAllAsRead}
+            sx={{
+              color: '#2563eb',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease',
+              '&:active': { transform: 'scale(0.95)' },
+            }}
+          >
+            Mark all read
+          </Typography>
         )}
-      </motion.div>
+      </Box>
 
       {/* Notifications List */}
       <Box sx={{ p: 2 }}>
         {notifications.length > 0 ? (
-          <AnimatePresence mode="popLayout">
-            {notifications.map((notification, index) => {
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {notifications.map((notification) => {
               const colors = getNotificationColor(notification.type);
               const isFriendRequest = notification.type === 'FRIEND_REQUEST';
               
               return (
-                <motion.div
+                <Box
                   key={notification.id}
-                  custom={index}
-                  variants={listItemVariants}
-                  initial="hidden"
-                  animate="visible"
-                  exit="exit"
-                  layout
-                  whileHover={{ scale: 1.01, x: 4 }}
-                  whileTap={{ scale: 0.99 }}
                   onClick={() => !isFriendRequest && handleNotificationClick(notification)}
-                  style={{
-                    backgroundColor: notification.read ? 'white' : 'rgba(37, 99, 235, 0.03)',
-                    padding: 16,
-                    borderRadius: 24,
+                  sx={{
+                    bgcolor: notification.read ? 'white' : 'rgba(37, 99, 235, 0.03)',
+                    p: 2,
+                    borderRadius: '1.5rem',
                     border: `1px solid ${notification.read ? '#f1f5f9' : 'rgba(37, 99, 235, 0.1)'}`,
                     display: 'flex',
                     alignItems: 'flex-start',
-                    gap: 16,
+                    gap: 2,
                     cursor: isFriendRequest ? 'default' : 'pointer',
-                    marginBottom: 12,
+                    transition: 'all 0.2s ease',
+                    '&:active': { transform: 'scale(0.99)' },
                   }}
                 >
                   <Avatar
@@ -245,14 +236,12 @@ export default function Notifications() {
                         {notification.title}
                       </Typography>
                       {!notification.read && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          style={{
+                        <Box
+                          sx={{
                             width: 8,
                             height: 8,
                             borderRadius: '50%',
-                            backgroundColor: '#2563eb',
+                            bgcolor: '#2563eb',
                           }}
                         />
                       )}
@@ -309,47 +298,39 @@ export default function Notifications() {
                       </Box>
                     )}
                   </Box>
-                  <motion.div
-                    whileHover={{ scale: 1.2, backgroundColor: '#fee2e2' }}
-                    whileTap={{ scale: 0.9 }}
+                  <Box
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteNotification(notification.id);
                     }}
-                    style={{
+                    sx={{
                       width: 32,
                       height: 32,
-                      borderRadius: 8,
+                      borderRadius: 2,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: '#cbd5e1',
                       cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': { bgcolor: '#fee2e2', color: '#ef4444' },
+                      '&:active': { transform: 'scale(0.9)' },
                     }}
                   >
                     <Trash2 size={16} />
-                  </motion.div>
-                </motion.div>
+                  </Box>
+                </Box>
               );
             })}
-          </AnimatePresence>
+          </Box>
         ) : (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            style={{ textAlign: 'center', paddingTop: 80, paddingBottom: 80 }}
-          >
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Typography sx={{ fontSize: '4rem', mb: 2 }}>🔔</Typography>
-            </motion.div>
+          <Box sx={{ textAlign: 'center', py: 12 }}>
+            <Typography sx={{ fontSize: '4rem', mb: 2 }}>🔔</Typography>
             <Typography sx={{ fontWeight: 700, color: '#64748b' }}>沒有通知</Typography>
             <Typography sx={{ color: '#94a3b8', mt: 1 }}>
               所有通知都會顯示在這裡
             </Typography>
-          </motion.div>
+          </Box>
         )}
       </Box>
     </Box>
