@@ -1,15 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
   Avatar,
   Divider,
+  TextField,
+  Button,
+  Snackbar,
+  Alert,
 } from '@mui/material';
-import { Settings, ChevronRight, Bell, Lock, Info, LogOut, Calendar } from 'lucide-react';
+import { Settings, ChevronRight, Bell, Lock, Info, LogOut, Calendar, MapPin } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { eventsApi, Event } from '../api/events';
+import { usersApi } from '../api/users';
 import { format } from 'date-fns';
+import { loadGoogleMaps } from '../lib/googleMapsLoader';
 
 // 模擬徽章數據
 const badges = [
@@ -22,6 +28,21 @@ export default function Profile() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
+  const [defaultLocation, setDefaultLocation] = useState({
+    lat: null as number | null,
+    lng: null as number | null,
+    address: '',
+    name: '',
+  });
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success' as 'success' | 'error',
+  });
+  const autocompleteInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -35,6 +56,61 @@ export default function Profile() {
     fetchEvents();
   }, []);
 
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await usersApi.getProfile();
+        if (response.user) {
+          setDefaultLocation({
+            lat: response.user.defaultLat || null,
+            lng: response.user.defaultLng || null,
+            address: response.user.defaultAddress || '',
+            name: response.user.defaultLocationName || '',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  useEffect(() => {
+    loadGoogleMaps()
+      .then(() => setMapsLoaded(true))
+      .catch((err) => console.error('Failed to load Google Maps:', err));
+  }, []);
+
+  useEffect(() => {
+    if (
+      mapsLoaded &&
+      autocompleteInputRef.current &&
+      !autocompleteRef.current &&
+      typeof google !== 'undefined' &&
+      google.maps &&
+      google.maps.places
+    ) {
+      const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
+        types: ['establishment', 'geocode'],
+        componentRestrictions: { country: 'tw' },
+      });
+
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (place.geometry && place.geometry.location) {
+          setDefaultLocation({
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng(),
+            address: place.formatted_address || '',
+            name: place.name || place.formatted_address || '',
+          });
+        }
+      });
+
+      autocompleteRef.current = autocomplete;
+    }
+  }, [mapsLoaded]);
+
   const stats = {
     totalEvents: events.length,
     onTimeRate: 85,
@@ -47,6 +123,29 @@ export default function Profile() {
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const handleSaveDefaultLocation = async () => {
+    if (!defaultLocation.lat || !defaultLocation.lng) {
+      setSnackbar({ open: true, message: '請選擇一個地點', severity: 'error' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await usersApi.updateProfile({
+        defaultLat: defaultLocation.lat,
+        defaultLng: defaultLocation.lng,
+        defaultAddress: defaultLocation.address,
+        defaultLocationName: defaultLocation.name,
+      });
+      setSnackbar({ open: true, message: '預設出發點已儲存', severity: 'success' });
+    } catch (error) {
+      console.error('Failed to save default location:', error);
+      setSnackbar({ open: true, message: '儲存失敗', severity: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -282,6 +381,57 @@ export default function Profile() {
         </Box>
       </Box>
 
+      {/* Default Location */}
+      <Box sx={{ px: 3, mt: 4 }}>
+        <Typography sx={{ fontWeight: 700, color: '#0f172a', mb: 2, px: 1 }}>
+          預設出發點
+        </Typography>
+        <Box
+          sx={{
+            bgcolor: 'white',
+            borderRadius: '1.5rem',
+            border: '1px solid #f1f5f9',
+            p: 3,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <MapPin size={20} style={{ color: '#2563eb' }} />
+            <Typography sx={{ fontWeight: 600, color: '#475569' }}>
+              設定常用出發地點
+            </Typography>
+          </Box>
+          <TextField
+            inputRef={autocompleteInputRef}
+            fullWidth
+            placeholder="搜尋地點..."
+            value={defaultLocation.name || defaultLocation.address}
+            onChange={(e) =>
+              setDefaultLocation((prev) => ({ ...prev, name: e.target.value }))
+            }
+            sx={{ mb: 2 }}
+            size="small"
+          />
+          {defaultLocation.lat && defaultLocation.lng && (
+            <Typography sx={{ fontSize: '0.75rem', color: '#94a3b8', mb: 2 }}>
+              已選擇：{defaultLocation.name || defaultLocation.address}
+            </Typography>
+          )}
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={handleSaveDefaultLocation}
+            disabled={saving || !defaultLocation.lat}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
+            {saving ? '儲存中...' : '儲存預設出發點'}
+          </Button>
+        </Box>
+      </Box>
+
       {/* Settings */}
       <Box sx={{ px: 3, mt: 4 }}>
         <Typography sx={{ fontWeight: 700, color: '#0f172a', mb: 2, px: 1 }}>
@@ -344,6 +494,18 @@ export default function Profile() {
           登出帳號
         </Box>
       </Box>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
