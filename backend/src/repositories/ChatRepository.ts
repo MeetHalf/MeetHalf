@@ -229,7 +229,7 @@ export class ChatRepository {
             ],
             NOT: {
               readBy: {
-                array_contains: userId,
+                has: userId,
               },
             },
           },
@@ -240,12 +240,10 @@ export class ChatRepository {
         const unreadCount = await prisma.chatMessage.count({
           where: {
             groupId: conv.id as number,
-            NOT: {
-              senderId: userId, // Don't count own messages
-              readBy: {
-                array_contains: userId,
-              },
-            },
+            AND: [
+              { NOT: { senderId: userId } }, // Don't count own messages
+              { NOT: { readBy: { has: userId } } }, // Don't count read messages
+            ],
           },
         });
         conv.unreadCount = unreadCount;
@@ -283,12 +281,10 @@ export class ChatRepository {
             },
           },
         },
-        NOT: {
-          senderId: userId, // Don't count own messages
-          readBy: {
-            array_contains: userId,
-          },
-        },
+        AND: [
+          { NOT: { senderId: userId } }, // Don't count own messages
+          { NOT: { readBy: { has: userId } } }, // Don't count read messages
+        ],
       },
     });
 
