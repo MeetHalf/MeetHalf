@@ -44,6 +44,7 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
   const mapRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const markersRef = useRef<Map<number | string, google.maps.Marker>>(new Map());
 
   // 初始化地圖（只運行一次）
   useEffect(() => {
@@ -85,79 +86,111 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
     map.setCenter(center);
   }, [map, center]);
 
-  // Add markers when map is ready
+  // Add/update markers when map is ready or markers change
   useEffect(() => {
     if (!map) return;
 
-    // Clear existing markers (in a real app, we'd track these)
-    const googleMarkers: google.maps.Marker[] = [];
-
+    // 創建一個 Set 來追蹤當前應該存在的標記 ID
+    const currentMarkerIds = new Set<number | string>();
+    
+    // 處理每個標記
     markers.forEach((marker) => {
-      const markerOptions: google.maps.MarkerOptions = {
-        position: { lat: marker.lat, lng: marker.lng },
-        map,
-        title: marker.title,
-        draggable: marker.draggable || false,
-      };
-
-      // 如果有 avatarUrl，使用頭像圖片
-      if (marker.avatarUrl) {
-        markerOptions.icon = {
-          url: marker.avatarUrl,
-          scaledSize: new google.maps.Size(48, 48),
-          anchor: new google.maps.Point(24, 24),
-        };
-      } else if (marker.label) {
-        // 根據 label 決定顏色
-        let color = '#2196f3'; // 默認藍色
-        if (marker.label === '📍') {
-          // 集合地點用紅色 pin，不用圓形
-          markerOptions.icon = {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: '#f44336',
-            fillOpacity: 1,
-            strokeColor: 'white',
-            strokeWeight: 2,
-          };
-        } else if (marker.label === '✅') {
-          // 已到達用綠色
-          color = '#4caf50';
-          markerOptions.icon = {
-            url: createCircleMarkerIcon('✓', color),
-            scaledSize: new google.maps.Size(48, 48),
-            anchor: new google.maps.Point(24, 24),
-          };
-        } else {
-          // 其他成員用藍色圓形頭像
-          markerOptions.icon = {
-            url: createCircleMarkerIcon(marker.label, color),
-            scaledSize: new google.maps.Size(48, 48),
-            anchor: new google.maps.Point(24, 24),
-          };
+      // 使用 id 或生成一個唯一 key（基於位置和標題）
+      const markerId = marker.id !== undefined 
+        ? marker.id 
+        : `marker-${marker.lat}-${marker.lng}-${marker.title}`;
+      
+      currentMarkerIds.add(markerId);
+      
+      // 檢查標記是否已存在
+      const existingMarker = markersRef.current.get(markerId);
+      
+      if (existingMarker) {
+        // 更新現有標記的位置和標題
+        const currentPos = existingMarker.getPosition();
+        const newPos = new google.maps.LatLng(marker.lat, marker.lng);
+        
+        // 只有當位置改變時才更新
+        if (!currentPos || currentPos.lat() !== marker.lat || currentPos.lng() !== marker.lng) {
+          existingMarker.setPosition(newPos);
         }
-      }
+        
+        // 更新標題
+        if (existingMarker.getTitle() !== marker.title) {
+          existingMarker.setTitle(marker.title);
+        }
+      } else {
+        // 創建新標記
+        const markerOptions: google.maps.MarkerOptions = {
+          position: { lat: marker.lat, lng: marker.lng },
+          map,
+          title: marker.title,
+          draggable: marker.draggable || false,
+        };
 
-      const mapMarker = new google.maps.Marker(markerOptions);
-
-      // Add drag end listener if marker is draggable and callback is provided
-      if (marker.draggable && marker.id !== undefined && onMarkerDragEnd) {
-        mapMarker.addListener('dragend', (event: google.maps.MapMouseEvent) => {
-          if (event.latLng) {
-            const newLat = event.latLng.lat();
-            const newLng = event.latLng.lng();
-            onMarkerDragEnd(marker.id!, newLat, newLng);
+        // 如果有 avatarUrl，使用頭像圖片
+        if (marker.avatarUrl) {
+          markerOptions.icon = {
+            url: marker.avatarUrl,
+            scaledSize: new google.maps.Size(48, 48),
+            anchor: new google.maps.Point(24, 24),
+          };
+        } else if (marker.label) {
+          // 根據 label 決定顏色
+          let color = '#2196f3'; // 默認藍色
+          if (marker.label === '📍') {
+            // 集合地點用紅色 pin，不用圓形
+            markerOptions.icon = {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 10,
+              fillColor: '#f44336',
+              fillOpacity: 1,
+              strokeColor: 'white',
+              strokeWeight: 2,
+            };
+          } else if (marker.label === '✅') {
+            // 已到達用綠色
+            color = '#4caf50';
+            markerOptions.icon = {
+              url: createCircleMarkerIcon('✓', color),
+              scaledSize: new google.maps.Size(48, 48),
+              anchor: new google.maps.Point(24, 24),
+            };
+          } else {
+            // 其他成員用藍色圓形頭像
+            markerOptions.icon = {
+              url: createCircleMarkerIcon(marker.label, color),
+              scaledSize: new google.maps.Size(48, 48),
+              anchor: new google.maps.Point(24, 24),
+            };
           }
-        });
-      }
+        }
 
-      googleMarkers.push(mapMarker);
+        const mapMarker = new google.maps.Marker(markerOptions);
+
+        // Add drag end listener if marker is draggable and callback is provided
+        if (marker.draggable && marker.id !== undefined && onMarkerDragEnd) {
+          mapMarker.addListener('dragend', (event: google.maps.MapMouseEvent) => {
+            if (event.latLng) {
+              const newLat = event.latLng.lat();
+              const newLng = event.latLng.lng();
+              onMarkerDragEnd(marker.id!, newLat, newLng);
+            }
+          });
+        }
+
+        // 保存到 ref
+        markersRef.current.set(markerId, mapMarker);
+      }
     });
 
-    // Cleanup
-    return () => {
-      googleMarkers.forEach((m) => m.setMap(null));
-    };
+    // 移除不再存在的標記
+    markersRef.current.forEach((marker, markerId) => {
+      if (!currentMarkerIds.has(markerId)) {
+        marker.setMap(null);
+        markersRef.current.delete(markerId);
+      }
+    });
   }, [map, markers, onMarkerDragEnd]);
 
   // Add polyline routes when available

@@ -548,7 +548,7 @@ router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response): 
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-// PATCH /events/:id - Update event (owner or members can update)
+// PATCH /events/:id - Update event (owner only)
 router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const paramsValidation = eventParamsSchema.safeParse(req.params);
@@ -572,15 +572,19 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
     }
 
     const { id } = paramsValidation.data as EventParams;
-    const { name } = bodyValidation.data as UpdateEventRequest;
+    const updateData = bodyValidation.data as UpdateEventRequest;
     
-    // Get current user's userId and name (or use anonymous identifier)
+    // Get current user's userId
     let userUserId: string | null = null;
-    let userName: string | null = null;
     if (req.user && 'userId' in req.user) {
       const jwtPayload = req.user as { userId: number };
       userUserId = await getUserUserId(jwtPayload.userId);
-      userName = await getUserName(jwtPayload.userId);
+    }
+
+    // For anonymous users, check if ownerId is provided in request body
+    // (This allows guest users to edit events they created)
+    if (!userUserId && req.body.ownerId) {
+      userUserId = req.body.ownerId;
     }
 
     // Check if event exists
@@ -599,30 +603,110 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
       return;
     }
 
-    // Check if user is the owner (by ownerId match) or a member (by userId match)
-    if (userUserId && (event.ownerId === userUserId || event.members.some(m => m.userId === userUserId))) {
-      const updatedEvent = await prisma.event.update({
-        where: { id },
-        data: { name },
-        include: {
-          members: {
-            orderBy: {
-              id: 'asc'
-            }
-          },
-          _count: {
-            select: { members: true }
-          }
-        }
-      });
-
-      res.json({ event: updatedEvent });
-    } else {
+    // Check if user is the owner (only owner can update)
+    if (!userUserId || event.ownerId !== userUserId) {
       res.status(403).json({
         code: 'FORBIDDEN',
-        message: 'Only event owner or members can update the event'
+        message: 'Only event owner can update the event'
       });
+      return;
     }
+
+    // Build update data object, only including provided fields
+    const dataToUpdate: any = {};
+    if (updateData.name !== undefined) {
+      dataToUpdate.name = updateData.name;
+    }
+    if (updateData.startTime !== undefined) {
+      dataToUpdate.startTime = updateData.startTime;
+    }
+    if (updateData.endTime !== undefined) {
+      dataToUpdate.endTime = updateData.endTime;
+    }
+    if (updateData.meetingPointLat !== undefined) {
+      dataToUpdate.meetingPointLat = updateData.meetingPointLat;
+    }
+    if (updateData.meetingPointLng !== undefined) {
+      dataToUpdate.meetingPointLng = updateData.meetingPointLng;
+    }
+    if (updateData.meetingPointName !== undefined) {
+      dataToUpdate.meetingPointName = updateData.meetingPointName;
+    }
+    if (updateData.meetingPointAddress !== undefined) {
+      dataToUpdate.meetingPointAddress = updateData.meetingPointAddress;
+    }
+
+    // If no fields to update, return error
+    if (Object.keys(dataToUpdate).length === 0) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'No fields to update'
+      });
+      return;
+    }
+
+    const updatedEvent = await prisma.event.update({
+      where: { id },
+      data: dataToUpdate,
+      include: {
+        members: {
+          orderBy: {
+            id: 'asc'
+          }
+        },
+        _count: {
+          select: { members: true }
+        }
+      }
+    });
+
+    // 觸發 Pusher 事件通知所有成員
+    try {
+      const { triggerEventChannel } = await import('../lib/pusher');
+      triggerEventChannel(id, 'event-updated', {
+        event: updatedEvent,
+        updatedFields: Object.keys(dataToUpdate),
+        timestamp: new Date().toISOString(),
+      });
+
+      // 發送推送通知給所有成員（除了主揪自己）
+      const { sendPushNotificationToInterests } = await import('../lib/pusherBeams');
+      const memberInterests = updatedEvent.members
+        .filter(m => m.userId && m.userId !== event.ownerId) // 排除主揪自己
+        .map(m => `event-${id}-member-${m.id}`);
+      
+      if (memberInterests.length > 0) {
+        const changedFields = Object.keys(dataToUpdate);
+        let notificationTitle = '活動資訊已更新';
+        let notificationBody = '';
+        
+        if (changedFields.includes('name')) {
+          notificationBody = `活動名稱已更改為：${updatedEvent.name}`;
+        } else if (changedFields.includes('startTime') || changedFields.includes('endTime')) {
+          notificationBody = '活動時間已更改';
+        } else if (changedFields.some(f => f.startsWith('meetingPoint'))) {
+          notificationBody = '集合地點已更改';
+        } else {
+          notificationBody = '活動資訊已更新';
+        }
+        
+        await sendPushNotificationToInterests(
+          memberInterests,
+          notificationTitle,
+          notificationBody,
+          {
+            eventId: id,
+            url: `/events/${id}`,
+            type: 'event-updated',
+          }
+        );
+      }
+    } catch (error) {
+      // 不影響主要流程，只記錄錯誤
+      console.error('[Events] Error sending Pusher event/notification:', error);
+    }
+
+    res.json({ event: updatedEvent });
   } catch (error) {
     console.error('Error updating event:', error);
     res.status(500).json({

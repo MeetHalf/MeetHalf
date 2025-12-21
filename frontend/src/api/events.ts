@@ -91,7 +91,13 @@ export interface CreateEventRequest {
 }
 
 export interface UpdateEventRequest {
-  name: string;
+  name?: string;
+  startTime?: string; // ISO 8601
+  endTime?: string; // ISO 8601
+  meetingPointLat?: number | null;
+  meetingPointLng?: number | null;
+  meetingPointName?: string | null;
+  meetingPointAddress?: string | null;
 }
 
 export interface AddMemberRequest {

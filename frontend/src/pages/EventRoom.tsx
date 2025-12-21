@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -20,6 +20,10 @@ import {
   FormControl,
   InputLabel,
   Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   AccessTime as TimeIcon,
@@ -35,7 +39,11 @@ import {
   ArrowBack as ArrowBackIcon,
   Close as CloseIcon,
   Share as ShareIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type MemberETA, type ETAUpdateEvent } from '../api/events';
@@ -48,6 +56,7 @@ import { LOCATION_CONFIG } from '../config/location';
 import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, MemberJoinedEvent, LocationUpdateEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
 import EventResultPopup from '../components/EventResultPopup';
+import { loadGoogleMaps } from '../lib/googleMapsLoader';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
@@ -84,6 +93,19 @@ export default function EventRoom() {
   // 結果彈出視窗
   const [showResultPopup, setShowResultPopup] = useState(false);
   
+  // 編輯活動相關狀態
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    startTime: new Date(),
+    endTime: new Date(),
+    meetingPointName: '',
+    meetingPointAddress: '',
+    meetingPointLat: null as number | null,
+    meetingPointLng: null as number | null,
+  });
+  
   // ETA 相關狀態（包含移動狀態和倒數模式）
   interface ETAState {
     eta: MemberETA['eta'];
@@ -108,6 +130,11 @@ export default function EventRoom() {
   );
   const [requestingPermission, setRequestingPermission] = useState(false);
 
+  // Google Places Autocomplete refs
+  const autocompleteInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+
   // 檢查通知權限狀態（不自動請求）
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -126,6 +153,178 @@ export default function EventRoom() {
       }
     }
   }, []);
+
+  // Load Google Maps API when edit dialog opens
+  useEffect(() => {
+    if (editDialogOpen && !mapsLoaded) {
+      loadGoogleMaps()
+        .then(() => {
+          setMapsLoaded(true);
+        })
+        .catch((err) => {
+          console.error('Failed to load Google Maps:', err);
+          setSnackbar({ open: true, message: 'Google Maps 載入失敗', severity: 'error' });
+        });
+    }
+  }, [editDialogOpen, mapsLoaded]);
+
+  // Initialize Google Places Autocomplete
+  useEffect(() => {
+    if (!editDialogOpen || !mapsLoaded) {
+      // Cleanup when dialog closes
+      if (autocompleteRef.current) {
+        if (typeof google !== 'undefined' && google.maps) {
+          google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        }
+        autocompleteRef.current = null;
+      }
+      return;
+    }
+
+    // Wait for Dialog to fully render before initializing Autocomplete
+    let retryCount = 0;
+    const maxRetries = 20; // 增加重試次數
+    let timeoutId: NodeJS.Timeout | null = null;
+    let rafId: number | null = null;
+    
+    const initAutocomplete = () => {
+      // Check if input is ready
+      if (!autocompleteInputRef.current) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          rafId = requestAnimationFrame(initAutocomplete);
+        } else {
+          console.warn('[EventRoom] ⚠️ Autocomplete input ref not ready after max retries');
+        }
+        return;
+      }
+
+      // Clean up existing autocomplete if any (to ensure fresh initialization)
+      if (autocompleteRef.current) {
+        if (typeof google !== 'undefined' && google.maps) {
+          google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        }
+        autocompleteRef.current = null;
+      }
+
+      // Check if Google Maps API is ready
+      if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          rafId = requestAnimationFrame(initAutocomplete);
+        } else {
+          console.warn('[EventRoom] ⚠️ Google Maps API not ready after max retries');
+        }
+        return;
+      }
+
+      try {
+        // Initialize Autocomplete
+        const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
+          types: ['establishment', 'geocode'],
+          componentRestrictions: { country: 'tw' },
+          fields: ['name', 'formatted_address', 'geometry', 'place_id'], // 明確指定需要的欄位
+        });
+
+        // Listen for place selection
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          console.log('[EventRoom] Place selected:', place);
+
+          // 檢查 place 是否有效
+          if (!place || place.place_id === undefined) {
+            console.warn('[EventRoom] Invalid place selected:', place);
+            setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'warning' });
+            return;
+          }
+
+          if (!place.geometry || !place.geometry.location) {
+            console.warn('[EventRoom] Place missing geometry:', place);
+            setSnackbar({ open: true, message: '找不到該地點的位置資訊', severity: 'error' });
+            return;
+          }
+
+          // Update form data with selected place
+          setEditFormData((prev) => ({
+            ...prev,
+            meetingPointName: place.name || place.formatted_address || '',
+            meetingPointAddress: place.formatted_address || '',
+            meetingPointLat: place.geometry!.location!.lat(),
+            meetingPointLng: place.geometry!.location!.lng(),
+          }));
+
+          console.log('[EventRoom] ✓ Place data updated:', {
+            name: place.name || place.formatted_address,
+            lat: place.geometry!.location!.lat(),
+            lng: place.geometry!.location!.lng(),
+          });
+          setSnackbar({ open: true, message: '地點已選擇', severity: 'success' });
+        });
+
+        autocompleteRef.current = autocomplete;
+        console.log('[EventRoom] ✓ Google Places Autocomplete initialized', {
+          inputElement: autocompleteInputRef.current,
+          hasValue: autocompleteInputRef.current?.value || false,
+        });
+
+        // 設置 Google Places Autocomplete 建議列表的樣式
+        // 使用 setTimeout 確保 pac-container 已經被創建
+        setTimeout(() => {
+          const pacContainer = document.querySelector('.pac-container') as HTMLElement;
+          if (pacContainer) {
+            pacContainer.style.zIndex = '1400';
+            pacContainer.style.position = 'fixed';
+            console.log('[EventRoom] ✓ Set pac-container z-index to 1400');
+          } else {
+            console.warn('[EventRoom] ⚠️ pac-container not found');
+          }
+        }, 500);
+      } catch (error) {
+        console.error('[EventRoom] ✗ Failed to initialize Autocomplete:', error);
+        setSnackbar({ open: true, message: '地點搜尋功能初始化失敗', severity: 'error' });
+      }
+    };
+
+    // Start initialization after a delay to ensure Dialog is rendered
+    timeoutId = setTimeout(() => {
+      rafId = requestAnimationFrame(initAutocomplete);
+    }, 300);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (autocompleteRef.current) {
+        if (typeof google !== 'undefined' && google.maps) {
+          google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        }
+        autocompleteRef.current = null;
+      }
+    };
+  }, [editDialogOpen, mapsLoaded]);
+
+  // 監聽 pac-container 的創建，確保樣式正確設置
+  useEffect(() => {
+    if (!editDialogOpen) return;
+
+    // 使用 MutationObserver 監聽 pac-container 的創建
+    const observer = new MutationObserver((mutations) => {
+      const pacContainer = document.querySelector('.pac-container') as HTMLElement;
+      if (pacContainer) {
+        pacContainer.style.zIndex = '1400';
+        pacContainer.style.position = 'fixed';
+        console.log('[EventRoom] ✓ pac-container style updated via MutationObserver');
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [editDialogOpen]);
 
   // 處理通知權限請求（必須由用戶點擊觸發）
   const handleRequestNotificationPermission = async () => {
@@ -522,6 +721,46 @@ export default function EventRoom() {
     },
     onError: (error) => {
       console.error('[EventRoom] Pusher error for location-update:', error);
+    },
+    debug: true,
+  });
+
+  // 整合 Pusher - 監聽 event-updated 事件
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'event-updated',
+    onEvent: (data: { event: ApiEvent; updatedFields: string[]; timestamp: string }) => {
+      console.log('[EventRoom] Received event-updated event:', data);
+      
+      // 更新本地 event 狀態（即使主揪也需要更新，因為可能有多個標籤頁）
+      setEvent(data.event);
+      
+      // 如果地點改變，地圖會自動更新（因為 mapCenter 和 mapMarkers 依賴 event）
+      // 如果時間改變，位置追蹤會自動重新計算時間窗
+      
+      // 顯示通知（只有當不是主揪自己編輯時才顯示）
+      // 主揪已經通過 API 響應更新了狀態並顯示了成功通知，不需要重複通知
+      if (!isOwner) {
+        const updatedFields = data.updatedFields || [];
+        let message = '活動資訊已更新';
+        
+        if (updatedFields.includes('name')) {
+          message = `活動名稱已更改為：${data.event.name}`;
+        } else if (updatedFields.includes('startTime') || updatedFields.includes('endTime')) {
+          message = '活動時間已更改';
+        } else if (updatedFields.some(f => f.startsWith('meetingPoint'))) {
+          message = '集合地點已更改';
+        }
+        
+        setSnackbar({ 
+          open: true, 
+          message, 
+          severity: 'info' 
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('[EventRoom] Pusher event-updated error:', error);
     },
     debug: true,
   });
@@ -998,6 +1237,170 @@ export default function EventRoom() {
     }
   };
 
+  // 檢查是否為主揪
+  const isOwner = useMemo(() => {
+    if (!event) return false;
+    
+    // 檢查已登入用戶
+    if (user?.userId && event.ownerId === user.userId) {
+      return true;
+    }
+    
+    // 檢查匿名用戶（從 localStorage）
+    if (!user && id) {
+      const storageKey = `event_${id}_member`;
+      const storedMember = localStorage.getItem(storageKey);
+      if (storedMember) {
+        try {
+          const memberData = JSON.parse(storedMember);
+          // 檢查是否是 owner（通過比較 userId）
+          if (memberData.userId && event.ownerId === memberData.userId) {
+            return true;
+          }
+        } catch (e) {
+          console.error('Failed to parse stored member data:', e);
+        }
+      }
+    }
+    
+    return false;
+  }, [event, user, id]);
+
+  // 打開編輯對話框
+  const handleOpenEditDialog = () => {
+    if (!event) return;
+    
+    setEditFormData({
+      name: event.name,
+      startTime: new Date(event.startTime),
+      endTime: new Date(event.endTime),
+      meetingPointName: event.meetingPointName || '',
+      meetingPointAddress: event.meetingPointAddress || '',
+      meetingPointLat: event.meetingPointLat,
+      meetingPointLng: event.meetingPointLng,
+    });
+    setEditDialogOpen(true);
+  };
+
+  // 關閉編輯對話框
+  const handleCloseEditDialog = () => {
+    // 重置表單數據為當前活動數據，確保下次打開時顯示最新數據
+    if (event) {
+      setEditFormData({
+        name: event.name,
+        startTime: new Date(event.startTime),
+        endTime: new Date(event.endTime),
+        meetingPointName: event.meetingPointName || '',
+        meetingPointAddress: event.meetingPointAddress || '',
+        meetingPointLat: event.meetingPointLat,
+        meetingPointLng: event.meetingPointLng,
+      });
+    }
+    setEditDialogOpen(false);
+  };
+
+  // 更新活動
+  const handleUpdateEvent = async () => {
+    if (!event || !id) return;
+    
+    // 驗證表單
+    if (!editFormData.name.trim()) {
+      setSnackbar({
+        open: true,
+        message: '請輸入活動名稱',
+        severity: 'error',
+      });
+      return;
+    }
+    
+    if (editFormData.endTime <= editFormData.startTime) {
+      setSnackbar({
+        open: true,
+        message: '結束時間必須晚於開始時間',
+        severity: 'error',
+      });
+      return;
+    }
+    
+    setUpdating(true);
+    
+    try {
+      const updateData: any = {
+        name: editFormData.name.trim(),
+        startTime: editFormData.startTime.toISOString(),
+        endTime: editFormData.endTime.toISOString(),
+      };
+      
+      // 驗證地點資訊
+      // 如果輸入了地點名稱但沒有選擇（沒有座標），提示用戶
+      if (editFormData.meetingPointName && (!editFormData.meetingPointLat || !editFormData.meetingPointLng)) {
+        setSnackbar({
+          open: true,
+          message: '請從建議列表中選擇地點，或清空地點欄位',
+          severity: 'warning',
+        });
+        setUpdating(false);
+        return;
+      }
+      
+      // 如果提供了完整的地點資訊，添加到更新數據
+      if (editFormData.meetingPointName && editFormData.meetingPointLat && editFormData.meetingPointLng) {
+        updateData.meetingPointName = editFormData.meetingPointName;
+        updateData.meetingPointAddress = editFormData.meetingPointAddress || null;
+        updateData.meetingPointLat = editFormData.meetingPointLat;
+        updateData.meetingPointLng = editFormData.meetingPointLng;
+      } else {
+        // 如果清空了地點，設為 null
+        updateData.meetingPointName = null;
+        updateData.meetingPointAddress = null;
+        updateData.meetingPointLat = null;
+        updateData.meetingPointLng = null;
+      }
+      
+      // 對於匿名用戶，需要傳遞 ownerId
+      if (!user && event && id) {
+        const storageKey = `event_${id}_member`;
+        const storedMember = localStorage.getItem(storageKey);
+        if (storedMember) {
+          try {
+            const memberData = JSON.parse(storedMember);
+            if (memberData.userId && event.ownerId === memberData.userId) {
+              updateData.ownerId = memberData.userId;
+            }
+          } catch (e) {
+            console.error('Failed to parse stored member data:', e);
+          }
+        }
+      }
+      
+      const response = await eventsApi.updateEvent(Number(id), updateData);
+      
+      // 更新本地狀態
+      setEvent(response.event);
+      
+      // 如果地點改變，需要更新地圖
+      // 如果時間改變，位置追蹤會自動重新計算時間窗
+      
+      setSnackbar({
+        open: true,
+        message: '活動資訊已更新',
+        severity: 'success',
+      });
+      
+      handleCloseEditDialog();
+    } catch (err: any) {
+      console.error('更新活動失敗:', err);
+      const errorMessage = err.response?.data?.message || err.message || '更新失敗，請稍後再試';
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error',
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   // 戳人
   const handlePokeMember = async (targetMemberId: number) => {
     if (!event || !id || !currentMemberId || targetMemberId === currentMemberId) {
@@ -1078,9 +1481,10 @@ export default function EventRoom() {
   const mapMarkers = useMemo(() => {
     const markers = [];
 
-    // 集合地點標記
+    // 集合地點標記（使用固定 ID 以便追蹤和更新）
     if (event?.meetingPointLat && event?.meetingPointLng) {
       markers.push({
+        id: -1, // 使用 -1 作為集合地點的唯一 ID
         lat: event.meetingPointLat,
         lng: event.meetingPointLng,
         title: event.meetingPointName || '集合地點',
@@ -1106,6 +1510,7 @@ export default function EventRoom() {
           : `${m.nickname || '成員'}${etaText ? ` - ${etaText}` : ''}`;
         
         markers.push({
+          id: m.id, // 使用成員 ID 作為標記 ID
           lat: m.lat!,
           lng: m.lng!,
           title,
@@ -1546,7 +1951,7 @@ export default function EventRoom() {
                   </Box>
                 </Box>
 
-                {/* 主揪 + 分享 */}
+                {/* 主揪 + 分享 + 編輯 */}
                 <Box sx={{ 
                   pt: 2, 
                   borderTop: '1px solid #e2e8f0',
@@ -1568,26 +1973,50 @@ export default function EventRoom() {
                       主揪：{ownerDisplayName}
                     </Typography>
                   </Box>
-                  <Button
-                    size="small"
-                    startIcon={<ShareIcon sx={{ fontSize: 12 }} />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigator.clipboard.writeText(window.location.href);
-                      setSnackbar({ open: true, message: '已複製連結！', severity: 'success' });
-                    }}
-                    sx={{ 
-                      fontSize: '0.625rem', 
-                      fontWeight: 800, 
-                      color: '#3b82f6',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      minWidth: 'auto',
-                      p: 0.5,
-                    }}
-                  >
-                    分享連結
-                  </Button>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {/* 編輯按鈕（僅主揪可見） */}
+                    {isOwner && (
+                      <Button
+                        size="small"
+                        startIcon={<EditIcon sx={{ fontSize: 12 }} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEditDialog();
+                        }}
+                        sx={{ 
+                          fontSize: '0.625rem', 
+                          fontWeight: 800, 
+                          color: '#3b82f6',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          minWidth: 'auto',
+                          p: 0.5,
+                        }}
+                      >
+                        編輯
+                      </Button>
+                    )}
+                    <Button
+                      size="small"
+                      startIcon={<ShareIcon sx={{ fontSize: 12 }} />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(window.location.href);
+                        setSnackbar({ open: true, message: '已複製連結！', severity: 'success' });
+                      }}
+                      sx={{ 
+                        fontSize: '0.625rem', 
+                        fontWeight: 800, 
+                        color: '#3b82f6',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        minWidth: 'auto',
+                        p: 0.5,
+                      }}
+                    >
+                      分享連結
+                    </Button>
+                  </Box>
                 </Box>
               </Box>
             )}
@@ -1980,6 +2409,206 @@ export default function EventRoom() {
           eventId={Number(id)}
         />
       )}
+
+      {/* 編輯活動 Dialog */}
+      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={zhTW}>
+        <Dialog
+          open={editDialogOpen}
+          onClose={handleCloseEditDialog}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 4,
+              bgcolor: 'rgba(255,255,255,0.95)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.6)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+              overflow: 'visible', // 改為 visible 以確保 Autocomplete 建議列表可以顯示
+              position: 'relative',
+              zIndex: 1300, // 確保 Dialog 的 z-index 足夠高
+            },
+          }}
+          sx={{
+            '& .MuiBackdrop-root': {
+              zIndex: 1300, // 確保 backdrop 的 z-index 也足夠高
+            },
+            // 確保 Google Places Autocomplete 建議列表的 z-index 高於 Dialog
+            '& ~ .pac-container': {
+              zIndex: '1400 !important', // Google Places Autocomplete 容器
+            },
+          }}
+        >
+          <DialogTitle sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            pb: 2,
+            pt: 3,
+            px: 3,
+          }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#1e293b', fontSize: '1.25rem' }}>
+              編輯活動
+            </Typography>
+            <IconButton
+              onClick={handleCloseEditDialog}
+              size="small"
+              sx={{ 
+                color: '#94a3b8',
+                width: 32,
+                height: 32,
+                bgcolor: '#f1f5f9',
+                '&:hover': { bgcolor: '#e2e8f0' },
+              }}
+            >
+              <CloseIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ px: 3 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
+              {/* 活動名稱 */}
+              <TextField
+                label="活動名稱"
+                placeholder="例如：週五火鍋聚會"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                fullWidth
+                required
+                autoFocus
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+
+              {/* 開始時間 */}
+              <DateTimePicker
+                label="開始時間"
+                value={editFormData.startTime}
+                onChange={(newValue) => {
+                  if (newValue) {
+                    setEditFormData({ ...editFormData, startTime: newValue });
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    required: true,
+                    sx: {
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                      },
+                    },
+                  },
+                }}
+              />
+
+              {/* 結束時間 */}
+              <DateTimePicker
+                label="結束時間"
+                value={editFormData.endTime}
+                onChange={(newValue) => {
+                  if (newValue) {
+                    setEditFormData({ ...editFormData, endTime: newValue });
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    required: true,
+                    sx: {
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                      },
+                    },
+                  },
+                }}
+              />
+
+              {/* 地點選擇 */}
+              <TextField
+                label="集合地點"
+                placeholder="搜尋地點或地址..."
+                value={editFormData.meetingPointName}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  // 當用戶輸入時，如果當前有座標數據，清除它們
+                  // 這樣 Autocomplete 才能正常工作並顯示建議
+                  if (editFormData.meetingPointLat !== null || editFormData.meetingPointLng !== null) {
+                    setEditFormData({ 
+                      ...editFormData, 
+                      meetingPointName: newValue,
+                      meetingPointLat: null,
+                      meetingPointLng: null,
+                      meetingPointAddress: '',
+                    });
+                  } else {
+                    setEditFormData({ 
+                      ...editFormData, 
+                      meetingPointName: newValue,
+                    });
+                  }
+                }}
+                inputRef={autocompleteInputRef}
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <LocationIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
+                    </Box>
+                  ),
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+                helperText={
+                  editFormData.meetingPointLat && editFormData.meetingPointLng
+                    ? `✓ 已選擇：${editFormData.meetingPointAddress || editFormData.meetingPointName}`
+                    : '開始輸入以搜尋地點（使用 Google Places）'
+                }
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3, pt: 2, borderTop: '1px solid #e2e8f0' }}>
+            <Button 
+              onClick={handleCloseEditDialog} 
+              disabled={updating}
+              sx={{
+                fontWeight: 600,
+                color: '#64748b',
+                '&:hover': {
+                  bgcolor: '#f1f5f9',
+                },
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleUpdateEvent}
+              variant="contained"
+              disabled={updating}
+              startIcon={updating ? <CircularProgress size={20} sx={{ color: 'white' }} /> : <CheckIcon />}
+              sx={{
+                fontWeight: 700,
+                borderRadius: 2,
+                px: 3,
+                bgcolor: '#3b82f6',
+                '&:hover': {
+                  bgcolor: '#2563eb',
+                },
+                '&.Mui-disabled': {
+                  bgcolor: '#94a3b8',
+                },
+              }}
+            >
+              {updating ? '更新中...' : '儲存'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </LocalizationProvider>
     </Box>
   );
 }

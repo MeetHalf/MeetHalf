@@ -44,8 +44,45 @@ export const createEventSchema = z.object({
 
 
 export const updateEventSchema = z.object({
-  name: z.string().min(1, 'Event name is required').max(100, 'Event name must be less than 100 characters'),
-});
+  name: z.string().min(1, 'Event name is required').max(100, 'Event name must be less than 100 characters').optional(),
+  startTime: dateSchema.optional(),
+  endTime: dateSchema.optional(),
+  meetingPointLat: z.number().optional().nullable(),
+  meetingPointLng: z.number().optional().nullable(),
+  meetingPointName: z.string().optional().nullable(),
+  meetingPointAddress: z.string().optional().nullable(),
+}).refine(
+  (data) => {
+    // Only validate if both times are provided
+    if (data.startTime && data.endTime) {
+      return data.endTime > data.startTime;
+    }
+    return true;
+  },
+  {
+    message: 'endTime must be after startTime',
+    path: ['endTime'],
+  }
+).refine(
+  (data) => {
+    // If any location field is provided, all location fields should be provided
+    const hasAnyLocation = data.meetingPointLat !== undefined || 
+                          data.meetingPointLng !== undefined || 
+                          data.meetingPointName !== undefined || 
+                          data.meetingPointAddress !== undefined;
+    
+    if (hasAnyLocation) {
+      return data.meetingPointLat !== undefined && 
+             data.meetingPointLng !== undefined && 
+             data.meetingPointName !== undefined;
+    }
+    return true;
+  },
+  {
+    message: 'If providing location, meetingPointLat, meetingPointLng, and meetingPointName are required',
+    path: ['meetingPointLat'],
+  }
+);
 
 export const eventParamsSchema = z.object({
   id: z.coerce.number().int().positive('Event ID must be a positive integer'),
