@@ -1,23 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Container,
   Typography,
   TextField,
-  IconButton,
   InputAdornment,
-  List,
   CircularProgress,
-  Fade,
+  Alert,
   Button,
 } from '@mui/material';
-import {
-  Search as SearchIcon,
-  GroupAdd as GroupAddIcon,
-  PersonAdd as PersonAddIcon,
-  People as PeopleIcon,
-} from '@mui/icons-material';
+import { Search, UserPlus, Users, UserCheck } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
 import ConversationItem from '../components/ConversationItem';
@@ -28,7 +20,12 @@ import FriendListDialog from '../components/FriendListDialog';
 export default function Friends() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { conversations, loadConversations, loading } = useChat(user?.userId);
+  const {
+    conversations,
+    loading,
+    error,
+    loadConversations,
+  } = useChat(user?.userId);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [addFriendDrawerOpen, setAddFriendDrawerOpen] = useState(false);
@@ -38,7 +35,9 @@ export default function Friends() {
   // Load conversations on mount
   useEffect(() => {
     if (user) {
-      loadConversations();
+      loadConversations().catch((err) => {
+        console.error('[Friends] Failed to load conversations:', err);
+      });
     }
   }, [user, loadConversations]);
 
@@ -51,111 +50,177 @@ export default function Friends() {
     navigate(`/chat/${type}/${id}`);
   };
 
-  if (!user) {
-    return null;
-  }
-
   return (
-    <Box sx={{ bgcolor: 'background.default', minHeight: '100vh' }}>
-      <Container maxWidth="lg" sx={{ py: 3 }}>
-        {/* Header */}
-        <Fade in={true} timeout={600}>
-          <Box>
-            <Typography
-              variant="h4"
-              component="h1"
-              sx={{ fontWeight: 'bold', mb: 3 }}
+    <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
+      {/* Header */}
+      <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #f1f5f9', px: 3, pt: 2, pb: 3 }}>
+        <Typography sx={{ fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', mb: 3 }}>
+          Squad
+        </Typography>
+
+        {/* 搜尋欄 */}
+        <TextField
+          fullWidth
+          placeholder="Search conversations..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search size={20} style={{ color: '#94a3b8' }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            mb: 3,
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 4,
+              bgcolor: '#f1f5f9',
+              '& fieldset': { border: 'none' },
+            },
+          }}
+        />
+
+        {/* Action Buttons */}
+        {user && (
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              onClick={() => setCreateGroupDialogOpen(true)}
+              startIcon={<Users size={18} />}
+              sx={{
+                flex: 1,
+                minWidth: '120px',
+                borderRadius: 4,
+                bgcolor: '#f1f5f9',
+                color: '#0f172a',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                py: 1.5,
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#e2e8f0' },
+              }}
             >
-              好友
-            </Typography>
-
-            {/* Search Bar & Action Buttons */}
-            <Box sx={{ mb: 3 }}>
-              <TextField
-                fullWidth
-                placeholder="搜尋好友或聊天記錄..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{ mb: 2 }}
-              />
-
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<GroupAddIcon />}
-                  onClick={() => setCreateGroupDialogOpen(true)}
-                  sx={{ flex: 1, minWidth: '140px' }}
-                >
-                  建立群組
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<PersonAddIcon />}
-                  onClick={() => setAddFriendDrawerOpen(true)}
-                  sx={{ flex: 1, minWidth: '140px' }}
-                >
-                  加入好友
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<PeopleIcon />}
-                  onClick={() => setFriendListDialogOpen(true)}
-                  sx={{ flex: 1, minWidth: '140px' }}
-                >
-                  查看好友
-                </Button>
-              </Box>
-            </Box>
+              建立群組
+            </Button>
+            <Button
+              onClick={() => setAddFriendDrawerOpen(true)}
+              startIcon={<UserPlus size={18} />}
+              sx={{
+                flex: 1,
+                minWidth: '120px',
+                borderRadius: 4,
+                bgcolor: '#f1f5f9',
+                color: '#0f172a',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                py: 1.5,
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#e2e8f0' },
+              }}
+            >
+              加入好友
+            </Button>
+            <Button
+              onClick={() => setFriendListDialogOpen(true)}
+              startIcon={<UserCheck size={18} />}
+              sx={{
+                flex: 1,
+                minWidth: '120px',
+                borderRadius: 4,
+                bgcolor: '#f1f5f9',
+                color: '#0f172a',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                py: 1.5,
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#e2e8f0' },
+              }}
+            >
+              查看好友
+            </Button>
           </Box>
-        </Fade>
+        )}
+      </Box>
 
-        {/* Conversations List */}
+      {/* Content */}
+      <Box sx={{ p: 3 }}>
+        {/* 未登入提示 */}
+        {!user && (
+          <Alert severity="info" sx={{ mb: 2, borderRadius: 4 }}>
+            請先登入以查看聊天記錄
+          </Alert>
+        )}
+
+        {/* Error Alert */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, borderRadius: 4 }} onClose={() => {}}>
+            {error}
+          </Alert>
+        )}
+
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
             <CircularProgress />
           </Box>
         ) : filteredConversations.length > 0 ? (
-          <Fade in={true} timeout={800}>
-            <List sx={{ bgcolor: 'background.paper', borderRadius: 2 }}>
-              {filteredConversations.map((conversation) => (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {filteredConversations.map((conversation) => (
+              <Box
+                key={`${conversation.type}-${conversation.id}`}
+                onClick={() => handleConversationClick(conversation.type, conversation.id)}
+                sx={{
+                  bgcolor: 'white',
+                  borderBottom: '1px solid #f1f5f9',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:hover': { bgcolor: '#f8fafc' },
+                  '&:first-of-type': {
+                    borderTopLeftRadius: '1.5rem',
+                    borderTopRightRadius: '1.5rem',
+                  },
+                  '&:last-of-type': {
+                    borderBottomLeftRadius: '1.5rem',
+                    borderBottomRightRadius: '1.5rem',
+                    borderBottom: 'none',
+                  },
+                }}
+              >
                 <ConversationItem
-                  key={`${conversation.type}-${conversation.id}`}
                   conversation={conversation}
                   onClick={() => handleConversationClick(conversation.type, conversation.id)}
                 />
-              ))}
-            </List>
-          </Fade>
+              </Box>
+            ))}
+          </Box>
         ) : (
-          <Fade in={true} timeout={800}>
-            <Box sx={{ textAlign: 'center', py: 12 }}>
-              <Typography variant="h1" sx={{ fontSize: '4rem', mb: 2 }}>
-                💬
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                還沒有聊天記錄
-              </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                開始加入好友或建立群組來聊天吧
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<PersonAddIcon />}
-                onClick={() => setAddFriendDrawerOpen(true)}
-              >
-                加入好友
-              </Button>
-            </Box>
-          </Fade>
+          <Box sx={{ textAlign: 'center', py: 12 }}>
+            <Typography sx={{ fontSize: '4rem', mb: 2 }}>💬</Typography>
+            <Typography sx={{ fontWeight: 700, color: '#64748b' }}>
+              No conversations yet
+            </Typography>
+            <Typography sx={{ color: '#94a3b8', mt: 1, mb: 3 }}>
+              Start a chat with your friends
+            </Typography>
+            <Button
+              onClick={() => setAddFriendDrawerOpen(true)}
+              startIcon={<UserPlus size={18} />}
+              sx={{
+                borderRadius: 4,
+                bgcolor: '#0f172a',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                px: 3,
+                py: 1.5,
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#1e293b' },
+              }}
+            >
+              加入好友
+            </Button>
+          </Box>
         )}
-      </Container>
+      </Box>
 
       {/* Dialogs & Drawers */}
       <AddFriendDrawer

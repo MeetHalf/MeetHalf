@@ -6,16 +6,9 @@ import {
   IconButton,
   Avatar,
   Typography,
-  Paper,
   CircularProgress,
-  AppBar,
-  Toolbar,
 } from '@mui/material';
-import {
-  Send as SendIcon,
-  ArrowBack as ArrowBackIcon,
-  Info as InfoIcon,
-} from '@mui/icons-material';
+import { ArrowLeft, Send } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
 import { format } from 'date-fns';
@@ -25,29 +18,55 @@ export default function ChatRoom() {
   const { type, id } = useParams<{ type: 'user' | 'group'; id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { messages, loadMessages, sendMessage, markConversationAsRead, loading } = useChat(user?.userId, type, id);
+  const { messages, conversations, loadMessages, loadConversations, sendMessage, markConversationAsRead, loading } = useChat(user?.userId, type, id);
   
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [chatName, setChatName] = useState('');
+  const [chatAvatar, setChatAvatar] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load messages and chat info
+  // Load conversations to get chat name and avatar
+  useEffect(() => {
+    if (user) {
+      loadConversations().catch((err) => {
+        console.error('[ChatRoom] Failed to load conversations:', err);
+      });
+    }
+  }, [user, loadConversations]);
+
+  // Find conversation info from conversations list
+  useEffect(() => {
+    if (conversations.length > 0 && type && id) {
+      const conversation = conversations.find((conv) => {
+        if (type === 'user') {
+          return conv.type === 'user' && conv.id === id;
+        } else {
+          return conv.type === 'group' && conv.id === parseInt(id);
+        }
+      });
+
+      if (conversation) {
+        setChatName(conversation.name);
+        setChatAvatar(conversation.avatar);
+      } else {
+        // Fallback to ID if conversation not found
+        setChatName(type === 'user' ? id : `群組 ${id}`);
+        setChatAvatar(null);
+      }
+    }
+  }, [conversations, type, id]);
+
+  // Load messages and mark as read
   useEffect(() => {
     if (user && type && id) {
       const loadData = async () => {
         if (type === 'user') {
           await loadMessages({ receiverId: id });
-          // Mark conversation as read
           await markConversationAsRead({ receiverId: id });
-          // TODO: Load user info to get name
-          setChatName(id);
         } else {
           await loadMessages({ groupId: parseInt(id) });
-          // Mark conversation as read
           await markConversationAsRead({ groupId: parseInt(id) });
-          // TODO: Load group info to get name
-          setChatName(`群組 ${id}`);
         }
       };
       loadData();
@@ -106,37 +125,55 @@ export default function ChatRoom() {
         height: '100vh',
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: '#f5f5f5',
+        bgcolor: '#f8fafc',
       }}
     >
       {/* Header */}
-      <AppBar
-        position="static"
-        elevation={1}
+      <Box
         sx={{
           bgcolor: 'white',
-          color: 'text.primary',
+          borderBottom: '1px solid #f1f5f9',
+          px: 3,
+          py: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
         }}
       >
-        <Toolbar>
-          <IconButton
-            edge="start"
-            onClick={() => navigate('/friends')}
-            sx={{ mr: 2 }}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          <Avatar sx={{ mr: 2 }}>
-            {chatName.charAt(0).toUpperCase()}
-          </Avatar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            {chatName}
-          </Typography>
-          <IconButton edge="end">
-            <InfoIcon />
-          </IconButton>
-        </Toolbar>
-      </AppBar>
+        <IconButton
+          onClick={() => navigate('/friends')}
+          sx={{
+            color: '#64748b',
+            '&:hover': { bgcolor: '#f1f5f9' },
+          }}
+        >
+          <ArrowLeft size={20} />
+        </IconButton>
+        <Avatar
+          src={chatAvatar || undefined}
+          sx={{
+            width: 40,
+            height: 40,
+            bgcolor: type === 'group' ? '#dcfce7' : '#dbeafe',
+            fontSize: '1rem',
+            borderRadius: 4,
+            color: type === 'group' ? '#15803d' : '#2563eb',
+            fontWeight: 700,
+          }}
+        >
+          {chatName.charAt(0).toUpperCase()}
+        </Avatar>
+        <Typography
+          sx={{
+            flexGrow: 1,
+            fontWeight: 700,
+            color: '#0f172a',
+            fontSize: '1rem',
+          }}
+        >
+          {chatName}
+        </Typography>
+      </Box>
 
       {/* Messages Area */}
       <Box
@@ -146,7 +183,7 @@ export default function ChatRoom() {
           p: 2,
           display: 'flex',
           flexDirection: 'column',
-          gap: 1,
+          gap: 1.5,
         }}
       >
         {loading ? (
@@ -162,20 +199,29 @@ export default function ChatRoom() {
                 sx={{
                   display: 'flex',
                   justifyContent: isOwn ? 'flex-end' : 'flex-start',
-                  mb: 1,
+                  alignItems: 'flex-end',
+                  gap: 1,
                 }}
               >
                 {!isOwn && (
                   <Avatar
                     src={message.sender?.avatar || undefined}
-                    sx={{ width: 32, height: 32, mr: 1 }}
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      bgcolor: '#dbeafe',
+                      fontSize: '0.75rem',
+                      borderRadius: 3,
+                      color: '#2563eb',
+                      fontWeight: 700,
+                    }}
                   >
-                    {message.sender?.name?.charAt(0).toUpperCase()}
+                    {message.sender?.name?.charAt(0).toUpperCase() || '?'}
                   </Avatar>
                 )}
                 <Box
                   sx={{
-                    maxWidth: '70%',
+                    maxWidth: '75%',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: isOwn ? 'flex-end' : 'flex-start',
@@ -183,27 +229,46 @@ export default function ChatRoom() {
                 >
                   {!isOwn && type === 'group' && (
                     <Typography
-                      variant="caption"
-                      sx={{ color: 'text.secondary', mb: 0.5, px: 1 }}
+                      sx={{
+                        fontSize: '0.75rem',
+                        color: '#94a3b8',
+                        fontWeight: 500,
+                        mb: 0.5,
+                        px: 1,
+                      }}
                     >
                       {message.sender?.name || 'Unknown'}
                     </Typography>
                   )}
-                  <Paper
+                  <Box
                     sx={{
                       p: 1.5,
-                      bgcolor: isOwn ? 'primary.main' : 'white',
-                      color: isOwn ? 'white' : 'text.primary',
-                      borderRadius: 2,
+                      bgcolor: isOwn ? '#2563eb' : '#f1f5f9',
+                      color: isOwn ? 'white' : '#0f172a',
+                      borderRadius: isOwn ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
                       wordBreak: 'break-word',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                     }}
-                    elevation={1}
                   >
-                    <Typography variant="body1">{message.content}</Typography>
-                  </Paper>
+                    <Typography
+                      sx={{
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        lineHeight: 1.5,
+                        color: isOwn ? 'white' : '#0f172a',
+                      }}
+                    >
+                      {message.content}
+                    </Typography>
+                  </Box>
                   <Typography
-                    variant="caption"
-                    sx={{ color: 'text.secondary', mt: 0.5, px: 1 }}
+                    sx={{
+                      fontSize: '0.625rem',
+                      color: '#94a3b8',
+                      mt: 0.5,
+                      px: 1,
+                      fontWeight: 500,
+                    }}
                   >
                     {formatMessageTime(message.createdAt)}
                     {isOwn && message.readBy.length > 1 && ' · 已讀'}
@@ -213,9 +278,13 @@ export default function ChatRoom() {
             );
           })
         ) : (
-          <Box sx={{ textAlign: 'center', py: 8 }}>
-            <Typography variant="body2" color="text.secondary">
-              還沒有訊息，開始聊天吧！
+          <Box sx={{ textAlign: 'center', py: 12 }}>
+            <Typography sx={{ fontSize: '4rem', mb: 2 }}>💬</Typography>
+            <Typography sx={{ fontWeight: 700, color: '#64748b' }}>
+              還沒有訊息
+            </Typography>
+            <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8', mt: 1 }}>
+              開始聊天吧！
             </Typography>
           </Box>
         )}
@@ -223,14 +292,14 @@ export default function ChatRoom() {
       </Box>
 
       {/* Input Area */}
-      <Paper
-        elevation={3}
+      <Box
         sx={{
           p: 2,
-          display: 'flex',
-          gap: 1,
-          alignItems: 'flex-end',
           bgcolor: 'white',
+          borderTop: '1px solid #f1f5f9',
+          display: 'flex',
+          gap: 1.5,
+          alignItems: 'flex-end',
         }}
       >
         <TextField
@@ -245,28 +314,46 @@ export default function ChatRoom() {
           size="small"
           sx={{
             '& .MuiOutlinedInput-root': {
-              borderRadius: 3,
+              borderRadius: 4,
+              bgcolor: '#f1f5f9',
+              '& fieldset': {
+                border: 'none',
+              },
+              '&:hover fieldset': {
+                border: 'none',
+              },
+              '&.Mui-focused fieldset': {
+                border: '1px solid #2563eb',
+              },
             },
           }}
         />
         <IconButton
-          color="primary"
           onClick={handleSendMessage}
           disabled={!inputMessage.trim() || sending}
           sx={{
-            bgcolor: 'primary.main',
-            color: 'white',
+            bgcolor: inputMessage.trim() ? '#2563eb' : '#e2e8f0',
+            color: inputMessage.trim() ? 'white' : '#94a3b8',
+            width: 40,
+            height: 40,
+            borderRadius: 3,
             '&:hover': {
-              bgcolor: 'primary.dark',
+              bgcolor: inputMessage.trim() ? '#1d4ed8' : '#e2e8f0',
             },
             '&:disabled': {
-              bgcolor: 'grey.300',
+              bgcolor: '#e2e8f0',
+              color: '#94a3b8',
             },
+            transition: 'all 0.2s ease',
           }}
         >
-          {sending ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
+          {sending ? (
+            <CircularProgress size={20} sx={{ color: 'inherit' }} />
+          ) : (
+            <Send size={18} />
+          )}
         </IconButton>
-      </Paper>
+      </Box>
     </Box>
   );
 }
