@@ -1,12 +1,14 @@
-import { AppBar, Toolbar, Typography, Button, Box, Avatar } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Box, Avatar, Badge } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { Logout as LogoutIcon, Group as GroupIcon } from '@mui/icons-material';
+import { Logout as LogoutIcon, Notifications as NotificationsIcon } from '@mui/icons-material';
+import { useNotifications } from '../hooks/useNotifications';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { unreadCount } = useNotifications(user?.userId);
 
   const handleLogout = async () => {
     try {
@@ -90,13 +92,17 @@ export default function Navbar() {
               </Typography>
             </Box>
 
-            {/* Events Button */}
-            {location.pathname !== '/groups' && (
+            {/* Notifications Button */}
+            {location.pathname !== '/notifications' && (
               <Button 
                 variant="outlined" 
                 size="medium"
-                startIcon={<GroupIcon />}
-                onClick={() => navigate('/groups')}
+                startIcon={
+                  <Badge badgeContent={unreadCount} color="error" max={99}>
+                    <NotificationsIcon />
+                  </Badge>
+                }
+                onClick={() => navigate('/notifications')}
                 sx={{
                   borderColor: 'divider',
                   color: 'text.primary',
@@ -106,7 +112,7 @@ export default function Navbar() {
                   }
                 }}
               >
-                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>活動</Box>
+                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>通知</Box>
               </Button>
             )}
 
