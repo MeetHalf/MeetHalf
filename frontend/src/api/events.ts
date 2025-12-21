@@ -88,6 +88,8 @@ export interface CreateEventRequest {
   ownerNickname?: string;
   ownerTravelMode?: TravelMode;
   ownerShareLocation?: boolean;
+  // 邀請好友列表（可選）
+  invitedFriendIds?: string[];
 }
 
 export interface UpdateEventRequest {
@@ -377,5 +379,49 @@ export const offlineMembersApi = {
   async delete(id: number): Promise<void> {
     await api.delete(`/members/offline/${id}`);
   }
+};
+
+// Temporary midpoint calculation (no event required)
+export interface CalculateMidpointRequest {
+  locations: Array<{
+    lat: number;
+    lng: number;
+    travelMode: TravelMode;
+  }>;
+  useMeetHalf?: boolean;
+}
+
+export interface CalculateMidpointResponse {
+  midpoint: {
+    lat: number;
+    lng: number;
+  };
+  address: string;
+  suggested_places: Array<{
+    name: string;
+    address: string;
+    rating?: number;
+    types: string[];
+    place_id: string;
+    lat?: number;
+    lng?: number;
+  }>;
+  travel_times: Array<{
+    locationIndex: number;
+    travelMode: string;
+    duration: string;
+    durationValue: number | null;
+    distance: string;
+    distanceValue: number | null;
+  }>;
+  location_count: number;
+  cached: boolean;
+}
+
+export const calculateTempMidpoint = async (
+  data: CalculateMidpointRequest
+): Promise<CalculateMidpointResponse> => {
+  const response = await api.post('/events/calculate-midpoint', data);
+  return response.data;
 };
 
