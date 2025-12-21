@@ -265,7 +265,7 @@ export class ChatRepository {
         receiverId: userId,
         NOT: {
           readBy: {
-            array_contains: userId,
+            has: userId,
           },
         },
       },
