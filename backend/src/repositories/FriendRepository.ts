@@ -67,7 +67,12 @@ export class FriendRepository {
       },
     });
 
-    return users;
+    // Map users with their friendship createdAt
+    const friendMap = new Map(friends.map((f) => [f.friendId, f.createdAt]));
+    return users.map((user) => ({
+      ...user,
+      createdAt: friendMap.get(user.userId)?.toISOString() || new Date().toISOString(),
+    }));
   }
 
   /**
