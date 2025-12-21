@@ -30,14 +30,6 @@ const getEventStatus = (event: Event): EventStatus => {
   return 'ongoing';
 };
 
-const mockSquads = [
-  { id: 1, name: '大學同學', avatar: '🎓' },
-  { id: 2, name: '工作夥伴', avatar: '💼' },
-  { id: 3, name: '健身群', avatar: '💪' },
-  { id: 4, name: '讀書會', avatar: '📚' },
-];
-
-
 export default function Events() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
@@ -120,104 +112,6 @@ export default function Events() {
 
   return (
     <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
-      {/* Squads 水平滾動列表 */}
-      <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #f1f5f9', px: 3, pb: 3 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 2,
-            overflowX: 'auto',
-            py: 1,
-            mx: -1,
-            px: 1,
-            '&::-webkit-scrollbar': { display: 'none' },
-            scrollbarWidth: 'none',
-          }}
-        >
-          {/* New Meet 按鈕 */}
-          <Box
-            onClick={() => navigate('/events/new')}
-            sx={{
-              flexShrink: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 1,
-              cursor: 'pointer',
-              transition: 'transform 0.2s ease',
-              '&:active': { transform: 'scale(0.95)' },
-            }}
-          >
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                borderRadius: 6,
-                bgcolor: '#2563eb',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.4)',
-              }}
-            >
-              <Plus size={24} />
-            </Box>
-            <Typography sx={{ fontSize: '0.625rem', fontWeight: 700, color: '#64748b' }}>
-              New Meet
-            </Typography>
-          </Box>
-
-          {/* Squads */}
-          {mockSquads.map((squad) => (
-            <Box
-              key={squad.id}
-              sx={{
-                flexShrink: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 1,
-                cursor: 'pointer',
-                transition: 'transform 0.2s ease',
-                '&:active': { transform: 'scale(0.95)' },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 6,
-                  bgcolor: 'white',
-                  border: '1px solid #f1f5f9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.875rem',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                }}
-              >
-                {squad.avatar}
-              </Box>
-              <Typography
-                sx={{
-                  fontSize: '0.625rem',
-                  fontWeight: 700,
-                  color: '#64748b',
-                  width: 64,
-                  textAlign: 'center',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {squad.name}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-      </Box>
-
       {/* Main Content */}
       <Box sx={{ p: 3 }}>
         {error && (
@@ -226,46 +120,67 @@ export default function Events() {
           </Alert>
         )}
 
-        {/* 輸入邀請碼 */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
-          <Button
-            variant="text"
-            size="small"
-            startIcon={<LogIn size={16} />}
-            onClick={() => setInviteDialogOpen(true)}
-            sx={{
-              color: '#64748b',
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              textTransform: 'none',
-              '&:hover': { bgcolor: '#f1f5f9' },
-            }}
-          >
-            輸入邀請碼
-          </Button>
-        </Box>
-
         {/* Active Events Section */}
         <Box sx={{ mb: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
             <Typography sx={{ fontWeight: 700, color: '#1e293b' }}>Active Gatherings</Typography>
-            {activeEvents.length > 0 && (
+            
+            {/* 快速操作按鈕 */}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {/* 建立新聚會按鈕 */}
               <Box
+                onClick={() => navigate('/events/new')}
                 sx={{
-                  bgcolor: '#dcfce7',
-                  color: '#15803d',
-                  fontSize: '0.625rem',
-                  fontWeight: 900,
-                  px: 1,
-                  py: 0.25,
-                  borderRadius: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
+                  bgcolor: '#2563eb',
+                  color: 'white',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 3,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px -2px rgba(37, 99, 235, 0.3)',
+                  '&:active': { transform: 'scale(0.95)' },
+                  '&:hover': {
+                    boxShadow: '0 6px 16px -2px rgba(37, 99, 235, 0.4)',
+                    bgcolor: '#1d4ed8',
+                  },
                 }}
               >
-                Live
+                <Plus size={18} />
+                <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', color: 'white' }}>建立新聚會</Typography>
               </Box>
-            )}
+
+              {/* 輸入邀請碼按鈕 */}
+              <Box
+                onClick={() => setInviteDialogOpen(true)}
+                sx={{
+                  bgcolor: 'white',
+                  border: '1px solid #e2e8f0',
+                  color: '#0f172a',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 3,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  '&:active': { transform: 'scale(0.95)' },
+                  '&:hover': {
+                    borderColor: '#2563eb',
+                    bgcolor: '#f8fafc',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  },
+                }}
+              >
+                <LogIn size={18} />
+                <Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>輸入邀請碼</Typography>
+              </Box>
+            </Box>
           </Box>
 
           {activeEvents.length > 0 ? (
@@ -274,6 +189,7 @@ export default function Events() {
                 const status = getEventStatus(event);
                 const memberCount = event._count?.members || event.members?.length || 0;
                 const startTime = new Date(event.startTime);
+                const isLive = status === 'ongoing';
 
                 return (
                   <Box
@@ -312,16 +228,35 @@ export default function Events() {
                         {status === 'ongoing' ? '🔴' : '📍'}
                       </Box>
                       <Box>
-                        <Typography
-                          className="event-title"
-                          sx={{
-                            fontWeight: 700,
-                            color: '#0f172a',
-                            transition: 'color 0.2s ease',
-                          }}
-                        >
-                          {event.name}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Typography
+                            className="event-title"
+                            sx={{
+                              fontWeight: 700,
+                              color: '#0f172a',
+                              transition: 'color 0.2s ease',
+                            }}
+                          >
+                            {event.name}
+                          </Typography>
+                          {isLive && (
+                            <Box
+                              sx={{
+                                bgcolor: '#dcfce7',
+                                color: '#15803d',
+                                fontSize: '0.625rem',
+                                fontWeight: 900,
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                              }}
+                            >
+                              Live
+                            </Box>
+                          )}
+                        </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8' }}>
                           <Clock size={12} />
                           <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
@@ -421,7 +356,7 @@ export default function Events() {
         onClose={() => setInviteDialogOpen(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: 6, p: 1 } }}
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
       >
         <DialogTitle sx={{ fontWeight: 900, color: '#0f172a' }}>輸入邀請碼</DialogTitle>
         <DialogContent>
@@ -455,7 +390,7 @@ export default function Events() {
             disabled={!inviteToken.trim() || resolving}
             startIcon={resolving ? <CircularProgress size={20} /> : <LogIn size={18} />}
             sx={{
-              borderRadius: 3,
+              borderRadius: 2,
               fontWeight: 700,
               bgcolor: '#0f172a',
               '&:hover': { bgcolor: '#1e293b' },

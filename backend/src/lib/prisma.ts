@@ -10,9 +10,10 @@ const prisma = new PrismaClient({
   },
 });
 
-// Handle connection errors and reconnect
+// Handle connection errors
 prisma.$on('error' as never, (e: any) => {
   console.error('[Prisma] Database error:', e);
+  // Prisma will automatically retry on next query
 });
 
 // Graceful shutdown
