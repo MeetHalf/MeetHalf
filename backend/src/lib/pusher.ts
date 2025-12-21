@@ -67,3 +67,76 @@ export function triggerEventChannel(eventId: number, eventName: string, data: an
     });
 }
 
+/**
+ * Trigger a Pusher event on a chat channel (user or group)
+ */
+export function triggerChatChannel(
+  type: 'user' | 'group',
+  id: string | number,
+  eventName: string,
+  data: any
+): void {
+  const channelName = type === 'user' ? `chat-user-${id}` : `group-${id}`;
+  
+  console.log('[Pusher] Attempting to trigger chat event:', {
+    channel: channelName,
+    event: eventName,
+    data,
+    timestamp: new Date().toISOString(),
+  });
+
+  if (!pusher) {
+    console.warn(`[Pusher] Pusher not configured. Skipping event: ${eventName} on channel ${channelName}`);
+    return;
+  }
+
+  pusher.trigger(channelName, eventName, data)
+    .then(() => {
+      console.log('[Pusher] ✓ Successfully triggered chat event:', {
+        channel: channelName,
+        event: eventName,
+        timestamp: new Date().toISOString(),
+      });
+    })
+    .catch((error) => {
+      console.error(`[Pusher] ✗ Error triggering chat event ${eventName} on channel ${channelName}:`, {
+        error: error.message,
+        stack: error.stack,
+      });
+    });
+}
+
+/**
+ * Trigger a Pusher event on a notification channel
+ */
+export function triggerNotificationChannel(userId: string, eventName: string, data: any): void {
+  const channelName = `notification-${userId}`;
+  
+  console.log('[Pusher] Attempting to trigger notification event:', {
+    channel: channelName,
+    event: eventName,
+    data,
+    timestamp: new Date().toISOString(),
+  });
+
+  if (!pusher) {
+    console.warn(`[Pusher] Pusher not configured. Skipping event: ${eventName} on channel ${channelName}`);
+    return;
+  }
+
+  pusher.trigger(channelName, eventName, data)
+    .then(() => {
+      console.log('[Pusher] ✓ Successfully triggered notification event:', {
+        channel: channelName,
+        event: eventName,
+        timestamp: new Date().toISOString(),
+      });
+    })
+    .catch((error) => {
+      console.error(`[Pusher] ✗ Error triggering notification event ${eventName} on channel ${channelName}:`, {
+        error: error.message,
+        stack: error.stack,
+      });
+    });
+}
+
