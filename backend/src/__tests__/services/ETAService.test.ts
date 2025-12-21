@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import { ETA_CONFIG } from '../../config/eta';
 
 // Mock Pusher
@@ -27,10 +27,14 @@ vi.mock('@googlemaps/google-maps-services-js', () => {
   };
 });
 
-// 動態導入 etaService（在 mock 設置後）
-const { etaService } = await import('../../services/ETAService');
-
 describe('ETAService', () => {
+  let etaService: any;
+
+  // 動態導入 etaService（在 mock 設置後）
+  beforeAll(async () => {
+    const module = await import('../../services/ETAService');
+    etaService = module.etaService;
+  });
   // 在每個測試前清理狀態
   beforeEach(() => {
     // 清理所有成員狀態
@@ -159,7 +163,7 @@ describe('ETAService', () => {
       expect(eta?.isCountdown).toBe(true);
       // ETA 應該減少了（因為時間過去了）
       // Mock 返回 600 秒，經過 1 秒後應該是 599 或更少
-      if (eta?.etaSeconds !== null) {
+      if (eta && eta.etaSeconds !== null) {
         expect(eta.etaSeconds).toBeLessThanOrEqual(599);
       }
     });

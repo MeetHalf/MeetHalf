@@ -209,8 +209,8 @@ router.get('/search', authMiddleware, async (req: Request, res: Response): Promi
       return;
     }
 
-    const { q, limit } = result.data;
-    const messages = await chatService.searchMessages(userUserId, q, limit);
+    const { q } = result.data;
+    const messages = await chatService.searchMessages(userUserId, q);
     res.json({ messages });
   } catch (error) {
     console.error('Error searching messages:', error);
