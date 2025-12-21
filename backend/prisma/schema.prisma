@@ -8,19 +8,23 @@ generator client {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  userId       String   @unique // email前綴 + "_" + 三個字母數字亂碼
-  email        String   @unique
-  name         String   // User display name (from OAuth or email)
-  passwordHash String?  // Optional: keep for existing users, new users via OAuth
-  googleId     String?  @unique
-  githubId     String?  @unique
-  provider     String?  // EMAIL, GOOGLE, GITHUB
-  avatar       String?  // Avatar URL from OAuth
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  Int      @id @default(autoincrement())
+  userId              String   @unique // email前綴 + "_" + 三個字母數字亂碼
+  email               String   @unique
+  name                String   // User display name (from OAuth or email)
+  passwordHash        String?  // Optional: keep for existing users, new users via OAuth
+  googleId            String?  @unique
+  githubId            String?  @unique
+  provider            String?  // EMAIL, GOOGLE, GITHUB
+  avatar              String?  // Avatar URL from OAuth
+  defaultLat          Float?   // 預設出發點緯度
+  defaultLng          Float?   // 預設出發點經度
+  defaultAddress      String?  // 預設出發點地址
+  defaultLocationName String?  // 預設出發點名稱
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
   
-  groups       Group[]  // Many-to-many relation with Group
+  groups              Group[]  // Many-to-many relation with Group
 }
 
 model Event {
@@ -42,6 +46,7 @@ model Event {
   members             Member[]
   pokeRecords         PokeRecord[]
   shareTokens         ShareToken[]
+  invitations         EventInvitation[]
   group               Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
   
   @@index([ownerId])
@@ -113,6 +118,29 @@ model ShareToken {
   
   @@index([token])
   @@index([eventId])
+}
+
+model EventInvitation {
+  id         Int                    @id @default(autoincrement())
+  eventId    Int                    // 關聯到 Event
+  fromUserId String                 // 邀請者 userId
+  toUserId   String                 // 被邀請者 userId
+  status     EventInvitationStatus  @default(pending)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  
+  event      Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  @@unique([eventId, toUserId]) // 同一個活動不能重複邀請同一個人
+  @@index([eventId])
+  @@index([toUserId])
+  @@index([status])
+}
+
+enum EventInvitationStatus {
+  pending
+  accepted
+  rejected
 }
 
 model Friend {

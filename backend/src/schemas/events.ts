@@ -28,6 +28,8 @@ export const createEventSchema = z.object({
   ownerNickname: z.string().min(1, 'Owner nickname is required').max(100).optional(),
   ownerTravelMode: z.enum(['driving', 'transit', 'walking', 'bicycling']).optional(),
   ownerShareLocation: z.boolean().default(false).optional(),
+  // 邀請好友列表（可選）
+  invitedFriendIds: z.array(z.string().min(1, 'User ID is required')).optional(),
 }).refine(
   (data) => {
     // Only validate if both times are provided

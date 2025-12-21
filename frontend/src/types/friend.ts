@@ -3,6 +3,10 @@ export interface User {
   name: string;
   email: string;
   avatar: string | null;
+  defaultLat?: number | null;
+  defaultLng?: number | null;
+  defaultAddress?: string | null;
+  defaultLocationName?: string | null;
 }
 
 export interface Friend extends User {
