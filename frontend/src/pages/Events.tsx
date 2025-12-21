@@ -13,7 +13,7 @@ import {
   CircularProgress,
   Snackbar,
 } from '@mui/material';
-import { LogIn, Plus, ChevronRight, Trophy, Clock } from 'lucide-react';
+import { LogIn, Plus, ChevronRight, Trophy, Clock, MessageCircle } from 'lucide-react';
 import { format, isAfter, isBefore, isToday } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { eventsApi, Event, inviteApi } from '../api/events';
@@ -194,7 +194,6 @@ export default function Events() {
                 return (
                   <Box
                     key={event.id}
-                    onClick={() => handleEventClick(event.id)}
                     sx={{
                       bgcolor: 'white',
                       p: 2.5,
@@ -212,7 +211,10 @@ export default function Events() {
                       },
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box
+                      onClick={() => handleEventClick(event.id)}
+                      sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}
+                    >
                       <Box
                         sx={{
                           width: 48,
@@ -271,7 +273,36 @@ export default function Events() {
                         </Box>
                       </Box>
                     </Box>
-                    <ChevronRight size={18} style={{ color: '#cbd5e1' }} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {event.groupId && (
+                        <Box
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/chat/group/${event.groupId}`);
+                          }}
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 2,
+                            bgcolor: '#f1f5f9',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#2563eb',
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                              bgcolor: '#dbeafe',
+                            },
+                            '&:active': {
+                              transform: 'scale(0.9)',
+                            },
+                          }}
+                        >
+                          <MessageCircle size={18} />
+                        </Box>
+                      )}
+                      <ChevronRight size={18} style={{ color: '#cbd5e1' }} />
+                    </Box>
                   </Box>
                 );
               })}
