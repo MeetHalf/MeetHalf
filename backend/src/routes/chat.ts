@@ -164,6 +164,44 @@ router.get('/conversations', authMiddleware, async (req: Request, res: Response)
 });
 
 /**
+ * PUT /api/chat/conversations/read - Mark conversation as read
+ */
+router.put('/conversations/read', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user || !('userId' in req.user)) {
+      res.status(401).json({ code: 'UNAUTHORIZED', message: 'Authentication required' });
+      return;
+    }
+
+    const jwtPayload = req.user as { userId: number };
+    const userUserId = await getUserUserId(jwtPayload.userId);
+
+    if (!userUserId) {
+      res.status(401).json({ code: 'UNAUTHORIZED', message: 'User not found' });
+      return;
+    }
+
+    const { receiverId, groupId } = req.body;
+
+    if (!receiverId && !groupId) {
+      res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Either receiverId or groupId is required' });
+      return;
+    }
+
+    const count = await chatService.markConversationAsRead(
+      userUserId,
+      receiverId,
+      groupId ? parseInt(groupId) : undefined
+    );
+
+    res.json({ success: true, count });
+  } catch (error: any) {
+    console.error('Error marking conversation as read:', error);
+    res.status(500).json({ code: 'INTERNAL_ERROR', message: 'Failed to mark conversation as read' });
+  }
+});
+
+/**
  * GET /api/chat/unread-count - Get unread message count
  */
 router.get('/unread-count', authMiddleware, async (req: Request, res: Response): Promise<void> => {

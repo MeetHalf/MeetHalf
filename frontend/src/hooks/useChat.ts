@@ -51,6 +51,16 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     []
   );
 
+  // Load unread count
+  const loadUnreadCount = useCallback(async () => {
+    try {
+      const { count } = await chatApi.getUnreadCount();
+      setUnreadCount(count);
+    } catch (err: any) {
+      console.error('Error loading unread count:', err);
+    }
+  }, []);
+
   // Send message
   const sendMessage = useCallback(async (content: string, receiverId?: string, groupId?: number) => {
     try {
@@ -75,15 +85,18 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     }
   }, []);
 
-  // Load unread count
-  const loadUnreadCount = useCallback(async () => {
+  // Mark entire conversation as read
+  const markConversationAsRead = useCallback(async (params: { receiverId?: string; groupId?: number }) => {
     try {
-      const { count } = await chatApi.getUnreadCount();
-      setUnreadCount(count);
+      const result = await chatApi.markConversationAsRead(params);
+      // Update local unread count
+      await loadUnreadCount();
+      return result.count;
     } catch (err: any) {
-      console.error('Error loading unread count:', err);
+      console.error('Error marking conversation as read:', err);
+      return 0;
     }
-  }, []);
+  }, [loadUnreadCount]);
 
   // Search messages
   const searchMessages = useCallback(async (query: string) => {
@@ -120,6 +133,13 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
         }
         return [...prev, data];
       });
+      
+      // If user is currently in this chat and the message is from someone else, mark as read
+      if (userId && type && id && data.senderId !== userId) {
+        // Mark the message as read immediately
+        markAsRead(data.id);
+      }
+      
       // Update unread count
       loadUnreadCount();
     },
@@ -161,6 +181,7 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     loadMessages,
     sendMessage,
     markAsRead,
+    markConversationAsRead,
     loadUnreadCount,
     searchMessages,
   };

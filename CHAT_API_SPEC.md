@@ -113,7 +113,39 @@ PUT /chat/messages/:id/read
 
 ---
 
-### 4. 取得聊天室列表
+### 4. 批量標記對話已讀
+```http
+PUT /chat/conversations/read
+```
+
+**Request Body:**
+```json
+{
+  "receiverId": "user456", // 個人聊天 (與 groupId 二選一)
+  "groupId": 123          // 群組聊天 (與 receiverId 二選一)
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "count": 5  // 標記為已讀的訊息數量
+}
+```
+
+**說明:**
+- 進入聊天室時自動調用，將對話中所有未讀訊息標記為已讀
+- 會觸發 Pusher `message-read` 事件給發送方
+- 自動更新所有相關的未讀數量顯示
+
+**Errors:**
+- `400 VALIDATION_ERROR`: receiverId 和 groupId 都未提供
+- `401 UNAUTHORIZED`: 未認證
+
+---
+
+### 5. 取得聊天室列表
 ```http
 GET /chat/conversations
 ```
@@ -157,7 +189,7 @@ GET /chat/conversations
 
 ---
 
-### 5. 取得未讀訊息數量
+### 6. 取得未讀訊息數量
 ```http
 GET /chat/unread-count
 ```
@@ -171,7 +203,7 @@ GET /chat/unread-count
 
 ---
 
-### 6. 搜尋訊息
+### 7. 搜尋訊息
 ```http
 GET /chat/search?q=keyword&limit=20
 ```

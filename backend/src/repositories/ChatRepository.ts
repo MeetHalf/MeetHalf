@@ -268,6 +268,50 @@ export class ChatRepository {
   }
 
   /**
+   * Mark all messages in a conversation as read
+   */
+  async markConversationAsRead(userId: string, receiverId?: string, groupId?: number) {
+    const where: any = {
+      NOT: {
+        senderId: userId, // Don't mark own messages
+        readBy: {
+          array_contains: userId,
+        },
+      },
+    };
+
+    if (receiverId) {
+      // Private chat: mark messages from the other user
+      where.senderId = receiverId;
+      where.receiverId = userId;
+    } else if (groupId) {
+      // Group chat: mark all unread messages in the group
+      where.groupId = groupId;
+    } else {
+      return [];
+    }
+
+    // Get unread messages
+    const unreadMessages = await prisma.chatMessage.findMany({
+      where,
+      select: { id: true, readBy: true },
+    });
+
+    // Update each message to add userId to readBy
+    const updatePromises = unreadMessages.map((message) => {
+      const readBy = message.readBy as string[];
+      return prisma.chatMessage.update({
+        where: { id: message.id },
+        data: {
+          readBy: [...readBy, userId],
+        },
+      });
+    });
+
+    return Promise.all(updatePromises);
+  }
+
+  /**
    * Get unread message count for a user
    */
   async getUnreadCount(userId: string): Promise<number> {
