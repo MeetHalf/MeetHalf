@@ -3,11 +3,12 @@ import { Box, Typography, Avatar, Badge } from '@mui/material';
 import { motion } from 'framer-motion';
 import { AnimatedBell } from './AnimatedIcons';
 import { useAuth } from '../hooks/useAuth';
+import { useNotifications } from '../hooks/useNotifications';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const unreadCount = 3; // 模擬未讀通知
+  const { unreadCount } = useNotifications(user?.userId);
 
   return (
     <Box
@@ -94,7 +95,7 @@ export default function Navbar() {
                 color: '#3b82f6',
               }}
             >
-              {user?.name?.[0]?.toUpperCase() || '👤'}
+              {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '👤'}
             </Avatar>
           </motion.div>
         </Box>

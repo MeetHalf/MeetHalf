@@ -27,6 +27,17 @@ MeetHalf 是一個**聚會即時定位追蹤應用**，解決朋友聚會時「�
 - 遲到統計與被戳排名
 - 儲存歷史記錄
 
+**👨‍👩‍👧‍👦 好友與聊天系統** ✨ 新功能
+- 搜尋並加入好友
+- 個人與群組即時聊天
+- 好友邀請通知
+- 聊天訊息推播通知
+
+**🔔 通知中心** ✨ 新功能
+- 統一管理所有通知（好友邀請、訊息、活動邀請、戳人）
+- 即時推送與推播通知
+- 通知內直接操作（接受/拒絕好友邀請）
+
 ### 可選功能
 
 **🗺️ MeetHalf 智能中點計算**（選用）
@@ -140,16 +151,20 @@ npm run dev  # Port 5173
 - **UI**: Material-UI (MUI v5)
 - **地圖**: Google Maps JavaScript API
 - **即時**: Pusher Channels
+- **推播通知**: Pusher Beams
 - **路由**: React Router v6
 - **HTTP**: Axios
+- **日期處理**: date-fns
 
 ### Backend
 - **Framework**: Node.js + Express + TypeScript
 - **資料庫**: PostgreSQL + Prisma ORM
 - **認證**: JWT (HttpOnly Cookie) + Guest Token
 - **即時**: Pusher Channels
+- **推播通知**: Pusher Beams
 - **APIs**: Google Maps (Geocoding, Places, Directions, Distance Matrix)
 - **安全**: Helmet, CORS, bcrypt, Rate Limiting
+- **驗證**: Zod
 
 ### 資料庫 Schema
 
@@ -281,13 +296,22 @@ MeetHalf/
 - 參加者填寫出發地與交通方式
 - 主揪按「計算中間點」取得建議地點
 
-### Stage 3: 進階功能 💡 未來規劃
+### Stage 3: 好友與聊天系統 ✅ 已完成
 
-- PWA 支援（離線快取、推送通知）
-- 朋友系統
+- ✅ 好友管理（搜尋、邀請、接受/拒絕、刪除）
+- ✅ 個人與群組即時聊天
+- ✅ 通知中心（統一管理所有通知）
+- ✅ 推播通知（Pusher Beams）
+- ✅ 底部 Tab Bar 導航（活動、好友、個人）
+- ✅ 已讀回條與未讀數量
+
+### Stage 4: 進階功能 💡 未來規劃
+
+- PWA 支援（離線快取、桌面安裝）
 - 聚會模板
 - 統計圖表
 - 匯出報表
+- 多語言支援
 
 ---
 
@@ -313,6 +337,54 @@ MeetHalf/
 - `member-arrived` - 成員到達
 - `poke` - 戳人通知
 - `event-ended` - 聚會結束
+
+### Friends API ✨ 新
+
+完整規格請見 [FRIENDS_API_SPEC.md](./FRIENDS_API_SPEC.md)
+
+**主要端點**：
+- `POST /friends/requests` - 發送好友邀請
+- `GET /friends/requests` - 取得好友邀請
+- `POST /friends/requests/:id/accept` - 接受邀請
+- `POST /friends/requests/:id/reject` - 拒絕邀請
+- `GET /friends` - 取得好友列表
+- `DELETE /friends/:friendId` - 刪除好友
+- `GET /friends/search` - 搜尋用戶
+
+### Chat API ✨ 新
+
+完整規格請見 [CHAT_API_SPEC.md](./CHAT_API_SPEC.md)
+
+**主要端點**：
+- `POST /chat/messages` - 發送訊息
+- `GET /chat/messages` - 取得聊天記錄
+- `PUT /chat/messages/:id/read` - 標記已讀
+- `GET /chat/conversations` - 取得聊天室列表
+- `GET /chat/unread-count` - 取得未讀數量
+- `GET /chat/search` - 搜尋訊息
+
+**Pusher 頻道**：
+- `chat-user-{userId}` - 個人聊天
+- `group-{groupId}` - 群組聊天
+
+### Notifications API ✨ 新
+
+完整規格請見 [NOTIFICATIONS_API_SPEC.md](./NOTIFICATIONS_API_SPEC.md)
+
+**主要端點**：
+- `GET /notifications` - 取得通知列表
+- `PUT /notifications/:id/read` - 標記已讀
+- `PUT /notifications/read-all` - 全部標記已讀
+- `DELETE /notifications/:id` - 刪除通知
+- `GET /notifications/unread-count` - 取得未讀數量
+
+**通知類型**：
+- `FRIEND_REQUEST` - 好友邀請
+- `FRIEND_ACCEPTED` - 好友邀請已接受
+- `NEW_MESSAGE` - 新訊息
+- `EVENT_INVITE` - 活動邀請
+- `POKE` - 戳人通知
+- `EVENT_UPDATE` - 活動更新
 
 ### MeetHalf API
 
@@ -343,6 +415,10 @@ PUSHER_KEY="your_pusher_key"
 PUSHER_SECRET="your_pusher_secret"
 PUSHER_CLUSTER="ap3"
 
+# Pusher Beams (Push Notifications)
+PUSHER_BEAMS_INSTANCE_ID="your_beams_instance_id"
+PUSHER_BEAMS_SECRET_KEY="your_beams_secret_key"
+
 # CORS
 CORS_ORIGIN="http://localhost:5173"
 ```
@@ -356,6 +432,9 @@ VITE_GOOGLE_MAPS_JS_KEY="your_google_maps_browser_key"
 # Pusher
 VITE_PUSHER_KEY="your_pusher_key"
 VITE_PUSHER_CLUSTER="ap3"
+
+# Pusher Beams (Push Notifications)
+VITE_PUSHER_BEAMS_INSTANCE_ID="your_beams_instance_id"
 
 # Backend API (optional)
 # VITE_API_BASE_URL="http://localhost:3000"
@@ -465,6 +544,6 @@ git commit -m "fix(pusher): resolve connection timeout issue"
 
 ---
 
-**Last Updated**: 2025-11-29  
-**Status**: Stage 1 開發中  
+**Last Updated**: 2025-12-21  
+**Status**: Stage 3 完成 (好友與聊天系統)  
 **Team**: Frontend + Backend 協作開發

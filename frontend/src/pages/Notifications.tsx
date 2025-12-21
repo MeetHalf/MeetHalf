@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
   Avatar,
+  Button,
+  CircularProgress,
 } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -12,85 +14,49 @@ import {
   AnimatedCalendar,
   AnimatedZap,
 } from '../components/AnimatedIcons';
-import { UserPlus, Megaphone } from 'lucide-react';
+import { UserPlus, Megaphone, Check, X } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useNotifications } from '../hooks/useNotifications';
+import { useFriends } from '../hooks/useFriends';
+import { Notification } from '../types/notification';
+import { formatDistanceToNow } from 'date-fns';
+import { zhTW } from 'date-fns/locale';
 
-interface Notification {
-  id: number;
-  type: 'event_invite' | 'event_update' | 'friend_request' | 'poke' | 'reminder';
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-  eventId?: number;
-}
-
-const mockNotifications: Notification[] = [
-  {
-    id: 1,
-    type: 'event_invite',
-    title: '活動邀請',
-    message: '小明邀請你參加「週五火鍋聚會」',
-    time: '5 分鐘前',
-    read: false,
-    eventId: 1,
-  },
-  {
-    id: 2,
-    type: 'event_update',
-    title: '活動更新',
-    message: '「聖誕派對」的集合地點已更改',
-    time: '30 分鐘前',
-    read: false,
-    eventId: 2,
-  },
-  {
-    id: 3,
-    type: 'poke',
-    title: '有人戳你',
-    message: '小華在「週末登山」中戳了你一下！',
-    time: '1 小時前',
-    read: true,
-    eventId: 3,
-  },
-  {
-    id: 4,
-    type: 'friend_request',
-    title: '好友申請',
-    message: '阿強想加你為好友',
-    time: '2 小時前',
-    read: true,
-  },
-];
-
-const getNotificationIcon = (type: Notification['type']) => {
+const getNotificationIcon = (type: string) => {
   switch (type) {
     case 'event_invite':
+    case 'EVENT_INVITE':
+    case 'EVENT_UPDATE':
       return <AnimatedCalendar size={18} />;
     case 'event_update':
       return <Megaphone size={18} />;
     case 'friend_request':
+    case 'FRIEND_REQUEST':
+    case 'FRIEND_ACCEPTED':
       return <UserPlus size={18} />;
     case 'poke':
+    case 'POKE':
       return <AnimatedZap size={18} animate />;
-    case 'reminder':
-      return <AnimatedCalendar size={18} />;
     default:
       return <AnimatedCalendar size={18} />;
   }
 };
 
-const getNotificationColor = (type: Notification['type']) => {
+const getNotificationColor = (type: string) => {
   switch (type) {
     case 'event_invite':
+    case 'EVENT_INVITE':
       return { bg: '#dbeafe', color: '#2563eb' };
     case 'event_update':
+    case 'EVENT_UPDATE':
       return { bg: '#fef3c7', color: '#d97706' };
     case 'friend_request':
+    case 'FRIEND_REQUEST':
+    case 'FRIEND_ACCEPTED':
       return { bg: '#dcfce7', color: '#16a34a' };
     case 'poke':
+    case 'POKE':
       return { bg: '#fee2e2', color: '#dc2626' };
-    case 'reminder':
-      return { bg: '#e0e7ff', color: '#4f46e5' };
     default:
       return { bg: '#f1f5f9', color: '#64748b' };
   }
@@ -103,7 +69,7 @@ const listItemVariants = {
     x: 0,
     transition: {
       delay: i * 0.05,
-      type: 'spring',
+      type: 'spring' as const,
       stiffness: 300,
       damping: 24,
     },
@@ -115,32 +81,83 @@ const listItemVariants = {
   },
 };
 
+const formatTimestamp = (dateString: string) => {
+  try {
+    return formatDistanceToNow(new Date(dateString), {
+      addSuffix: true,
+      locale: zhTW,
+    });
+  } catch {
+    return '';
+  }
+};
+
 export default function Notifications() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const { user } = useAuth();
+  const { notifications, loading, loadNotifications, markAsRead, markAllAsRead, deleteNotification, unreadCount } =
+    useNotifications(user?.userId);
+  const { acceptRequest, rejectRequest } = useFriends();
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const handleMarkAsRead = (id: number) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  };
-
-  const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
-
-  const handleDelete = (id: number) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  };
+  useEffect(() => {
+    if (user) {
+      loadNotifications();
+    }
+  }, [user, loadNotifications]);
 
   const handleNotificationClick = (notification: Notification) => {
-    handleMarkAsRead(notification.id);
-    if (notification.eventId) {
-      navigate(`/events/${notification.eventId}`);
-    } else if (notification.type === 'friend_request') {
-      navigate('/social');
+    if (!notification.read) {
+      markAsRead(notification.id);
+    }
+
+    switch (notification.type) {
+      case 'FRIEND_ACCEPTED':
+        navigate('/friends');
+        break;
+      case 'NEW_MESSAGE':
+        if (notification.data?.groupId) {
+          navigate(`/chat/group/${notification.data.groupId}`);
+        } else if (notification.data?.senderId) {
+          navigate(`/chat/user/${notification.data.senderId}`);
+        }
+        break;
+      case 'EVENT_INVITE':
+      case 'EVENT_UPDATE':
+      case 'POKE':
+        if (notification.data?.eventId) {
+          navigate(`/events/${notification.data.eventId}`);
+        }
+        break;
+      default:
+        break;
     }
   };
+
+  const handleAcceptFriendRequest = async (notification: Notification) => {
+    if (notification.data?.requestId) {
+      await acceptRequest(notification.data.requestId);
+      loadNotifications();
+    }
+  };
+
+  const handleRejectFriendRequest = async (notification: Notification) => {
+    if (notification.data?.requestId) {
+      await rejectRequest(notification.data.requestId);
+      loadNotifications();
+    }
+  };
+
+  if (!user) {
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 200px)' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
@@ -189,7 +206,7 @@ export default function Notifications() {
         {unreadCount > 0 && (
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Typography
-              onClick={handleMarkAllAsRead}
+              onClick={markAllAsRead}
               sx={{
                 color: '#2563eb',
                 fontSize: '0.75rem',
@@ -209,6 +226,8 @@ export default function Notifications() {
           <AnimatePresence mode="popLayout">
             {notifications.map((notification, index) => {
               const colors = getNotificationColor(notification.type);
+              const isFriendRequest = notification.type === 'FRIEND_REQUEST';
+              
               return (
                 <motion.div
                   key={notification.id}
@@ -220,7 +239,7 @@ export default function Notifications() {
                   layout
                   whileHover={{ scale: 1.01, x: 4 }}
                   whileTap={{ scale: 0.99 }}
-                  onClick={() => handleNotificationClick(notification)}
+                  onClick={() => !isFriendRequest && handleNotificationClick(notification)}
                   style={{
                     backgroundColor: notification.read ? 'white' : 'rgba(37, 99, 235, 0.03)',
                     padding: 16,
@@ -229,7 +248,7 @@ export default function Notifications() {
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: 16,
-                    cursor: 'pointer',
+                    cursor: isFriendRequest ? 'default' : 'pointer',
                     marginBottom: 12,
                   }}
                 >
@@ -272,18 +291,54 @@ export default function Notifications() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {notification.message}
+                      {notification.body}
                     </Typography>
                     <Typography sx={{ color: '#94a3b8', fontSize: '0.625rem', fontWeight: 600 }}>
-                      {notification.time}
+                      {formatTimestamp(notification.createdAt)}
                     </Typography>
+
+                    {/* Friend Request Actions */}
+                    {isFriendRequest && (
+                      <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<Check size={16} />}
+                          onClick={() => handleAcceptFriendRequest(notification)}
+                          sx={{
+                            borderRadius: 3,
+                            bgcolor: '#22c55e',
+                            '&:hover': { bgcolor: '#16a34a' },
+                            textTransform: 'none',
+                            fontWeight: 700,
+                          }}
+                        >
+                          接受
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<X size={16} />}
+                          onClick={() => handleRejectFriendRequest(notification)}
+                          sx={{
+                            borderRadius: 3,
+                            borderColor: '#e2e8f0',
+                            color: '#64748b',
+                            textTransform: 'none',
+                            fontWeight: 700,
+                          }}
+                        >
+                          拒絕
+                        </Button>
+                      </Box>
+                    )}
                   </Box>
                   <motion.div
                     whileHover={{ scale: 1.2, backgroundColor: '#fee2e2' }}
                     whileTap={{ scale: 0.9 }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(notification.id);
+                      deleteNotification(notification.id);
                     }}
                     style={{
                       width: 32,
@@ -293,6 +348,7 @@ export default function Notifications() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: '#cbd5e1',
+                      cursor: 'pointer',
                     }}
                   >
                     <AnimatedTrash size={16} />
@@ -313,9 +369,9 @@ export default function Notifications() {
             >
               <Typography sx={{ fontSize: '4rem', mb: 2 }}>🔔</Typography>
             </motion.div>
-            <Typography sx={{ fontWeight: 700, color: '#64748b' }}>No notifications</Typography>
+            <Typography sx={{ fontWeight: 700, color: '#64748b' }}>沒有通知</Typography>
             <Typography sx={{ color: '#94a3b8', mt: 1 }}>
-              We'll let you know when something happens
+              所有通知都會顯示在這裡
             </Typography>
           </motion.div>
         )}

@@ -9,6 +9,8 @@ import InvitePage from './pages/InvitePage';
 import Social from './pages/Social';
 import MapView from './pages/MapView';
 import Profile from './pages/Profile';
+import Friends from './pages/Friends';
+import ChatRoom from './pages/ChatRoom';
 import Notifications from './pages/Notifications';
 import { Box, CircularProgress } from '@mui/material';
 
@@ -101,6 +103,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: '/friends',
+        element: (
+          <LoadingRoute>
+            <Friends />
+          </LoadingRoute>
+        ),
+      },
+      {
         path: '/map',
         element: (
           <LoadingRoute>
@@ -113,6 +123,14 @@ export const router = createBrowserRouter([
         element: (
           <LoadingRoute>
             <Profile />
+          </LoadingRoute>
+        ),
+      },
+      {
+        path: '/chat/:type/:id',
+        element: (
+          <LoadingRoute>
+            <ChatRoom />
           </LoadingRoute>
         ),
       },

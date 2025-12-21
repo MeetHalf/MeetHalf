@@ -12,6 +12,9 @@ import membersRouter from './routes/members';
 import mapsRouter from './routes/maps';
 import usersRouter from './routes/users';
 import inviteRouter from './routes/invite';
+import friendsRouter from './routes/friends';
+import chatRouter from './routes/chat';
+import notificationsRouter from './routes/notifications';
 import { mapsRateLimiter } from './middleware/rateLimit';
 
 // Load environment variables
@@ -238,6 +241,12 @@ app.use('/users', usersRouter);
 console.log('[ROUTES] ✓ /users registered');
 app.use('/invite', inviteRouter);
 console.log('[ROUTES] ✓ /invite registered');
+app.use('/friends', friendsRouter);
+console.log('[ROUTES] ✓ /friends registered');
+app.use('/chat', chatRouter);
+console.log('[ROUTES] ✓ /chat registered');
+app.use('/notifications', notificationsRouter);
+console.log('[ROUTES] ✓ /notifications registered');
 console.log('[ROUTES] All routes registered successfully');
 
 // 404 handler
