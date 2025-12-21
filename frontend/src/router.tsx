@@ -6,6 +6,9 @@ import Events from './pages/Events';
 import EventDetail from './pages/EventDetail';
 import CreateEvent from './pages/CreateEvent';
 import InvitePage from './pages/InvitePage';
+import Friends from './pages/Friends';
+import ChatRoom from './pages/ChatRoom';
+import Notifications from './pages/Notifications';
 import { Box, CircularProgress } from '@mui/material';
 
 // Root layout that wraps all routes
@@ -85,6 +88,30 @@ export const router = createBrowserRouter([
         element: (
           <LoadingRoute>
             <EventDetail />
+          </LoadingRoute>
+        ),
+      },
+      {
+        path: '/friends',
+        element: (
+          <LoadingRoute>
+            <Friends />
+          </LoadingRoute>
+        ),
+      },
+      {
+        path: '/chat/:type/:id',
+        element: (
+          <LoadingRoute>
+            <ChatRoom />
+          </LoadingRoute>
+        ),
+      },
+      {
+        path: '/notifications',
+        element: (
+          <LoadingRoute>
+            <Notifications />
           </LoadingRoute>
         ),
       },
