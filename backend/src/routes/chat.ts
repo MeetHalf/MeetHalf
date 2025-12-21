@@ -136,6 +136,7 @@ router.put('/messages/:id/read', authMiddleware, async (req: Request, res: Respo
  * GET /api/chat/conversations - Get conversation list
  */
 router.get('/conversations', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  let userUserId: string | null = null;
   try {
     if (!req.user || !('userId' in req.user)) {
       res.status(401).json({ code: 'UNAUTHORIZED', message: 'Authentication required' });
@@ -143,7 +144,7 @@ router.get('/conversations', authMiddleware, async (req: Request, res: Response)
     }
 
     const jwtPayload = req.user as { userId: number };
-    const userUserId = await getUserUserId(jwtPayload.userId);
+    userUserId = await getUserUserId(jwtPayload.userId);
 
     if (!userUserId) {
       res.status(401).json({ code: 'UNAUTHORIZED', message: 'User not found' });
