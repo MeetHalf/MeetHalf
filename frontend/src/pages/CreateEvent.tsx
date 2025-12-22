@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { eventsApi, calculateTempMidpoint } from '../api/events';
 import { friendsApi } from '../api/friends';
 import { usersApi } from '../api/users';
-import { Friend, User } from '../types/friend';
+import { Friend } from '../types/friend';
 import {
   Box,
   Container,
@@ -61,6 +61,21 @@ interface InvitedFriend extends Friend {
   editableLng: number | null;
   editableAddress: string | null;
   editableLocationName: string | null;
+  editableTravelMode?: 'driving' | 'transit' | 'walking' | 'bicycling';
+  estimatedDuration?: string;
+  estimatedDurationValue?: number;
+  estimatedDistance?: string;
+}
+
+// Interface for dummy member (virtual member for MeetHalf calculation)
+interface DummyMember {
+  id: string; // Temporary ID (using Date.now() + random)
+  nickname: string;
+  editableLat: number | null;
+  editableLng: number | null;
+  editableAddress: string | null;
+  editableLocationName: string | null;
+  travelMode: 'driving' | 'transit' | 'walking' | 'bicycling';
   estimatedDuration?: string;
   estimatedDurationValue?: number;
   estimatedDistance?: string;
@@ -84,6 +99,11 @@ export default function CreateEvent() {
     ownerNickname: user?.name || '',
     ownerTravelMode: 'transit' as 'driving' | 'transit' | 'walking' | 'bicycling',
     ownerShareLocation: true,
+    // 主辦出發點（可編輯）
+    ownerLat: null as number | null,
+    ownerLng: null as number | null,
+    ownerAddress: null as string | null,
+    ownerLocationName: null as string | null,
   });
   
   const [submitting, setSubmitting] = useState(false);
@@ -95,11 +115,25 @@ export default function CreateEvent() {
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   
+  // Ref for owner departure point autocomplete
+  const ownerAutocompleteInputRef = useRef<HTMLInputElement>(null);
+  const ownerAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  
+  // Refs for dummy member autocomplete inputs
+  const dummyAutocompleteRefs = useRef<Map<string, google.maps.places.Autocomplete | null>>(new Map());
+  const dummyInputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
+  
+  // Refs for friend autocomplete inputs
+  const friendAutocompleteRefs = useRef<Map<string, google.maps.places.Autocomplete | null>>(new Map());
+  const friendInputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
+  
   // Friends invitation state
   const [friends, setFriends] = useState<Friend[]>([]);
   const [invitedFriends, setInvitedFriends] = useState<InvitedFriend[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
-  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
+  
+  // Dummy members state (for MeetHalf calculation)
+  const [dummyMembers, setDummyMembers] = useState<DummyMember[]>([]);
   
   // Midpoint calculation state
   const [calculatingMidpoint, setCalculatingMidpoint] = useState(false);
@@ -149,10 +183,17 @@ export default function CreateEvent() {
   const loadUserProfile = async () => {
     try {
       const { user: profile } = await usersApi.getProfile();
-      setCurrentUserProfile(profile);
-      // Update owner nickname if not already set
-      if (profile?.name) {
-        setFormData(prev => ({ ...prev, ownerNickname: profile.name }));
+      // Update owner info with profile defaults
+      if (profile) {
+        setFormData(prev => ({
+          ...prev,
+          ownerNickname: profile.name || prev.ownerNickname,
+          ownerTravelMode: (profile.defaultTravelMode as 'driving' | 'transit' | 'walking' | 'bicycling') || prev.ownerTravelMode,
+          ownerLat: profile.defaultLat || null,
+          ownerLng: profile.defaultLng || null,
+          ownerAddress: profile.defaultAddress || null,
+          ownerLocationName: profile.defaultLocationName || null,
+        }));
       }
     } catch (error) {
       console.error('Failed to load user profile:', error);
@@ -167,13 +208,14 @@ export default function CreateEvent() {
       if (existing) {
         return existing;
       }
-      // New friend - initialize with their default location
+      // New friend - initialize with their default location and travel mode
       return {
         ...friend,
         editableLat: friend.defaultLat || null,
         editableLng: friend.defaultLng || null,
         editableAddress: friend.defaultAddress || null,
         editableLocationName: friend.defaultLocationName || null,
+        editableTravelMode: (friend.defaultTravelMode as 'driving' | 'transit' | 'walking' | 'bicycling') || 'transit',
       };
     });
     setInvitedFriends(newInvitedFriends);
@@ -184,12 +226,47 @@ export default function CreateEvent() {
     setInvitedFriends(prev => prev.filter(f => f.userId !== userId));
   };
 
+  // Add dummy member
+  const handleAddDummyMember = () => {
+    const dummyId = `dummy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const dummyNumber = dummyMembers.length + 1;
+    const newDummy: DummyMember = {
+      id: dummyId,
+      nickname: `假人 ${dummyNumber}`,
+      editableLat: null,
+      editableLng: null,
+      editableAddress: null,
+      editableLocationName: null,
+      travelMode: 'transit',
+    };
+    setDummyMembers(prev => [...prev, newDummy]);
+  };
+
+  // Update dummy member
+  const handleUpdateDummyMember = (id: string, updates: Partial<DummyMember>) => {
+    setDummyMembers(prev =>
+      prev.map(dummy => (dummy.id === id ? { ...dummy, ...updates } : dummy))
+    );
+  };
+
+  // Remove dummy member
+  const handleRemoveDummyMember = (id: string) => {
+    setDummyMembers(prev => prev.filter(d => d.id !== id));
+  };
+
   // Calculate travel times for invited friends when meeting point is selected
   useEffect(() => {
     if (formData.meetingPointLat && formData.meetingPointLng && invitedFriends.length > 0 && mapsLoaded) {
       calculateTravelTimes();
     }
   }, [formData.meetingPointLat, formData.meetingPointLng, invitedFriends.length, mapsLoaded]);
+
+  // Calculate travel times for dummy members when meeting point is selected
+  useEffect(() => {
+    if (formData.meetingPointLat && formData.meetingPointLng && dummyMembers.length > 0 && mapsLoaded) {
+      calculateDummyTravelTimes();
+    }
+  }, [formData.meetingPointLat, formData.meetingPointLng, dummyMembers.length, mapsLoaded]);
 
   const calculateTravelTimes = async () => {
     if (!formData.meetingPointLat || !formData.meetingPointLng || !window.google?.maps) return;
@@ -202,10 +279,17 @@ export default function CreateEvent() {
 
         try {
           const directionsService = new google.maps.DirectionsService();
+          const travelModeMap: Record<string, google.maps.TravelMode> = {
+            driving: google.maps.TravelMode.DRIVING,
+            transit: google.maps.TravelMode.TRANSIT,
+            walking: google.maps.TravelMode.WALKING,
+            bicycling: google.maps.TravelMode.BICYCLING,
+          };
+          const friendTravelMode = friend.editableTravelMode || 'transit';
           const result = await directionsService.route({
             origin: { lat: friend.editableLat, lng: friend.editableLng },
             destination: { lat: formData.meetingPointLat!, lng: formData.meetingPointLng! },
-            travelMode: google.maps.TravelMode.TRANSIT, // Default to transit for estimation
+            travelMode: travelModeMap[friendTravelMode] || google.maps.TravelMode.TRANSIT,
           });
 
           if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
@@ -228,15 +312,60 @@ export default function CreateEvent() {
     setInvitedFriends(updatedFriends);
   };
 
+  const calculateDummyTravelTimes = async () => {
+    if (!formData.meetingPointLat || !formData.meetingPointLng || !window.google?.maps) return;
+
+    const updatedDummies = await Promise.all(
+      dummyMembers.map(async (dummy) => {
+        if (!dummy.editableLat || !dummy.editableLng) {
+          return { ...dummy, estimatedDuration: '未設定出發點', estimatedDistance: '-' };
+        }
+
+        try {
+          const directionsService = new google.maps.DirectionsService();
+          const travelModeMap: Record<string, google.maps.TravelMode> = {
+            driving: google.maps.TravelMode.DRIVING,
+            transit: google.maps.TravelMode.TRANSIT,
+            walking: google.maps.TravelMode.WALKING,
+            bicycling: google.maps.TravelMode.BICYCLING,
+          };
+          
+          const result = await directionsService.route({
+            origin: { lat: dummy.editableLat, lng: dummy.editableLng },
+            destination: { lat: formData.meetingPointLat!, lng: formData.meetingPointLng! },
+            travelMode: travelModeMap[dummy.travelMode] || google.maps.TravelMode.TRANSIT,
+          });
+
+          if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
+            const leg = result.routes[0].legs[0];
+            return {
+              ...dummy,
+              estimatedDuration: leg.duration?.text || 'N/A',
+              estimatedDurationValue: leg.duration?.value || 0,
+              estimatedDistance: leg.distance?.text || 'N/A',
+            };
+          }
+        } catch (error) {
+          console.error(`Failed to calculate travel time for ${dummy.nickname}:`, error);
+        }
+
+        return { ...dummy, estimatedDuration: '計算失敗', estimatedDistance: '-' };
+      })
+    );
+
+    setDummyMembers(updatedDummies);
+  };
+
   // Calculate midpoint and recommend places
   const handleCalculateMidpoint = async () => {
-    if (!currentUserProfile?.defaultLat || !currentUserProfile?.defaultLng) {
-      setSnackbar({ open: true, message: '請先在個人資料中設定你的預設出發點', severity: 'warning' });
+    // Check if owner has departure point
+    if (!formData.ownerLat || !formData.ownerLng) {
+      setSnackbar({ open: true, message: '請設定你的出發點', severity: 'warning' });
       return;
     }
 
-    if (invitedFriends.length === 0) {
-      setSnackbar({ open: true, message: '請至少邀請一位好友', severity: 'warning' });
+    if (invitedFriends.length === 0 && dummyMembers.length === 0) {
+      setSnackbar({ open: true, message: '請至少邀請一位好友或新增一個假人', severity: 'warning' });
       return;
     }
 
@@ -251,19 +380,35 @@ export default function CreateEvent() {
       return;
     }
 
+    // Check if all dummy members have departure points
+    const dummiesWithoutLocation = dummyMembers.filter(d => !d.editableLat || !d.editableLng);
+    if (dummiesWithoutLocation.length > 0) {
+      setSnackbar({ 
+        open: true, 
+        message: `${dummiesWithoutLocation.map(d => d.nickname).join(', ')} 尚未設定出發點`, 
+        severity: 'warning' 
+      });
+      return;
+    }
+
     setCalculatingMidpoint(true);
     try {
-      // Collect all locations (owner + invited friends)
+      // Collect all locations (owner + invited friends + dummy members)
       const locations = [
         {
-          lat: currentUserProfile.defaultLat,
-          lng: currentUserProfile.defaultLng,
+          lat: formData.ownerLat,
+          lng: formData.ownerLng,
           travelMode: formData.ownerTravelMode,
         },
         ...invitedFriends.map(f => ({
           lat: f.editableLat!,
           lng: f.editableLng!,
-          travelMode: 'transit' as const, // Default for invited friends
+          travelMode: (f.editableTravelMode || 'transit') as 'driving' | 'transit' | 'walking' | 'bicycling',
+        })),
+        ...dummyMembers.map(d => ({
+          lat: d.editableLat!,
+          lng: d.editableLng!,
+          travelMode: d.travelMode,
         })),
       ];
 
@@ -350,6 +495,192 @@ export default function CreateEvent() {
       autocompleteRef.current = null;
     }
   }, [formData.useMeetHalf, mapsLoaded]);
+
+  // Initialize Google Places Autocomplete for owner departure point
+  useEffect(() => {
+    if (!mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+      return;
+    }
+
+    if (!ownerAutocompleteInputRef.current || ownerAutocompleteRef.current) {
+      return;
+    }
+
+    try {
+      const autocomplete = new google.maps.places.Autocomplete(ownerAutocompleteInputRef.current, {
+        types: ['establishment', 'geocode'],
+        componentRestrictions: { country: 'tw' },
+        fields: ['name', 'formatted_address', 'geometry', 'place_id'],
+      });
+
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+
+        if (!place || place.place_id === undefined) {
+          setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'info' });
+          return;
+        }
+
+        if (!place.geometry || !place.geometry.location) {
+          setSnackbar({ open: true, message: '找不到該地點的位置資訊', severity: 'error' });
+          return;
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          ownerLocationName: place.name || place.formatted_address || '',
+          ownerAddress: place.formatted_address || '',
+          ownerLat: place.geometry?.location?.lat() || null,
+          ownerLng: place.geometry?.location?.lng() || null,
+        }));
+
+        setSnackbar({ open: true, message: '地點已選擇', severity: 'success' });
+      });
+
+      ownerAutocompleteRef.current = autocomplete;
+    } catch (error) {
+      console.error('Failed to initialize owner autocomplete:', error);
+    }
+
+    return () => {
+      if (ownerAutocompleteRef.current && typeof google !== 'undefined' && google.maps) {
+        google.maps.event.clearInstanceListeners(ownerAutocompleteRef.current);
+        ownerAutocompleteRef.current = null;
+      }
+    };
+  }, [mapsLoaded]);
+
+  // Initialize Google Places Autocomplete for dummy members
+  useEffect(() => {
+    if (!formData.useMeetHalf || !mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+      return;
+    }
+
+    // Initialize autocomplete for each dummy member input
+    dummyMembers.forEach((dummy) => {
+      const inputElement = dummyInputRefs.current.get(dummy.id);
+      if (!inputElement) return;
+
+      // Skip if already initialized
+      if (dummyAutocompleteRefs.current.has(dummy.id)) return;
+
+      try {
+        const autocomplete = new google.maps.places.Autocomplete(inputElement, {
+          types: ['establishment', 'geocode'],
+          componentRestrictions: { country: 'tw' },
+          fields: ['name', 'formatted_address', 'geometry', 'place_id'],
+        });
+
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+
+          if (!place || place.place_id === undefined) {
+            setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'info' });
+            return;
+          }
+
+          if (!place.geometry || !place.geometry.location) {
+            setSnackbar({ open: true, message: '找不到該地點的位置資訊', severity: 'error' });
+            return;
+          }
+
+          handleUpdateDummyMember(dummy.id, {
+            editableLocationName: place.name || place.formatted_address || '',
+            editableAddress: place.formatted_address || '',
+            editableLat: place.geometry.location.lat(),
+            editableLng: place.geometry.location.lng(),
+          });
+
+          setSnackbar({ open: true, message: '地點已選擇', severity: 'success' });
+        });
+
+        dummyAutocompleteRefs.current.set(dummy.id, autocomplete);
+      } catch (error) {
+        console.error(`Failed to initialize autocomplete for dummy ${dummy.id}:`, error);
+      }
+    });
+
+    // Cleanup: remove autocomplete for deleted dummy members
+    const currentDummyIds = new Set(dummyMembers.map(d => d.id));
+    dummyAutocompleteRefs.current.forEach((autocomplete, id) => {
+      if (!currentDummyIds.has(id)) {
+        if (autocomplete && typeof google !== 'undefined' && google.maps) {
+          google.maps.event.clearInstanceListeners(autocomplete);
+        }
+        dummyAutocompleteRefs.current.delete(id);
+      }
+    });
+  }, [formData.useMeetHalf, mapsLoaded, dummyMembers]);
+
+  // Initialize Google Places Autocomplete for invited friends
+  useEffect(() => {
+    if (!mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+      return;
+    }
+
+    // Initialize autocomplete for each friend input
+    invitedFriends.forEach((friend) => {
+      if (!friend.userId) return;
+      
+      const inputElement = friendInputRefs.current.get(friend.userId);
+      if (!inputElement) return;
+
+      // Skip if already initialized
+      if (friendAutocompleteRefs.current.has(friend.userId)) return;
+
+      try {
+        const autocomplete = new google.maps.places.Autocomplete(inputElement, {
+          types: ['establishment', 'geocode'],
+          componentRestrictions: { country: 'tw' },
+          fields: ['name', 'formatted_address', 'geometry', 'place_id'],
+        });
+
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+
+          if (!place || place.place_id === undefined) {
+            setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'info' });
+            return;
+          }
+
+          if (!place.geometry || !place.geometry.location) {
+            setSnackbar({ open: true, message: '找不到該地點的位置資訊', severity: 'error' });
+            return;
+          }
+
+          const updatedFriends = invitedFriends.map(f =>
+            f.userId === friend.userId
+              ? {
+                  ...f,
+                  editableLocationName: place.name || place.formatted_address || '',
+                  editableAddress: place.formatted_address || '',
+                  editableLat: place.geometry?.location?.lat() || null,
+                  editableLng: place.geometry?.location?.lng() || null,
+                }
+              : f
+          );
+          setInvitedFriends(updatedFriends);
+
+          setSnackbar({ open: true, message: '地點已選擇', severity: 'success' });
+        });
+
+        friendAutocompleteRefs.current.set(friend.userId, autocomplete);
+      } catch (error) {
+        console.error(`Failed to initialize autocomplete for friend ${friend.userId}:`, error);
+      }
+    });
+
+    // Cleanup: remove autocomplete for removed friends
+    const currentFriendIds = new Set(invitedFriends.map(f => f.userId).filter(Boolean));
+    friendAutocompleteRefs.current.forEach((autocomplete, userId) => {
+      if (!currentFriendIds.has(userId)) {
+        if (autocomplete && typeof google !== 'undefined' && google.maps) {
+          google.maps.event.clearInstanceListeners(autocomplete);
+        }
+        friendAutocompleteRefs.current.delete(userId);
+      }
+    });
+  }, [mapsLoaded, invitedFriends]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -685,12 +1016,80 @@ export default function CreateEvent() {
                                     {friend.name}
                                   </Typography>
                                   
-                                  {/* 出發點資訊 */}
+                                  {/* 出發點編輯 */}
+                                  <TextField
+                                    label="出發點"
+                                    size="small"
+                                    placeholder="搜尋地點或地址..."
+                                    value={friend.editableLocationName || friend.editableAddress || ''}
+                                    onChange={(e) => {
+                                      // Clear location when user types manually
+                                      if (e.target.value !== (friend.editableLocationName || friend.editableAddress || '')) {
+                                        const updatedFriends = invitedFriends.map(f =>
+                                          f.userId === friend.userId
+                                            ? {
+                                                ...f,
+                                                editableLocationName: null,
+                                                editableAddress: null,
+                                                editableLat: null,
+                                                editableLng: null,
+                                              }
+                                            : f
+                                        );
+                                        setInvitedFriends(updatedFriends);
+                                      }
+                                    }}
+                                    inputRef={(el) => {
+                                      if (el && friend.userId) {
+                                        friendInputRefs.current.set(friend.userId, el);
+                                      } else if (friend.userId) {
+                                        friendInputRefs.current.delete(friend.userId);
+                                      }
+                                    }}
+                                    InputProps={{
+                                      startAdornment: (
+                                        <InputAdornment position="start">
+                                          <LocationIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                        </InputAdornment>
+                                      ),
+                                    }}
+                                    fullWidth
+                                    sx={{ mb: 0.5 }}
+                                    helperText={friend.editableLocationName || friend.editableAddress ? `✓ ${friend.editableLocationName || friend.editableAddress}` : '開始輸入以搜尋地點'}
+                                  />
+
+                                  {/* 交通方式 */}
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                    <LocationIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                      {friend.editableLocationName || friend.editableAddress || '未設定出發點'}
-                                    </Typography>
+                                    {friend.editableTravelMode === 'driving' && <CarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    {friend.editableTravelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    {friend.editableTravelMode === 'walking' && <WalkIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    {friend.editableTravelMode === 'bicycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                                      <Select
+                                        value={friend.editableTravelMode || 'transit'}
+                                        onChange={(e) => {
+                                          const updatedFriends = invitedFriends.map(f =>
+                                            f.userId === friend.userId
+                                              ? { ...f, editableTravelMode: e.target.value as any }
+                                              : f
+                                          );
+                                          setInvitedFriends(updatedFriends);
+                                        }}
+                                        sx={{
+                                          fontSize: '0.75rem',
+                                          height: 24,
+                                          '& .MuiSelect-select': {
+                                            py: 0.5,
+                                            px: 1,
+                                          },
+                                        }}
+                                      >
+                                        <MenuItem value="driving">🚗 開車</MenuItem>
+                                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
+                                        <MenuItem value="walking">🚶 步行</MenuItem>
+                                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                                      </Select>
+                                    </FormControl>
                                   </Box>
 
                                   {/* 預計交通時間 (如果已選擇集合地點) */}
@@ -782,8 +1181,8 @@ export default function CreateEvent() {
                   }
                 />
 
-                {/* 計算推薦地點按鈕 (當勾選 MeetHalf 且有邀請好友時顯示) */}
-                {formData.useMeetHalf && user && invitedFriends.length > 0 && (
+                {/* 計算推薦地點按鈕 (當勾選 MeetHalf 且有邀請好友或假人時顯示) */}
+                {formData.useMeetHalf && user && (invitedFriends.length > 0 || dummyMembers.length > 0) && (
                   <Button
                     variant="contained"
                     fullWidth
@@ -803,6 +1202,168 @@ export default function CreateEvent() {
                   </Button>
                 )}
               </Box>
+
+              {/* 假人管理區塊 (只在勾選 MeetHalf 時顯示) */}
+              {formData.useMeetHalf && (
+                <Box sx={{ mt: 2 }}>
+                  <Divider sx={{ my: 2 }} />
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <PersonAddIcon fontSize="small" />
+                      新增假人（輔助計算）
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
+                      新增虛擬成員來輔助模擬時間距離計算，假人不會保存到活動中
+                    </Typography>
+
+                    {/* 新增假人按鈕 */}
+                    <Button
+                      variant="outlined"
+                      startIcon={<PersonAddIcon />}
+                      onClick={handleAddDummyMember}
+                      sx={{
+                        mb: 2,
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        borderColor: '#e0e0e0',
+                        color: '#64748b',
+                        '&:hover': {
+                          borderColor: '#2196f3',
+                          bgcolor: '#e3f2fd',
+                        },
+                      }}
+                    >
+                      新增假人
+                    </Button>
+
+                    {/* 假人列表 */}
+                    {dummyMembers.length > 0 && (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 2 }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                          已新增 {dummyMembers.length} 個假人
+                        </Typography>
+                        {dummyMembers.map((dummy) => (
+                          <Card key={dummy.id} variant="outlined" sx={{ borderRadius: 2, bgcolor: '#f9fafb' }}>
+                            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                {/* 假人標題和刪除按鈕 */}
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Avatar sx={{ width: 32, height: 32, bgcolor: '#e0e0e0', color: '#64748b' }}>
+                                      {dummy.nickname.charAt(0)}
+                                    </Avatar>
+                                    <Box>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                          {dummy.nickname}
+                                        </Typography>
+                                        <Chip
+                                          label="假人"
+                                          size="small"
+                                          sx={{
+                                            height: 18,
+                                            fontSize: '0.625rem',
+                                            bgcolor: '#e0e0e0',
+                                            color: '#64748b',
+                                            fontWeight: 600,
+                                          }}
+                                        />
+                                      </Box>
+                                    </Box>
+                                  </Box>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleRemoveDummyMember(dummy.id)}
+                                    sx={{ color: 'error.main' }}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Box>
+
+                                {/* 暱稱編輯 */}
+                                <TextField
+                                  label="暱稱"
+                                  size="small"
+                                  value={dummy.nickname}
+                                  onChange={(e) => handleUpdateDummyMember(dummy.id, { nickname: e.target.value })}
+                                  fullWidth
+                                  required
+                                />
+
+                                {/* 出發點選擇 */}
+                                <TextField
+                                  label="出發點"
+                                  size="small"
+                                  placeholder="搜尋地點或地址..."
+                                  value={dummy.editableLocationName || dummy.editableAddress || ''}
+                                  onChange={(e) => {
+                                    // Clear location when user types manually
+                                    if (e.target.value !== (dummy.editableLocationName || dummy.editableAddress || '')) {
+                                      handleUpdateDummyMember(dummy.id, {
+                                        editableLocationName: null,
+                                        editableAddress: null,
+                                        editableLat: null,
+                                        editableLng: null,
+                                      });
+                                    }
+                                  }}
+                                  inputRef={(el) => {
+                                    if (el) {
+                                      dummyInputRefs.current.set(dummy.id, el);
+                                    } else {
+                                      dummyInputRefs.current.delete(dummy.id);
+                                    }
+                                  }}
+                                  InputProps={{
+                                    startAdornment: (
+                                      <InputAdornment position="start">
+                                        <LocationIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                  fullWidth
+                                  helperText={dummy.editableLocationName || dummy.editableAddress ? `✓ ${dummy.editableLocationName || dummy.editableAddress}` : '開始輸入以搜尋地點'}
+                                />
+
+                                {/* 交通方式選擇 */}
+                                <FormControl fullWidth size="small">
+                                  <InputLabel>交通方式</InputLabel>
+                                  <Select
+                                    value={dummy.travelMode}
+                                    onChange={(e) => handleUpdateDummyMember(dummy.id, { travelMode: e.target.value as any })}
+                                    label="交通方式"
+                                  >
+                                    <MenuItem value="driving">🚗 開車</MenuItem>
+                                    <MenuItem value="transit">🚇 大眾運輸</MenuItem>
+                                    <MenuItem value="walking">🚶 步行</MenuItem>
+                                    <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                                  </Select>
+                                </FormControl>
+
+                                {/* 預計交通時間 (如果已選擇集合地點) */}
+                                {formData.meetingPointLat && formData.meetingPointLng && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <TimeIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                                    <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                                      預計 {dummy.estimatedDuration || '計算中...'}
+                                    </Typography>
+                                    {dummy.estimatedDistance && (
+                                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                        ({dummy.estimatedDistance})
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                )}
+                              </Box>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              )}
 
               {/* 推薦地點展開列表 */}
               <Collapse in={showRecommendations} timeout="auto">
@@ -826,7 +1387,7 @@ export default function CreateEvent() {
                         計算中點：{midpointData.address}
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        基於 {midpointData.member_count || invitedFriends.length + 1} 位成員的出發點
+                        基於 {midpointData.member_count || invitedFriends.length + dummyMembers.length + 1} 位成員的出發點
                       </Typography>
                     </Box>
                   )}
@@ -943,7 +1504,7 @@ export default function CreateEvent() {
                 pt: 2 
               }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: 'text.secondary' }}>
-                  你的參與信息
+                  你的參與資訊
                 </Typography>
               </Box>
 
@@ -956,6 +1517,35 @@ export default function CreateEvent() {
                 fullWidth
                 required
                 helperText="這個暱稱會顯示在活動成員列表中"
+              />
+
+              {/* 出發點編輯 */}
+              <TextField
+                label="你的出發點"
+                placeholder="搜尋地點或地址..."
+                value={formData.ownerLocationName || formData.ownerAddress || ''}
+                onChange={(e) => {
+                  // Clear location when user types manually
+                  if (e.target.value !== (formData.ownerLocationName || formData.ownerAddress || '')) {
+                    setFormData(prev => ({
+                      ...prev,
+                      ownerLocationName: null,
+                      ownerAddress: null,
+                      ownerLat: null,
+                      ownerLng: null,
+                    }));
+                  }
+                }}
+                inputRef={ownerAutocompleteInputRef}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LocationIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+                fullWidth
+                helperText={formData.ownerLocationName || formData.ownerAddress ? `✓ ${formData.ownerLocationName || formData.ownerAddress}` : '開始輸入以搜尋地點'}
               />
 
               {/* 交通方式 */}

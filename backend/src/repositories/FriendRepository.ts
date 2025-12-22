@@ -64,6 +64,11 @@ export class FriendRepository {
         name: true,
         email: true,
         avatar: true,
+        defaultLat: true,
+        defaultLng: true,
+        defaultAddress: true,
+        defaultLocationName: true,
+        defaultTravelMode: true,
       },
     });
 
