@@ -13,7 +13,7 @@ import {
   CircularProgress,
   Snackbar,
 } from '@mui/material';
-import { LogIn, Plus, ChevronRight, Trophy, Clock, MessageCircle } from 'lucide-react';
+import { LogIn, Plus, ChevronRight, Trophy, Clock, MessageCircle, MapPin } from 'lucide-react';
 import { format, isAfter, isBefore, isToday } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { eventsApi, Event, inviteApi } from '../api/events';
@@ -58,20 +58,27 @@ export default function Events() {
     fetchEvents();
   }, [fetchEvents]);
 
-  const { activeEvents, pastEvents } = useMemo(() => {
+  const { activeEvents, upcomingEvents, pastEvents } = useMemo(() => {
     const active: Event[] = [];
+    const upcoming: Event[] = [];
     const past: Event[] = [];
 
     events.forEach((event) => {
       const status = getEventStatus(event);
-      if (status === 'ended') past.push(event);
-      else active.push(event);
+      if (status === 'ended') {
+        past.push(event);
+      } else if (status === 'upcoming') {
+        upcoming.push(event);
+      } else {
+        active.push(event); // ongoing
+      }
     });
 
     active.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    upcoming.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     past.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
 
-    return { activeEvents: active, pastEvents: past };
+    return { activeEvents: active, upcomingEvents: upcoming, pastEvents: past };
   }, [events]);
 
   const handleEventClick = (eventId: number) => {
@@ -259,18 +266,44 @@ export default function Events() {
                             </Box>
                           )}
                         </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', flexWrap: 'wrap' }}>
                           <Clock size={12} />
-                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                            {isToday(startTime)
-                              ? format(startTime, 'h:mm a', { locale: zhTW })
-                              : format(startTime, 'MM/dd h:mm a', { locale: zhTW })}
-                          </Typography>
+                          {isToday(startTime) ? (
+                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                              {format(startTime, 'h:mm a', { locale: zhTW })}
+                            </Typography>
+                          ) : (
+                            <>
+                              <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                {format(startTime, 'MM/dd', { locale: zhTW })}
+                              </Typography>
+                              <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                {format(startTime, 'h:mm a', { locale: zhTW })}
+                              </Typography>
+                            </>
+                          )}
                           <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
                           <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
                             {memberCount} friends
                           </Typography>
                         </Box>
+                        {(event.meetingPointName || event.meetingPointAddress) && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', mt: 0.5 }}>
+                            <MapPin size={12} />
+                            <Typography
+                              sx={{
+                                fontSize: '0.75rem',
+                                fontWeight: 500,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '200px',
+                              }}
+                            >
+                              {event.meetingPointName || event.meetingPointAddress}
+                            </Typography>
+                          </Box>
+                        )}
                       </Box>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -327,6 +360,103 @@ export default function Events() {
             </Box>
           )}
         </Box>
+
+        {/* Upcoming Events Section */}
+        {upcomingEvents.length > 0 && (
+          <Box sx={{ mb: 4 }}>
+            <Typography sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>Upcoming</Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {upcomingEvents.map((event) => {
+                const memberCount = event._count?.members || event.members?.length || 0;
+                const startTime = new Date(event.startTime);
+
+                return (
+                  <Box
+                    key={event.id}
+                    onClick={() => handleEventClick(event.id)}
+                    sx={{
+                      bgcolor: 'white',
+                      p: 2.5,
+                      borderRadius: '2rem',
+                      border: '1px solid #f1f5f9',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:active': { transform: 'scale(0.98)' },
+                      '&:hover': {
+                        '& .event-title': { color: '#2563eb' },
+                      },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          bgcolor: '#dbeafe',
+                          borderRadius: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '1.5rem',
+                        }}
+                      >
+                        📍
+                      </Box>
+                      <Box>
+                        <Typography
+                          className="event-title"
+                          sx={{
+                            fontWeight: 700,
+                            color: '#0f172a',
+                            transition: 'color 0.2s ease',
+                            mb: 0.5,
+                          }}
+                        >
+                          {event.name}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', flexWrap: 'wrap' }}>
+                          <Clock size={12} />
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                            {format(startTime, 'MM/dd', { locale: zhTW })}
+                          </Typography>
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                            {format(startTime, 'h:mm a', { locale: zhTW })}
+                          </Typography>
+                          <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                            {memberCount} friends
+                          </Typography>
+                        </Box>
+                        {(event.meetingPointName || event.meetingPointAddress) && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', mt: 0.5 }}>
+                            <MapPin size={12} />
+                            <Typography
+                              sx={{
+                                fontSize: '0.75rem',
+                                fontWeight: 500,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '200px',
+                              }}
+                            >
+                              {event.meetingPointName || event.meetingPointAddress}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
+                    <ChevronRight size={18} style={{ color: '#cbd5e1' }} />
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+        )}
 
         {/* Past Events Section */}
         {pastEvents.length > 0 && (
