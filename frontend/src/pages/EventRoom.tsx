@@ -23,6 +23,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Menu,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Avatar,
 } from '@mui/material';
 import {
   AccessTime as TimeIcon,
@@ -54,8 +59,12 @@ import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, MemberJoinedEvent,
 import MapContainer from '../components/MapContainer';
 import EventResultPopup from '../components/EventResultPopup';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, MoreVertical, Edit, Share2, UserPlus, LogOut } from 'lucide-react';
 import ChatPopup from '../components/ChatPopup';
+import { membersApi } from '../api/events';
+import { eventInvitationsApi } from '../api/eventInvitations';
+import { friendsApi } from '../api/friends';
+import type { Friend } from '../types/friend';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
@@ -121,6 +130,21 @@ export default function EventRoom() {
     message: '',
     severity: 'success' as 'success' | 'error' | 'info',
   });
+
+  // 更多按鈕 Menu 狀態
+  const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
+  const moreMenuOpen = Boolean(moreMenuAnchor);
+
+  // 邀請好友 Dialog 狀態
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [inviting, setInviting] = useState(false);
+
+  // 退出活動狀態
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   // 通知權限狀態
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
@@ -1267,7 +1291,139 @@ export default function EventRoom() {
   }, [event, user, id]);
 
   // 打開編輯對話框
+  // 更多按鈕 Menu 處理
+  const handleMoreMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    setMoreMenuAnchor(event.currentTarget);
+  };
+
+  const handleMoreMenuClose = () => {
+    setMoreMenuAnchor(null);
+  };
+
+  const handleShareLink = async () => {
+    handleMoreMenuClose();
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: event?.name || '活動邀請',
+          text: `邀請你參加活動：${event?.name || ''}`,
+          url: window.location.href,
+        });
+        setSnackbar({ open: true, message: '分享成功！', severity: 'success' });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        setSnackbar({ open: true, message: '已複製連結！', severity: 'success' });
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        await navigator.clipboard.writeText(window.location.href);
+        setSnackbar({ open: true, message: '已複製連結！', severity: 'success' });
+      }
+    }
+  };
+
+  const handleOpenInviteDialog = async () => {
+    handleMoreMenuClose();
+    setInviteDialogOpen(true);
+    setLoadingFriends(true);
+    try {
+      const response = await friendsApi.getFriends();
+      // 過濾已加入活動的好友
+      const memberUserIds = new Set(members.map(m => m.userId).filter(Boolean));
+      const availableFriends = response.friends.filter(f => !memberUserIds.has(f.userId));
+      setFriends(availableFriends);
+    } catch (error: any) {
+      console.error('[EventRoom] Failed to load friends:', error);
+      setSnackbar({
+        open: true,
+        message: '載入好友列表失敗',
+        severity: 'error',
+      });
+    } finally {
+      setLoadingFriends(false);
+    }
+  };
+
+  const handleCloseInviteDialog = () => {
+    setInviteDialogOpen(false);
+    setSelectedFriends([]);
+  };
+
+  const handleToggleFriendSelection = (userId: string) => {
+    setSelectedFriends(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleSendInvitations = async () => {
+    if (selectedFriends.length === 0 || !event) return;
+
+    setInviting(true);
+    try {
+      await eventInvitationsApi.createInvitations(event.id, {
+        invitedUserIds: selectedFriends,
+      });
+      setSnackbar({
+        open: true,
+        message: `已邀請 ${selectedFriends.length} 位好友`,
+        severity: 'success',
+      });
+      handleCloseInviteDialog();
+    } catch (error: any) {
+      console.error('[EventRoom] Failed to send invitations:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || '邀請失敗',
+        severity: 'error',
+      });
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleOpenLeaveDialog = () => {
+    handleMoreMenuClose();
+    setLeaveDialogOpen(true);
+  };
+
+  const handleCloseLeaveDialog = () => {
+    setLeaveDialogOpen(false);
+  };
+
+  const handleLeaveEvent = async () => {
+    if (!currentMemberId) return;
+
+    setLeaving(true);
+    try {
+      await membersApi.removeMember(currentMemberId);
+      setSnackbar({
+        open: true,
+        message: '已退出活動',
+        severity: 'success',
+      });
+      handleCloseLeaveDialog();
+      // 導航回活動列表
+      setTimeout(() => {
+        navigate('/events');
+      }, 1000);
+    } catch (error: any) {
+      console.error('[EventRoom] Failed to leave event:', error);
+      const errorMessage = error.response?.data?.message || '退出失敗';
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error',
+      });
+    } finally {
+      setLeaving(false);
+    }
+  };
+
   const handleOpenEditDialog = () => {
+    handleMoreMenuClose();
     if (!event) return;
     
     setEditFormData({
@@ -1978,49 +2134,120 @@ export default function EventRoom() {
                       主揪：{ownerDisplayName}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {/* 編輯按鈕（僅主揪可見） */}
-                    {isOwner && (
-                      <Button
-                        size="small"
-                        startIcon={<EditIcon sx={{ fontSize: 12 }} />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEditDialog();
-                        }}
-                        sx={{ 
-                          fontSize: '0.625rem', 
-                          fontWeight: 800, 
-                          color: '#3b82f6',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          minWidth: 'auto',
-                          p: 0.5,
-                        }}
-                      >
-                        編輯
-                      </Button>
-                    )}
-                    <Button
-                      size="small"
-                      startIcon={<ShareIcon sx={{ fontSize: 12 }} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(window.location.href);
-                        setSnackbar({ open: true, message: '已複製連結！', severity: 'success' });
-                      }}
-                      sx={{ 
-                        fontSize: '0.625rem', 
-                        fontWeight: 800, 
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <IconButton
+                      onClick={handleMoreMenuOpen}
+                      sx={{
                         color: '#3b82f6',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        minWidth: 'auto',
                         p: 0.5,
+                        '&:hover': { bgcolor: '#eff6ff' },
                       }}
                     >
-                      分享連結
-                    </Button>
+                      <MoreVertical size={18} />
+                    </IconButton>
+                    <Menu
+                      anchorEl={moreMenuAnchor}
+                      open={moreMenuOpen}
+                      onClose={handleMoreMenuClose}
+                      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                      PaperProps={{
+                        sx: {
+                          borderRadius: 2,
+                          mt: 1,
+                          minWidth: 180,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        },
+                      }}
+                    >
+                      {isOwner && (
+                        <MenuItem
+                          onClick={handleOpenEditDialog}
+                          sx={{
+                            py: 1.5,
+                            px: 2,
+                          }}
+                        >
+                          <ListItemIcon sx={{ minWidth: 36 }}>
+                            <Edit size={18} color="#3b82f6" />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary="編輯活動"
+                            primaryTypographyProps={{
+                              fontSize: '0.875rem',
+                              fontWeight: 600,
+                              color: '#0f172a',
+                            }}
+                          />
+                        </MenuItem>
+                      )}
+                      <MenuItem
+                        onClick={handleShareLink}
+                        sx={{
+                          py: 1.5,
+                          px: 2,
+                        }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                          <Share2 size={18} color="#3b82f6" />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary="分享連結"
+                          primaryTypographyProps={{
+                            fontSize: '0.875rem',
+                            fontWeight: 600,
+                            color: '#0f172a',
+                          }}
+                        />
+                      </MenuItem>
+                      <MenuItem
+                        onClick={handleOpenInviteDialog}
+                        sx={{
+                          py: 1.5,
+                          px: 2,
+                        }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                          <UserPlus size={18} color="#3b82f6" />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary="邀請好友"
+                          primaryTypographyProps={{
+                            fontSize: '0.875rem',
+                            fontWeight: 600,
+                            color: '#0f172a',
+                          }}
+                        />
+                      </MenuItem>
+                      {!isOwner && (
+                        <>
+                          <Divider sx={{ my: 0.5 }} />
+                          <MenuItem
+                            onClick={handleOpenLeaveDialog}
+                            sx={{
+                              py: 1.5,
+                              px: 2,
+                              color: '#ef4444',
+                              '&:hover': {
+                                bgcolor: '#fef2f2',
+                              },
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36 }}>
+                              <LogOut size={18} color="#ef4444" />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary="退出活動"
+                              primaryTypographyProps={{
+                                fontSize: '0.875rem',
+                                fontWeight: 600,
+                                color: '#ef4444',
+                              }}
+                            />
+                          </MenuItem>
+                        </>
+                      )}
+                    </Menu>
                   </Box>
                 </Box>
               </Box>
@@ -2648,6 +2875,204 @@ export default function EventRoom() {
           </DialogActions>
         </Dialog>
       </LocalizationProvider>
+
+      {/* 邀請好友 Dialog */}
+      <Dialog
+        open={inviteDialogOpen}
+        onClose={handleCloseInviteDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '1.5rem',
+            maxHeight: '80vh',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            color: '#0f172a',
+            fontSize: '1.25rem',
+            pb: 1,
+          }}
+        >
+          邀請好友
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          {loadingFriends ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : friends.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4, px: 3 }}>
+              <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
+                沒有可邀請的好友
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ maxHeight: '50vh', overflowY: 'auto' }}>
+              {friends.map((friend, index) => (
+                <Box key={friend.userId}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      p: 2.5,
+                      px: 3,
+                      cursor: 'pointer',
+                      '&:hover': {
+                        bgcolor: '#f8fafc',
+                      },
+                    }}
+                    onClick={() => handleToggleFriendSelection(friend.userId)}
+                  >
+                    <Checkbox
+                      checked={selectedFriends.includes(friend.userId)}
+                      onChange={() => handleToggleFriendSelection(friend.userId)}
+                      sx={{
+                        color: '#3b82f6',
+                        '&.Mui-checked': {
+                          color: '#3b82f6',
+                        },
+                      }}
+                    />
+                    <Avatar
+                      src={friend.avatar || undefined}
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        bgcolor: '#dbeafe',
+                        fontSize: '0.875rem',
+                        borderRadius: 3,
+                        color: '#2563eb',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {friend.name.charAt(0).toUpperCase()}
+                    </Avatar>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          fontWeight: 600,
+                          color: '#0f172a',
+                          fontSize: '0.875rem',
+                        }}
+                      >
+                        {friend.name}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          fontSize: '0.75rem',
+                          color: '#94a3b8',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {friend.email}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  {index < friends.length - 1 && <Divider />}
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, pt: 2 }}>
+          <Button
+            onClick={handleCloseInviteDialog}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              color: '#64748b',
+            }}
+          >
+            取消
+          </Button>
+          <Button
+            onClick={handleSendInvitations}
+            variant="contained"
+            disabled={selectedFriends.length === 0 || inviting}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              bgcolor: '#2563eb',
+              '&:hover': { bgcolor: '#1d4ed8' },
+            }}
+          >
+            {inviting ? (
+              <CircularProgress size={20} sx={{ color: 'white' }} />
+            ) : (
+              `發送邀請 (${selectedFriends.length})`
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 退出活動確認 Dialog */}
+      <Dialog
+        open={leaveDialogOpen}
+        onClose={handleCloseLeaveDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '1.5rem',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            color: '#0f172a',
+            fontSize: '1.25rem',
+            pb: 1,
+          }}
+        >
+          退出活動
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
+            確定要退出此活動嗎？退出後將無法查看活動詳情和成員位置。
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, pt: 2 }}>
+          <Button
+            onClick={handleCloseLeaveDialog}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              color: '#64748b',
+            }}
+          >
+            取消
+          </Button>
+          <Button
+            onClick={handleLeaveEvent}
+            variant="contained"
+            disabled={leaving}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              bgcolor: '#ef4444',
+              '&:hover': { bgcolor: '#dc2626' },
+            }}
+          >
+            {leaving ? (
+              <CircularProgress size={20} sx={{ color: 'white' }} />
+            ) : (
+              '確定退出'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Chat Popup */}
       {event && event.groupId !== null && event.groupId !== undefined && (

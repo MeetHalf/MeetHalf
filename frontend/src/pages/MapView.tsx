@@ -11,10 +11,22 @@ import {
   ChevronRight as ChevronRightIcon,
   ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
+import { format, isBefore, isAfter } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import MapContainer from '../components/MapContainer';
 import { eventsApi, Event } from '../api/events';
+
+type EventStatus = 'ongoing' | 'upcoming' | 'ended';
+
+const getEventStatus = (event: Event): EventStatus => {
+  const now = new Date();
+  const startTime = new Date(event.startTime);
+  const endTime = new Date(event.endTime);
+
+  if (isAfter(now, endTime)) return 'ended';
+  if (isBefore(now, startTime)) return 'upcoming';
+  return 'ongoing';
+};
 
 export default function MapView() {
   const navigate = useNavigate();
@@ -26,9 +38,12 @@ export default function MapView() {
     const fetchEvents = async () => {
       try {
         const response = await eventsApi.getEvents();
-        const eventsWithLocation = response.events.filter(
-          (e) => e.meetingPointLat && e.meetingPointLng && e.status !== 'ended'
-        );
+        // 顯示所有 upcoming 和 ongoing events（有位置資訊的）
+        const eventsWithLocation = response.events.filter((e) => {
+          if (!e.meetingPointLat || !e.meetingPointLng) return false;
+          const status = getEventStatus(e);
+          return status === 'upcoming' || status === 'ongoing';
+        });
         setEvents(eventsWithLocation);
       } catch (error) {
         console.error('Failed to fetch events:', error);
@@ -56,13 +71,18 @@ export default function MapView() {
   }, [events]);
 
   const markers = useMemo(() => {
-    return events.map((event) => ({
-      id: event.id,
-      lat: event.meetingPointLat!,
-      lng: event.meetingPointLng!,
-      title: event.name,
-      label: event.status === 'ongoing' ? '🔴' : '📍',
-    }));
+    return events.map((event) => {
+      const status = getEventStatus(event);
+      return {
+        id: event.id,
+        lat: event.meetingPointLat!,
+        lng: event.meetingPointLng!,
+        title: event.name,
+        label: status === 'ongoing' ? '🔴' : '📍',
+        // 傳遞狀態資訊給 MapContainer，用於自定義圖標
+        status,
+      };
+    });
   }, [events]);
 
   const handleMarkerClick = (markerId: number) => {
@@ -72,6 +92,12 @@ export default function MapView() {
     }
   };
 
+  const { ongoingCount, upcomingCount } = useMemo(() => {
+    const ongoing = events.filter((e) => getEventStatus(e) === 'ongoing').length;
+    const upcoming = events.filter((e) => getEventStatus(e) === 'upcoming').length;
+    return { ongoingCount: ongoing, upcomingCount: upcoming };
+  }, [events]);
+
   if (loading) {
     return (
       <Box
@@ -79,7 +105,7 @@ export default function MapView() {
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          minHeight: 'calc(100vh - 140px)',
+          height: '100%',
         }}
       >
         <CircularProgress />
@@ -91,8 +117,10 @@ export default function MapView() {
     <Box
       sx={{
         position: 'relative',
-        height: 'calc(100vh - 140px)',
+        height: '100%',
+        width: '100%',
         bgcolor: '#f1f5f9',
+        overflow: 'hidden',
       }}
     >
       {/* Floating Header */}
@@ -145,36 +173,39 @@ export default function MapView() {
           }}
         >
           <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '0.875rem' }}>
-            {events.length} Active
+            {events.length} {events.length === 1 ? 'Event' : 'Events'}
           </Typography>
-          <Box
-            sx={{
-              bgcolor: '#dcfce7',
-              color: '#15803d',
-              fontSize: '0.625rem',
-              fontWeight: 900,
-              px: 1,
-              py: 0.25,
-              borderRadius: 10,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            Live
-          </Box>
+          {ongoingCount > 0 && (
+            <Box
+              sx={{
+                bgcolor: '#dcfce7',
+                color: '#15803d',
+                fontSize: '0.625rem',
+                fontWeight: 900,
+                px: 1,
+                py: 0.25,
+                borderRadius: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {ongoingCount} Live
+            </Box>
+          )}
         </Box>
 
         <Box sx={{ width: 48 }} /> {/* Spacer */}
       </Box>
 
       {/* Map */}
-      <Box sx={{ height: '100%' }}>
+      <Box sx={{ height: '100%', width: '100%' }}>
         {events.length > 0 ? (
           <MapContainer
             center={mapCenter}
             zoom={12}
             markers={markers}
             onMarkerClick={handleMarkerClick}
+            fullscreen={true}
           />
         ) : (
           <Box
@@ -224,8 +255,8 @@ export default function MapView() {
                 <Box
                   sx={{
                     display: 'inline-block',
-                    bgcolor: selectedEvent.status === 'ongoing' ? '#dcfce7' : '#dbeafe',
-                    color: selectedEvent.status === 'ongoing' ? '#15803d' : '#2563eb',
+                    bgcolor: getEventStatus(selectedEvent) === 'ongoing' ? '#dcfce7' : '#dbeafe',
+                    color: getEventStatus(selectedEvent) === 'ongoing' ? '#15803d' : '#2563eb',
                     fontSize: '0.625rem',
                     fontWeight: 900,
                     px: 1,
@@ -236,7 +267,7 @@ export default function MapView() {
                     mb: 1,
                   }}
                 >
-                  {selectedEvent.status === 'ongoing' ? 'Happening Now' : 'Upcoming'}
+                  {getEventStatus(selectedEvent) === 'ongoing' ? 'Happening Now' : 'Upcoming'}
                 </Box>
                 <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '1.125rem', mb: 1 }}>
                   {selectedEvent.name}
