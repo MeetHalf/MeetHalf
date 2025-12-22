@@ -13,7 +13,7 @@ import {
   CircularProgress,
   Snackbar,
 } from '@mui/material';
-import { LogIn, Plus, ChevronRight, Trophy, Clock, MessageCircle } from 'lucide-react';
+import { LogIn, Plus, ChevronRight, Trophy, Clock, MessageCircle, MapPin } from 'lucide-react';
 import { format, isAfter, isBefore, isToday } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { eventsApi, Event, inviteApi } from '../api/events';
@@ -287,6 +287,23 @@ export default function Events() {
                             {memberCount} friends
                           </Typography>
                         </Box>
+                        {(event.meetingPointName || event.meetingPointAddress) && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', mt: 0.5 }}>
+                            <MapPin size={12} />
+                            <Typography
+                              sx={{
+                                fontSize: '0.75rem',
+                                fontWeight: 500,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '200px',
+                              }}
+                            >
+                              {event.meetingPointName || event.meetingPointAddress}
+                            </Typography>
+                          </Box>
+                        )}
                       </Box>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -403,25 +420,34 @@ export default function Events() {
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', flexWrap: 'wrap' }}>
                           <Clock size={12} />
-                          {isToday(startTime) ? (
-                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                              {format(startTime, 'h:mm a', { locale: zhTW })}
-                            </Typography>
-                          ) : (
-                            <>
-                              <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                                {format(startTime, 'MM/dd', { locale: zhTW })}
-                              </Typography>
-                              <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                                {format(startTime, 'h:mm a', { locale: zhTW })}
-                              </Typography>
-                            </>
-                          )}
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                            {format(startTime, 'MM/dd', { locale: zhTW })}
+                          </Typography>
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                            {format(startTime, 'h:mm a', { locale: zhTW })}
+                          </Typography>
                           <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
                           <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
                             {memberCount} friends
                           </Typography>
                         </Box>
+                        {(event.meetingPointName || event.meetingPointAddress) && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', mt: 0.5 }}>
+                            <MapPin size={12} />
+                            <Typography
+                              sx={{
+                                fontSize: '0.75rem',
+                                fontWeight: 500,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '200px',
+                              }}
+                            >
+                              {event.meetingPointName || event.meetingPointAddress}
+                            </Typography>
+                          </Box>
+                        )}
                       </Box>
                     </Box>
                     <ChevronRight size={18} style={{ color: '#cbd5e1' }} />
