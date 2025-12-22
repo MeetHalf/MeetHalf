@@ -11,6 +11,7 @@ interface MapMarker {
   label?: string;
   avatarUrl?: string;
   address?: string;
+  status?: 'ongoing' | 'upcoming' | 'ended';
 }
 
 interface MapContainerProps {
@@ -179,17 +180,19 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
             anchor: new google.maps.Point(24, 24),
           };
         } else if (marker.label) {
-          // 根據 label 決定顏色
+          // 根據 label 和 status 決定顏色和樣式
           let color = '#2196f3'; // 默認藍色
           if (marker.label === '📍') {
             // 集合地點用更醒目的 pin 圖標
+            // 如果是 ongoing，使用紅色並放大
+            const isOngoing = marker.status === 'ongoing';
             markerOptions.icon = {
               path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-              fillColor: '#ef4444',
+              fillColor: isOngoing ? '#ef4444' : '#3b82f6', // 紅色（ongoing）或藍色（upcoming）
               fillOpacity: 1,
               strokeColor: '#ffffff',
-              strokeWeight: 2,
-              scale: 2,
+              strokeWeight: isOngoing ? 3 : 2, // ongoing 用更粗的邊框
+              scale: isOngoing ? 2.2 : 2, // ongoing 稍微放大
               anchor: new google.maps.Point(12, 22),
             };
           } else if (marker.label === '✅') {
@@ -199,6 +202,17 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
               url: createCircleMarkerIcon('✓', color),
               scaledSize: new google.maps.Size(48, 48),
               anchor: new google.maps.Point(24, 24),
+            };
+          } else if (marker.label === '🔴') {
+            // Ongoing 活動用紅色脈衝標記
+            markerOptions.icon = {
+              path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+              fillColor: '#ef4444',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 3,
+              scale: 2.2,
+              anchor: new google.maps.Point(12, 22),
             };
           } else {
             // 其他成員用藍色圓形頭像

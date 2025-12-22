@@ -23,6 +23,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return <Box sx={{ minHeight: '100vh' }}>{children}</Box>;
   }
 
+  // 判斷是否為 MapView 頁面
+  const isMapPage = pathname === '/map';
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Navbar />
@@ -30,8 +33,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         component="main" 
         sx={{ 
           flexGrow: 1,
-          // Add padding at bottom when bottom nav is visible
-          pb: user ? { xs: '80px', md: '80px' } : 0,
+          // Add padding at bottom when bottom nav is visible (except for map page)
+          pb: user && !isMapPage ? { xs: '80px', md: '80px' } : 0,
+          // Map page should fill available space
+          ...(isMapPage && { height: 'calc(100vh - 64px - 80px)', overflow: 'hidden' }),
         }}
       >
         {children}
