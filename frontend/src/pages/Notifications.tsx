@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -73,8 +73,13 @@ export default function Notifications() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { notifications, loading, loadNotifications, markAsRead, markAllAsRead, deleteNotification, unreadCount } =
-    useNotifications(user?.userId);
+    useNotifications(user?.userId || undefined);
   const { acceptRequest, rejectRequest } = useFriends();
+  
+  // Track processed invitations (accepted/rejected)
+  const [processedInvitations, setProcessedInvitations] = useState<{
+    [notificationId: number]: 'accepted' | 'rejected'
+  }>({});
 
   useEffect(() => {
     if (user) {
@@ -113,6 +118,7 @@ export default function Notifications() {
   const handleAcceptFriendRequest = async (notification: Notification) => {
     if (notification.data?.requestId) {
       await acceptRequest(notification.data.requestId);
+      setProcessedInvitations(prev => ({...prev, [notification.id]: 'accepted'}));
       loadNotifications();
     }
   };
@@ -120,6 +126,7 @@ export default function Notifications() {
   const handleRejectFriendRequest = async (notification: Notification) => {
     if (notification.data?.requestId) {
       await rejectRequest(notification.data.requestId);
+      setProcessedInvitations(prev => ({...prev, [notification.id]: 'rejected'}));
       loadNotifications();
     }
   };
@@ -131,6 +138,7 @@ export default function Notifications() {
           notification.data.eventId,
           notification.data.invitationId
         );
+        setProcessedInvitations(prev => ({...prev, [notification.id]: 'accepted'}));
         loadNotifications();
         navigate(`/events/${notification.data.eventId}`);
       } catch (error) {
@@ -146,6 +154,7 @@ export default function Notifications() {
           notification.data.eventId,
           notification.data.invitationId
         );
+        setProcessedInvitations(prev => ({...prev, [notification.id]: 'rejected'}));
         loadNotifications();
       } catch (error) {
         console.error('Failed to reject event invitation:', error);
@@ -226,13 +235,29 @@ export default function Notifications() {
 
       {/* Notifications List */}
       <Box sx={{ p: 2 }}>
-        {notifications.length > 0 ? (
+        {notifications.filter(n => n.type !== 'NEW_MESSAGE').length > 0 ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            {notifications.map((notification) => {
+            {notifications.filter(n => n.type !== 'NEW_MESSAGE').map((notification) => {
               const colors = getNotificationColor(notification.type);
               const isFriendRequest = notification.type === 'FRIEND_REQUEST';
               const isEventInvite = notification.type === 'EVENT_INVITE';
-              const hasActions = isFriendRequest || isEventInvite;
+              
+              // Check current status from backend
+              const friendRequestStatus = notification.data?.requestStatus;
+              const eventInvitationStatus = notification.data?.invitationStatus;
+              
+              // Check if already processed (from state or from backend status)
+              const isAlreadyAccepted = 
+                processedInvitations[notification.id] === 'accepted' ||
+                friendRequestStatus === 'accepted' ||
+                eventInvitationStatus === 'accepted';
+              
+              const isAlreadyRejected = 
+                processedInvitations[notification.id] === 'rejected' ||
+                friendRequestStatus === 'rejected' ||
+                eventInvitationStatus === 'rejected';
+              
+              const hasActions = (isFriendRequest || isEventInvite) && !isAlreadyAccepted && !isAlreadyRejected;
               
               return (
                 <Box
@@ -296,86 +321,135 @@ export default function Notifications() {
 
                     {/* Friend Request Actions */}
                     {isFriendRequest && (
-                      <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          startIcon={<Check size={16} />}
-                          onClick={() => handleAcceptFriendRequest(notification)}
-                          sx={{
-                            borderRadius: 3,
-                            bgcolor: '#22c55e',
-                            '&:hover': { bgcolor: '#16a34a' },
-                            textTransform: 'none',
-                            fontWeight: 700,
-                          }}
-                        >
-                          接受
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          startIcon={<X size={16} />}
-                          onClick={() => handleRejectFriendRequest(notification)}
-                          sx={{
-                            borderRadius: 3,
-                            borderColor: '#e2e8f0',
-                            color: '#64748b',
-                            textTransform: 'none',
-                            fontWeight: 700,
-                          }}
-                        >
-                          拒絕
-                        </Button>
+                      <Box sx={{ mt: 1.5 }}>
+                        {isAlreadyAccepted ? (
+                          <Typography
+                            sx={{
+                              color: '#16a34a',
+                              fontSize: '0.875rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            您與 {notification.data?.fromUserName || '對方'} 已成為好友
+                          </Typography>
+                        ) : isAlreadyRejected ? (
+                          <Typography
+                            sx={{
+                              color: '#64748b',
+                              fontSize: '0.875rem',
+                              fontWeight: 600,
+                              fontStyle: 'italic',
+                            }}
+                          >
+                            已拒絕此好友邀請
+                          </Typography>
+                        ) : (
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              startIcon={<Check size={16} />}
+                              onClick={() => handleAcceptFriendRequest(notification)}
+                              sx={{
+                                borderRadius: 3,
+                                bgcolor: '#22c55e',
+                                '&:hover': { bgcolor: '#16a34a' },
+                                textTransform: 'none',
+                                fontWeight: 700,
+                              }}
+                            >
+                              接受
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<X size={16} />}
+                              onClick={() => handleRejectFriendRequest(notification)}
+                              sx={{
+                                borderRadius: 3,
+                                borderColor: '#e2e8f0',
+                                color: '#64748b',
+                                textTransform: 'none',
+                                fontWeight: 700,
+                              }}
+                            >
+                              拒絕
+                            </Button>
+                          </Box>
+                        )}
                       </Box>
                     )}
 
                     {/* Event Invite Actions */}
                     {isEventInvite && (
-                      <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          startIcon={<Check size={16} />}
-                          onClick={() => handleAcceptEventInvite(notification)}
-                          sx={{
-                            borderRadius: 3,
-                            bgcolor: '#2563eb',
-                            '&:hover': { bgcolor: '#1d4ed8' },
-                            textTransform: 'none',
-                            fontWeight: 700,
-                          }}
-                        >
-                          接受並加入
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          startIcon={<X size={16} />}
-                          onClick={() => handleRejectEventInvite(notification)}
-                          sx={{
-                            borderRadius: 3,
-                            borderColor: '#e2e8f0',
-                            color: '#64748b',
-                            textTransform: 'none',
-                            fontWeight: 700,
-                          }}
-                        >
-                          拒絕
-                        </Button>
-                        <Button
-                          variant="text"
-                          size="small"
-                          onClick={() => handleNotificationClick(notification)}
-                          sx={{
-                            borderRadius: 3,
-                            color: '#2563eb',
-                            textTransform: 'none',
-                            fontWeight: 700,
-                          }}
-                        >
-                          查看詳情
-                        </Button>
+                      <Box sx={{ mt: 1.5 }}>
+                        {isAlreadyAccepted ? (
+                          <Typography
+                            sx={{
+                              color: '#2563eb',
+                              fontSize: '0.875rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            您已加入此活動
+                          </Typography>
+                        ) : isAlreadyRejected ? (
+                          <Typography
+                            sx={{
+                              color: '#64748b',
+                              fontSize: '0.875rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            已拒絕此活動邀請
+                          </Typography>
+                        ) : (
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              startIcon={<Check size={16} />}
+                              onClick={() => handleAcceptEventInvite(notification)}
+                              sx={{
+                                borderRadius: 3,
+                                bgcolor: '#2563eb',
+                                '&:hover': { bgcolor: '#1d4ed8' },
+                                textTransform: 'none',
+                                fontWeight: 700,
+                              }}
+                            >
+                              接受並加入
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<X size={16} />}
+                              onClick={() => handleRejectEventInvite(notification)}
+                              sx={{
+                                borderRadius: 3,
+                                borderColor: '#e2e8f0',
+                                color: '#64748b',
+                                textTransform: 'none',
+                                fontWeight: 700,
+                              }}
+                            >
+                              拒絕
+                            </Button>
+                            <Button
+                              variant="text"
+                              size="small"
+                              onClick={() => handleNotificationClick(notification)}
+                              sx={{
+                                borderRadius: 3,
+                                color: '#2563eb',
+                                textTransform: 'none',
+                                fontWeight: 700,
+                              }}
+                            >
+                              查看詳情
+                            </Button>
+                          </Box>
+                        )}
                       </Box>
                     )}
                   </Box>

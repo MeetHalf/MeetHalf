@@ -38,10 +38,21 @@ export function useNotifications(userId?: string) {
   const markAsRead = useCallback(async (notificationId: number) => {
     try {
       await notificationsApi.markAsRead(notificationId);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      
+      // Update local state
+      setNotifications((prev) => {
+        const updatedNotifications = prev.map((n) =>
+          n.id === notificationId ? { ...n, read: true } : n
+        );
+        
+        // Only decrease unread count if it's not a NEW_MESSAGE notification
+        const notification = prev.find((n) => n.id === notificationId);
+        if (notification && !notification.read && notification.type !== 'NEW_MESSAGE') {
+          setUnreadCount((prevCount) => Math.max(0, prevCount - 1));
+        }
+        
+        return updatedNotifications;
+      });
     } catch (err: any) {
       console.error('Error marking notification as read:', err);
     }
@@ -61,11 +72,14 @@ export function useNotifications(userId?: string) {
   // Delete notification
   const deleteNotification = useCallback(async (notificationId: number) => {
     try {
+      // Find the notification before deleting
+      const notification = notifications.find((n) => n.id === notificationId);
+      
       await notificationsApi.deleteNotification(notificationId);
       setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
-      // Also update unread count if it was unread
-      const notification = notifications.find((n) => n.id === notificationId);
-      if (notification && !notification.read) {
+      
+      // Only update unread count if it was unread and not a NEW_MESSAGE
+      if (notification && !notification.read && notification.type !== 'NEW_MESSAGE') {
         setUnreadCount((prev) => Math.max(0, prev - 1));
       }
     } catch (err: any) {
@@ -80,7 +94,10 @@ export function useNotifications(userId?: string) {
     onEvent: (data: Notification) => {
       console.log('[useNotifications] New notification received:', data);
       setNotifications((prev) => [data, ...prev]);
-      setUnreadCount((prev) => prev + 1);
+      // Only increase unread count if it's not a NEW_MESSAGE notification
+      if (data.type !== 'NEW_MESSAGE') {
+        setUnreadCount((prev) => prev + 1);
+      }
     },
   });
 
@@ -92,7 +109,10 @@ export function useNotifications(userId?: string) {
       console.log('[useNotifications] Friend request received:', data);
       if (data.notification) {
         setNotifications((prev) => [data.notification, ...prev]);
-        setUnreadCount((prev) => prev + 1);
+        // Only increase unread count if it's not a NEW_MESSAGE notification
+        if (data.notification.type !== 'NEW_MESSAGE') {
+          setUnreadCount((prev) => prev + 1);
+        }
       }
     },
   });
@@ -105,7 +125,10 @@ export function useNotifications(userId?: string) {
       console.log('[useNotifications] Friend accepted:', data);
       if (data.notification) {
         setNotifications((prev) => [data.notification, ...prev]);
-        setUnreadCount((prev) => prev + 1);
+        // Only increase unread count if it's not a NEW_MESSAGE notification
+        if (data.notification.type !== 'NEW_MESSAGE') {
+          setUnreadCount((prev) => prev + 1);
+        }
       }
     },
   });
@@ -113,7 +136,7 @@ export function useNotifications(userId?: string) {
   // Load initial data
   useEffect(() => {
     if (userId) {
-      loadNotifications({ read: false, limit: 50 });
+      loadNotifications({ limit: 100 }); // Load all notifications, not just unread
       loadUnreadCount();
     }
   }, [userId, loadNotifications, loadUnreadCount]);

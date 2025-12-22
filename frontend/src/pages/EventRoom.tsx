@@ -9,7 +9,6 @@ import {
   Container,
   Chip,
   Paper,
-  Collapse,
   IconButton,
   TextField,
   Button,
@@ -30,7 +29,6 @@ import {
   LocationOn as LocationIcon,
   People as PeopleIcon,
   Person as PersonIcon,
-  ExpandMore as ExpandMoreIcon,
   Check as CheckIcon,
   TouchApp as PokeIcon,
   EmojiEvents as TrophyIcon,
@@ -52,11 +50,12 @@ import { usePusher } from '../hooks/usePusher';
 import { useLocationTracking } from '../hooks/useLocationTracking';
 import { showPokeNotification } from '../lib/notifications';
 import { initializeBeamsClient, subscribeToInterest, unsubscribeFromInterest } from '../lib/pusherBeams';
-import { LOCATION_CONFIG } from '../config/location';
 import type { PokeEvent, EventEndedEvent, MemberArrivedEvent, MemberJoinedEvent, LocationUpdateEvent } from '../types/events';
 import MapContainer from '../components/MapContainer';
 import EventResultPopup from '../components/EventResultPopup';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
+import { MessageCircle } from 'lucide-react';
+import ChatPopup from '../components/ChatPopup';
 
 export default function EventRoom() {
   const { id } = useParams<{ id: string }>();
@@ -67,8 +66,6 @@ export default function EventRoom() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [memberListExpanded, setMemberListExpanded] = useState(true);
-  
   // 新 UI 相關狀態
   const [isInfoExpanded, setIsInfoExpanded] = useState(false);
   const [isDrawerOpen, setDrawerOpen] = useState(false);
@@ -92,6 +89,9 @@ export default function EventRoom() {
   
   // 結果彈出視窗
   const [showResultPopup, setShowResultPopup] = useState(false);
+  
+  // 聊天室彈出視窗
+  const [chatPopupOpen, setChatPopupOpen] = useState(false);
   
   // 編輯活動相關狀態
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -184,7 +184,7 @@ export default function EventRoom() {
     // Wait for Dialog to fully render before initializing Autocomplete
     let retryCount = 0;
     const maxRetries = 20; // 增加重試次數
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let rafId: number | null = null;
     
     const initAutocomplete = () => {
@@ -234,7 +234,7 @@ export default function EventRoom() {
           // 檢查 place 是否有效
           if (!place || place.place_id === undefined) {
             console.warn('[EventRoom] Invalid place selected:', place);
-            setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'warning' });
+            setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'info' });
             return;
           }
 
@@ -307,7 +307,7 @@ export default function EventRoom() {
     if (!editDialogOpen) return;
 
     // 使用 MutationObserver 監聽 pac-container 的創建
-    const observer = new MutationObserver((mutations) => {
+    const observer = new MutationObserver(() => {
       const pacContainer = document.querySelector('.pac-container') as HTMLElement;
       if (pacContainer) {
         pacContainer.style.zIndex = '1400';
@@ -789,7 +789,7 @@ export default function EventRoom() {
   });
 
   // 使用進度條 hook（始終調用，內部處理 null）
-  const progress = useEventProgress(event);
+  useEventProgress(event);
 
   // 檢查 event 是否已結束（用於顯示「查看結果」按鈕）
   const isEventEnded = useMemo(() => {
@@ -1276,8 +1276,8 @@ export default function EventRoom() {
       endTime: new Date(event.endTime),
       meetingPointName: event.meetingPointName || '',
       meetingPointAddress: event.meetingPointAddress || '',
-      meetingPointLat: event.meetingPointLat,
-      meetingPointLng: event.meetingPointLng,
+      meetingPointLat: event.meetingPointLat ?? null,
+      meetingPointLng: event.meetingPointLng ?? null,
     });
     setEditDialogOpen(true);
   };
@@ -1292,8 +1292,8 @@ export default function EventRoom() {
         endTime: new Date(event.endTime),
         meetingPointName: event.meetingPointName || '',
         meetingPointAddress: event.meetingPointAddress || '',
-        meetingPointLat: event.meetingPointLat,
-        meetingPointLng: event.meetingPointLng,
+        meetingPointLat: event.meetingPointLat ?? null,
+        meetingPointLng: event.meetingPointLng ?? null,
       });
     }
     setEditDialogOpen(false);
@@ -1337,7 +1337,7 @@ export default function EventRoom() {
         setSnackbar({
           open: true,
           message: '請從建議列表中選擇地點，或清空地點欄位',
-          severity: 'warning',
+          severity: 'info',
         });
         setUpdating(false);
         return;
@@ -1804,33 +1804,37 @@ export default function EventRoom() {
         flexDirection: 'column',
         alignItems: 'center',
       }}>
+        {/* 返回按鈕（絕對定位左上角） */}
+        <IconButton
+          onClick={() => navigate('/events')}
+          sx={{
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            width: 48,
+            height: 48,
+            bgcolor: 'rgba(255,255,255,0.8)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 3,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            border: '1px solid rgba(255,255,255,0.4)',
+            '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
+            '&:active': { transform: 'scale(0.9)' },
+            transition: 'all 0.2s',
+            zIndex: 10,
+          }}
+        >
+          <ArrowBackIcon sx={{ color: '#475569' }} />
+        </IconButton>
+
+        {/* 可展開的聚會資訊 Pill（置中） */}
         <Box sx={{ 
           width: '100%', 
           display: 'flex', 
-          justifyContent: 'space-between', 
+          justifyContent: 'center', 
           alignItems: 'flex-start',
           mb: 2,
         }}>
-          {/* 返回按鈕 */}
-          <IconButton
-            onClick={() => navigate('/events')}
-            sx={{
-              width: 48,
-              height: 48,
-              bgcolor: 'rgba(255,255,255,0.8)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: 3,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              border: '1px solid rgba(255,255,255,0.4)',
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
-              '&:active': { transform: 'scale(0.9)' },
-              transition: 'all 0.2s',
-            }}
-          >
-            <ArrowBackIcon sx={{ color: '#475569' }} />
-          </IconButton>
-
-          {/* 可展開的聚會資訊 Pill */}
           <Box
             onClick={() => setIsInfoExpanded(!isInfoExpanded)}
             sx={{
@@ -2021,26 +2025,60 @@ export default function EventRoom() {
               </Box>
             )}
           </Box>
-
-          {/* 排行榜按鈕 */}
-          <IconButton
-            onClick={() => setShowResultPopup(true)}
-            sx={{
-              width: 48,
-              height: 48,
-              bgcolor: 'rgba(255,255,255,0.8)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: 3,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              border: '1px solid rgba(255,255,255,0.4)',
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
-              '&:active': { transform: 'scale(0.9)' },
-              transition: 'all 0.2s',
-            }}
-          >
-            <TrophyIcon sx={{ color: '#3b82f6' }} />
-          </IconButton>
         </Box>
+
+        {/* 右上角按鈕群組 */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+            zIndex: 10,
+          }}
+        >
+            {/* 排行榜按鈕 */}
+            <IconButton
+              onClick={() => setShowResultPopup(true)}
+              sx={{
+                width: 48,
+                height: 48,
+                bgcolor: 'rgba(255,255,255,0.8)',
+                backdropFilter: 'blur(12px)',
+                borderRadius: 3,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                border: '1px solid rgba(255,255,255,0.4)',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
+                '&:active': { transform: 'scale(0.9)' },
+                transition: 'all 0.2s',
+              }}
+            >
+              <TrophyIcon sx={{ color: '#3b82f6' }} />
+            </IconButton>
+
+            {/* 聊天室按鈕 - 只有在有 groupId 時顯示 */}
+            {event?.groupId && (
+              <IconButton
+                onClick={() => setChatPopupOpen(true)}
+                sx={{
+                  width: 48,
+                  height: 48,
+                  bgcolor: 'rgba(255,255,255,0.8)',
+                  backdropFilter: 'blur(12px)',
+                  borderRadius: 3,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
+                  '&:active': { transform: 'scale(0.9)' },
+                  transition: 'all 0.2s',
+                }}
+              >
+                <MessageCircle size={20} style={{ color: '#3b82f6' }} />
+              </IconButton>
+            )}
+          </Box>
 
         {/* 通知權限提示（僅在未啟用時顯示） */}
         {notificationPermission !== 'granted' && (
@@ -2350,8 +2388,8 @@ export default function EventRoom() {
                 <CircularProgress size={24} sx={{ color: 'white' }} />
               ) : canMarkArrival ? (
                 "I'M HERE 🏁"
-              ) : distanceToMeetingPoint !== null ? (
-                `距離 ${Math.round(distanceToMeetingPoint)}m`
+              ) : distanceToMeetingPoint !== null && distanceToMeetingPoint !== undefined ? (
+                `距離 ${Math.round(distanceToMeetingPoint as number)}m`
               ) : (
                 '等待位置資訊...'
               )}
@@ -2609,6 +2647,16 @@ export default function EventRoom() {
           </DialogActions>
         </Dialog>
       </LocalizationProvider>
+
+      {/* Chat Popup */}
+      {event && event.groupId !== null && event.groupId !== undefined && (
+        <ChatPopup
+          open={chatPopupOpen}
+          onClose={() => setChatPopupOpen(false)}
+          groupId={event.groupId as number}
+          groupName={event.name}
+        />
+      )}
     </Box>
   );
 }

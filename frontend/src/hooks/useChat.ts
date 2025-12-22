@@ -91,6 +91,10 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
       const result = await chatApi.markConversationAsRead(params);
       // Update local unread count
       await loadUnreadCount();
+      
+      // Trigger event to notify other components to update their unread count
+      window.dispatchEvent(new CustomEvent('chat-unread-updated'));
+      
       return result.count;
     } catch (err: any) {
       console.error('Error marking conversation as read:', err);
@@ -140,8 +144,9 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
         markAsRead(data.id);
       }
       
-      // Update unread count
+      // Update unread count and notify other components
       loadUnreadCount();
+      window.dispatchEvent(new CustomEvent('chat-unread-updated'));
     },
   });
 
@@ -169,6 +174,21 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     if (userId) {
       loadUnreadCount();
     }
+  }, [userId, loadUnreadCount]);
+
+  // Listen for unread count updates from other components
+  useEffect(() => {
+    const handleUnreadUpdate = () => {
+      if (userId) {
+        loadUnreadCount();
+      }
+    };
+
+    window.addEventListener('chat-unread-updated', handleUnreadUpdate);
+    
+    return () => {
+      window.removeEventListener('chat-unread-updated', handleUnreadUpdate);
+    };
   }, [userId, loadUnreadCount]);
 
   return {
