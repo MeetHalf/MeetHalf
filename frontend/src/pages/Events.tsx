@@ -266,13 +266,22 @@ export default function Events() {
                             </Box>
                           )}
                         </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', flexWrap: 'wrap' }}>
                           <Clock size={12} />
-                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                            {isToday(startTime)
-                              ? format(startTime, 'h:mm a', { locale: zhTW })
-                              : format(startTime, 'MM/dd h:mm a', { locale: zhTW })}
-                          </Typography>
+                          {isToday(startTime) ? (
+                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                              {format(startTime, 'h:mm a', { locale: zhTW })}
+                            </Typography>
+                          ) : (
+                            <>
+                              <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                {format(startTime, 'MM/dd', { locale: zhTW })}
+                              </Typography>
+                              <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                {format(startTime, 'h:mm a', { locale: zhTW })}
+                              </Typography>
+                            </>
+                          )}
                           <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
                           <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
                             {memberCount} friends
@@ -392,13 +401,22 @@ export default function Events() {
                         >
                           {event.name}
                         </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', flexWrap: 'wrap' }}>
                           <Clock size={12} />
-                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                            {isToday(startTime)
-                              ? format(startTime, 'h:mm a', { locale: zhTW })
-                              : format(startTime, 'MM/dd h:mm a', { locale: zhTW })}
-                          </Typography>
+                          {isToday(startTime) ? (
+                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                              {format(startTime, 'h:mm a', { locale: zhTW })}
+                            </Typography>
+                          ) : (
+                            <>
+                              <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                {format(startTime, 'MM/dd', { locale: zhTW })}
+                              </Typography>
+                              <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                {format(startTime, 'h:mm a', { locale: zhTW })}
+                              </Typography>
+                            </>
+                          )}
                           <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
                           <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
                             {memberCount} friends
