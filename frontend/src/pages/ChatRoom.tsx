@@ -7,10 +7,15 @@ import {
   Avatar,
   Typography,
   CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Divider,
 } from '@mui/material';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, Users } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
+import { groupsApi, Group } from '../api/groups';
 import { format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 
@@ -26,6 +31,11 @@ export default function ChatRoom() {
   const [chatAvatar, setChatAvatar] = useState<string | null>(null);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Group members dialog state
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
+  const [groupInfo, setGroupInfo] = useState<Group | null>(null);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   // Load conversations to get chat name and avatar
   useEffect(() => {
@@ -117,6 +127,22 @@ export default function ChatRoom() {
     }
   };
 
+  const handleOpenMembersDialog = async () => {
+    if (type !== 'group' || !id) return;
+    
+    setMembersDialogOpen(true);
+    setLoadingMembers(true);
+    
+    try {
+      const response = await groupsApi.getGroup(parseInt(id));
+      setGroupInfo(response.group);
+    } catch (error) {
+      console.error('[ChatRoom] Failed to load group members:', error);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
   const formatMessageTime = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -193,6 +219,17 @@ export default function ChatRoom() {
         >
           {chatName}
         </Typography>
+        {type === 'group' && (
+          <IconButton
+            onClick={handleOpenMembersDialog}
+            sx={{
+              color: '#64748b',
+              '&:hover': { bgcolor: '#f1f5f9' },
+            }}
+          >
+            <Users size={20} />
+          </IconButton>
+        )}
       </Box>
 
       {/* Messages Area */}
@@ -373,6 +410,127 @@ export default function ChatRoom() {
           )}
         </IconButton>
       </Box>
+
+      {/* Group Members Dialog */}
+      <Dialog
+        open={membersDialogOpen}
+        onClose={() => setMembersDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '1.5rem',
+            maxHeight: '80vh',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            color: '#0f172a',
+            fontSize: '1.25rem',
+            pb: 1,
+          }}
+        >
+          群組成員
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          {loadingMembers ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : groupInfo && groupInfo.members ? (
+            <Box>
+              <Box sx={{ px: 3, py: 2 }}>
+                <Typography sx={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 600 }}>
+                  共 {groupInfo.members.length} 位成員
+                </Typography>
+              </Box>
+              <Divider />
+              <Box sx={{ maxHeight: '50vh', overflowY: 'auto' }}>
+                {groupInfo.members.map((member, index) => (
+                  <Box key={member.id}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        p: 2.5,
+                        px: 3,
+                      }}
+                    >
+                      <Avatar
+                        src={member.avatar || undefined}
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          bgcolor: '#dbeafe',
+                          fontSize: '1rem',
+                          borderRadius: 3,
+                          color: '#2563eb',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {member.email.charAt(0).toUpperCase()}
+                      </Avatar>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          sx={{
+                            fontWeight: 600,
+                            color: '#0f172a',
+                            fontSize: '0.875rem',
+                            mb: 0.5,
+                          }}
+                        >
+                          {member.name}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: '0.75rem',
+                            color: '#94a3b8',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {member.email}
+                        </Typography>
+                      </Box>
+                      {groupInfo.owner && groupInfo.owner.id === member.id && (
+                        <Box
+                          sx={{
+                            px: 1.5,
+                            py: 0.5,
+                            bgcolor: '#fef3c7',
+                            borderRadius: 2,
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              color: '#f59e0b',
+                            }}
+                          >
+                            群主
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                    {index < groupInfo.members.length - 1 && <Divider />}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
+                無法載入成員列表
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

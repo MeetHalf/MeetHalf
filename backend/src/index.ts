@@ -16,6 +16,7 @@ import inviteRouter from './routes/invite';
 import friendsRouter from './routes/friends';
 import chatRouter from './routes/chat';
 import notificationsRouter from './routes/notifications';
+import groupsRouter from './routes/groups';
 import { mapsRateLimiter } from './middleware/rateLimit';
 
 // Load environment variables
@@ -250,6 +251,8 @@ app.use('/chat', chatRouter);
 console.log('[ROUTES] ✓ /chat registered');
 app.use('/notifications', notificationsRouter);
 console.log('[ROUTES] ✓ /notifications registered');
+app.use('/groups', groupsRouter);
+console.log('[ROUTES] ✓ /groups registered');
 console.log('[ROUTES] All routes registered successfully');
 
 // 404 handler

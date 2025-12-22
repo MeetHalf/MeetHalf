@@ -2,16 +2,19 @@ import api from './axios';
 
 export interface User {
   id: number;
+  userId: string;
   email: string;
+  name: string;
+  avatar: string | null;
 }
 
 export interface Group {
   id: number;
   name: string;
-  ownerId: number;
+  ownerId: string; // userId (String) from backend
   createdAt: string;
-  owner: User;
-  members: Member[];
+  owner: User | null;
+  members: User[]; // Group members are Users (many-to-many relation)
   _count?: {
     members: number;
   };
