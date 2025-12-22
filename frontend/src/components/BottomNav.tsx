@@ -1,6 +1,8 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, Badge } from '@mui/material';
 import { Home, Users, Plus, Map, User } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useChat } from '../hooks/useChat';
 
 interface NavItem {
   path: string;
@@ -35,6 +37,8 @@ const navItems: NavItem[] = [
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  const { unreadCount } = useChat(user?.userId ?? undefined);
 
   const isActive = (path: string) => {
     if (path === '/events') {
@@ -96,6 +100,8 @@ export default function BottomNav() {
           );
         }
 
+        const shouldShowBadge = item.path === '/friends' && unreadCount > 0;
+
         return (
           <Box
             key={item.path}
@@ -115,12 +121,31 @@ export default function BottomNav() {
               justifyContent: 'center',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
+              position: 'relative',
               '&:active': {
                 transform: 'scale(0.9)',
               },
             }}
           >
-            {item.icon}
+            {shouldShowBadge ? (
+              <Badge
+                badgeContent={unreadCount}
+                color="error"
+                max={99}
+                sx={{
+                  '& .MuiBadge-badge': {
+                    fontSize: '0.65rem',
+                    height: '16px',
+                    minWidth: '16px',
+                    padding: '0 4px',
+                  },
+                }}
+              >
+                {item.icon}
+              </Badge>
+            ) : (
+              item.icon
+            )}
           </Box>
         );
       })}
