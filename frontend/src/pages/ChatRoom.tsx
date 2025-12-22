@@ -23,7 +23,8 @@ export default function ChatRoom() {
   const { type, id } = useParams<{ type: 'user' | 'group'; id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { messages, conversations, loadMessages, loadConversations, sendMessage, markConversationAsRead, loading } = useChat(user?.userId, type, id);
+  const chatId = id ? (type === 'group' ? parseInt(id) : id) : undefined;
+  const { messages, conversations, loadMessages, loadConversations, sendMessage, markConversationAsRead, loading } = useChat(user?.userId ?? undefined, type ?? undefined, chatId);
   
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -172,6 +173,12 @@ export default function ChatRoom() {
         display: 'flex',
         flexDirection: 'column',
         bgcolor: '#f8fafc',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
       }}
     >
       {/* Header */}
@@ -184,6 +191,7 @@ export default function ChatRoom() {
           display: 'flex',
           alignItems: 'center',
           gap: 2,
+          flexShrink: 0,
         }}
       >
         <IconButton
@@ -236,11 +244,13 @@ export default function ChatRoom() {
       <Box
         sx={{
           flexGrow: 1,
-          overflow: 'auto',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           p: 2,
           display: 'flex',
           flexDirection: 'column',
           gap: 1.5,
+          minHeight: 0, // Important for flex children to respect overflow
         }}
       >
         {loading ? (
@@ -356,6 +366,7 @@ export default function ChatRoom() {
           display: 'flex',
           gap: 1.5,
           alignItems: 'flex-end',
+          flexShrink: 0,
         }}
       >
         <TextField

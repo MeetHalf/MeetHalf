@@ -66,8 +66,15 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     try {
       setError(null);
       const { message } = await chatApi.sendMessage({ content, receiverId, groupId });
-      // Add to local messages
-      setMessages((prev) => [...prev, message]);
+      // Add to local messages for optimistic update
+      // Pusher event will update it if it arrives (handled by duplicate check)
+      setMessages((prev) => {
+        // Check if message already exists (from Pusher event that arrived first)
+        if (prev.some((m) => m.id === message.id)) {
+          return prev;
+        }
+        return [...prev, message];
+      });
       return message;
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to send message');
@@ -131,9 +138,31 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     onEvent: (data: ChatMessage) => {
       console.log('[useChat] New message received:', data);
       setMessages((prev) => {
-        // Avoid duplicates
-        if (prev.some((m) => m.id === data.id)) {
-          return prev;
+        // Check if message already exists by ID
+        const existingIndex = prev.findIndex((m) => m.id === data.id);
+        if (existingIndex !== -1) {
+          console.log('[useChat] Duplicate message detected by ID, updating:', data.id);
+          // Update existing message with server data (in case it has more complete info)
+          const updated = [...prev];
+          updated[existingIndex] = data;
+          return updated;
+        }
+        // Also check for duplicate by content, sender, and timestamp (within 2 seconds)
+        // This handles cases where ID might not match but it's the same message
+        const duplicateIndex = prev.findIndex((m) => {
+          const timeDiff = Math.abs(new Date(m.createdAt).getTime() - new Date(data.createdAt).getTime());
+          return (
+            m.content === data.content &&
+            m.senderId === data.senderId &&
+            timeDiff < 2000 // 2 seconds
+          );
+        });
+        if (duplicateIndex !== -1) {
+          console.log('[useChat] Duplicate message detected by content/timestamp, updating');
+          // Update existing message with server data
+          const updated = [...prev];
+          updated[duplicateIndex] = data;
+          return updated;
         }
         return [...prev, data];
       });

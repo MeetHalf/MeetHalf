@@ -11,10 +11,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // 判斷是否為 EventRoom 頁面（/events/:id 但不是 /events 或 /events/new）
   const isEventRoomPage = pathname.match(/^\/events\/\d+$/);
+  
+  // 判斷是否為 ChatRoom 頁面
+  const isChatRoomPage = pathname.startsWith('/chat/');
 
   // 判斷是否隱藏導航
   const shouldHideNav =
     isEventRoomPage ||
+    isChatRoomPage ||
     pathname === '/login' ||
     pathname.startsWith('/invite/');
 

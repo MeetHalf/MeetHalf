@@ -101,6 +101,8 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
         sx: {
           height: fullScreen ? '100%' : '80vh',
           maxHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
         },
       }}
     >
@@ -114,6 +116,7 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
           justifyContent: 'space-between',
           py: 2,
           px: 3,
+          flexShrink: 0,
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -155,115 +158,126 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
       <DialogContent
         sx={{
           bgcolor: '#f8fafc',
-          p: 2,
+          p: 0,
           display: 'flex',
           flexDirection: 'column',
-          gap: 1.5,
-          overflowY: 'auto',
+          overflow: 'hidden',
+          flex: 1,
         }}
       >
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : messages.length > 0 ? (
-          messages.map((message) => {
-            const isOwn = message.senderId === user.userId;
-            return (
-              <Box
-                key={message.id}
-                sx={{
-                  display: 'flex',
-                  justifyContent: isOwn ? 'flex-end' : 'flex-start',
-                  alignItems: 'flex-end',
-                  gap: 1,
-                }}
-              >
-                {!isOwn && (
-                  <Avatar
-                    src={message.sender?.avatar || undefined}
-                    sx={{
-                      width: 32,
-                      height: 32,
-                      bgcolor: '#dbeafe',
-                      fontSize: '0.75rem',
-                      borderRadius: 3,
-                      color: '#2563eb',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {message.sender?.name?.charAt(0).toUpperCase() || '?'}
-                  </Avatar>
-                )}
+        <Box
+          sx={{
+            flex: 1,
+            overflowY: 'auto',
+            p: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.5,
+          }}
+        >
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : messages.length > 0 ? (
+            messages.map((message) => {
+              const isOwn = message.senderId === user.userId;
+              return (
                 <Box
+                  key={message.id}
                   sx={{
-                    maxWidth: '75%',
                     display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: isOwn ? 'flex-end' : 'flex-start',
+                    justifyContent: isOwn ? 'flex-end' : 'flex-start',
+                    alignItems: 'flex-end',
+                    gap: 1,
                   }}
                 >
                   {!isOwn && (
-                    <Typography
+                    <Avatar
+                      src={message.sender?.avatar || undefined}
                       sx={{
+                        width: 32,
+                        height: 32,
+                        bgcolor: '#dbeafe',
                         fontSize: '0.75rem',
-                        color: '#94a3b8',
-                        fontWeight: 500,
-                        mb: 0.5,
-                        px: 1,
+                        borderRadius: 3,
+                        color: '#2563eb',
+                        fontWeight: 700,
                       }}
                     >
-                      {message.sender?.name || 'Unknown'}
-                    </Typography>
+                      {message.sender?.name?.charAt(0).toUpperCase() || '?'}
+                    </Avatar>
                   )}
                   <Box
                     sx={{
-                      p: 1.5,
-                      bgcolor: isOwn ? '#2563eb' : '#f1f5f9',
-                      color: isOwn ? 'white' : '#0f172a',
-                      borderRadius: isOwn ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
-                      wordBreak: 'break-word',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      maxWidth: '75%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: isOwn ? 'flex-end' : 'flex-start',
                     }}
                   >
-                    <Typography
+                    {!isOwn && (
+                      <Typography
+                        sx={{
+                          fontSize: '0.75rem',
+                          color: '#94a3b8',
+                          fontWeight: 500,
+                          mb: 0.5,
+                          px: 1,
+                        }}
+                      >
+                        {message.sender?.name || 'Unknown'}
+                      </Typography>
+                    )}
+                    <Box
                       sx={{
-                        fontSize: '0.875rem',
-                        fontWeight: 500,
-                        lineHeight: 1.5,
+                        p: 1.5,
+                        bgcolor: isOwn ? '#2563eb' : '#f1f5f9',
                         color: isOwn ? 'white' : '#0f172a',
+                        borderRadius: isOwn ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
+                        wordBreak: 'break-word',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                       }}
                     >
-                      {message.content}
+                      <Typography
+                        sx={{
+                          fontSize: '0.875rem',
+                          fontWeight: 500,
+                          lineHeight: 1.5,
+                          color: isOwn ? 'white' : '#0f172a',
+                        }}
+                      >
+                        {message.content}
+                      </Typography>
+                    </Box>
+                    <Typography
+                      sx={{
+                        fontSize: '0.625rem',
+                        color: '#94a3b8',
+                        mt: 0.5,
+                        px: 1,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {formatMessageTime(message.createdAt)}
+                      {isOwn && message.readBy.length > 1 && ' · 已讀'}
                     </Typography>
                   </Box>
-                  <Typography
-                    sx={{
-                      fontSize: '0.625rem',
-                      color: '#94a3b8',
-                      mt: 0.5,
-                      px: 1,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {formatMessageTime(message.createdAt)}
-                    {isOwn && message.readBy.length > 1 && ' · 已讀'}
-                  </Typography>
                 </Box>
-              </Box>
-            );
-          })
-        ) : (
-          <Box sx={{ textAlign: 'center', py: 12 }}>
-            <Typography sx={{ fontWeight: 700, color: '#64748b', fontSize: '1rem', mb: 1 }}>
-              還沒有訊息
-            </Typography>
-            <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-              開始聊天吧！
-            </Typography>
-          </Box>
-        )}
-        <div ref={messagesEndRef} />
+              );
+            })
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 12 }}>
+              <Typography sx={{ fontWeight: 700, color: '#64748b', fontSize: '1rem', mb: 1 }}>
+                還沒有訊息
+              </Typography>
+              <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8' }}>
+                開始聊天吧！
+              </Typography>
+            </Box>
+          )}
+          <div ref={messagesEndRef} />
+        </Box>
       </DialogContent>
 
       {/* Input Area */}
@@ -275,6 +289,7 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
           display: 'flex',
           gap: 1.5,
           alignItems: 'flex-end',
+          flexShrink: 0,
         }}
       >
         <TextField
