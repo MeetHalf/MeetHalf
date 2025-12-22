@@ -1489,6 +1489,7 @@ export default function EventRoom() {
         lng: event.meetingPointLng,
         title: event.meetingPointName || '集合地點',
         label: '📍',
+        address: event.meetingPointAddress,
       });
     }
 
@@ -1520,7 +1521,7 @@ export default function EventRoom() {
       });
 
     return markers;
-  }, [event?.meetingPointLat, event?.meetingPointLng, event?.meetingPointName, members, membersETA]);
+  }, [event?.meetingPointLat, event?.meetingPointLng, event?.meetingPointName, event?.meetingPointAddress, members, membersETA]);
 
   // 計算兩點間距離（公尺）- Haversine 公式
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {

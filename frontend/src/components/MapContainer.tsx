@@ -2,17 +2,20 @@ import { useEffect, useRef, useState, memo } from 'react';
 import { Box, Alert } from '@mui/material';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
 
+interface MapMarker {
+  lat: number;
+  lng: number;
+  title: string;
+  id?: number;
+  draggable?: boolean;
+  label?: string;
+  avatarUrl?: string;
+  address?: string;
+}
+
 interface MapContainerProps {
   center?: { lat: number; lng: number };
-  markers?: Array<{ 
-    lat: number; 
-    lng: number; 
-    title: string;
-    id?: number;
-    draggable?: boolean;
-    label?: string;
-    avatarUrl?: string;
-  }>;
+  markers?: Array<MapMarker>;
   routes?: Array<{
     polyline: string;
     color: string;
@@ -40,11 +43,51 @@ function createCircleMarkerIcon(label: string, color: string = '#2196f3'): strin
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
+// 創建集合點 InfoWindow 內容
+function createMeetingPointInfoContent(marker: MapMarker): string {
+  return `
+    <div style="padding: 8px; min-width: 200px;">
+      <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #0f172a;">
+        ${marker.title}
+      </h3>
+      ${marker.address ? `
+        <p style="margin: 0 0 12px 0; font-size: 14px; color: #64748b;">
+          ${marker.address}
+        </p>
+      ` : ''}
+      <button 
+        id="navigate-btn-${marker.id}"
+        style="
+          width: 100%;
+          padding: 10px 16px;
+          background-color: #2563eb;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        "
+        onmouseover="this.style.backgroundColor='#1d4ed8'"
+        onmouseout="this.style.backgroundColor='#2563eb'"
+      >
+        <span>🧭</span>
+        <span>開始導航</span>
+      </button>
+    </div>
+  `;
+}
+
 function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], showRoutes = false, onMarkerDragEnd, fullscreen = false }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const markersRef = useRef<Map<number | string, google.maps.Marker>>(new Map());
+  const infoWindowsRef = useRef<Map<number | string, google.maps.InfoWindow>>(new Map());
 
   // 初始化地圖（只運行一次）
   useEffect(() => {
@@ -139,14 +182,15 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
           // 根據 label 決定顏色
           let color = '#2196f3'; // 默認藍色
           if (marker.label === '📍') {
-            // 集合地點用紅色 pin，不用圓形
+            // 集合地點用更醒目的 pin 圖標
             markerOptions.icon = {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 10,
-              fillColor: '#f44336',
+              path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+              fillColor: '#ef4444',
               fillOpacity: 1,
-              strokeColor: 'white',
+              strokeColor: '#ffffff',
               strokeWeight: 2,
+              scale: 2,
+              anchor: new google.maps.Point(12, 22),
             };
           } else if (marker.label === '✅') {
             // 已到達用綠色
@@ -179,19 +223,64 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
           });
         }
 
+        // 為集合點添加點擊事件和 InfoWindow
+        if (marker.label === '📍') {
+          const infoWindow = new google.maps.InfoWindow({
+            content: createMeetingPointInfoContent(marker),
+          });
+
+          mapMarker.addListener('click', () => {
+            // 關閉所有其他 InfoWindow
+            infoWindowsRef.current.forEach((iw) => iw.close());
+            // 打開當前 InfoWindow
+            infoWindow.open(map, mapMarker);
+          });
+
+          // 當 InfoWindow 的 DOM 準備好時，添加導航按鈕的事件監聽器
+          google.maps.event.addListener(infoWindow, 'domready', () => {
+            const navBtn = document.getElementById(`navigate-btn-${marker.id}`);
+            if (navBtn) {
+              navBtn.addEventListener('click', () => {
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${marker.lat},${marker.lng}`;
+                window.open(url, '_blank');
+              });
+            }
+          });
+
+          // 保存 InfoWindow 引用
+          infoWindowsRef.current.set(markerId, infoWindow);
+        }
+
         // 保存到 ref
         markersRef.current.set(markerId, mapMarker);
       }
     });
 
-    // 移除不再存在的標記
+    // 移除不再存在的標記和 InfoWindow
     markersRef.current.forEach((marker, markerId) => {
       if (!currentMarkerIds.has(markerId)) {
         marker.setMap(null);
         markersRef.current.delete(markerId);
+        
+        // 同時清理對應的 InfoWindow
+        const infoWindow = infoWindowsRef.current.get(markerId);
+        if (infoWindow) {
+          infoWindow.close();
+          infoWindowsRef.current.delete(markerId);
+        }
       }
     });
   }, [map, markers, onMarkerDragEnd]);
+
+  // 組件卸載時清理所有 InfoWindow
+  useEffect(() => {
+    return () => {
+      infoWindowsRef.current.forEach((infoWindow) => {
+        infoWindow.close();
+      });
+      infoWindowsRef.current.clear();
+    };
+  }, []);
 
   // Add polyline routes when available
   useEffect(() => {
@@ -260,7 +349,8 @@ export default memo(MapContainer, (prevProps, nextProps) => {
         marker.lat === nextMarker.lat &&
         marker.lng === nextMarker.lng &&
         marker.title === nextMarker.title &&
-        marker.label === nextMarker.label
+        marker.label === nextMarker.label &&
+        marker.address === nextMarker.address
       );
     });
 
