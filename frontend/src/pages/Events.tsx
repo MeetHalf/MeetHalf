@@ -130,7 +130,7 @@ export default function Events() {
         {/* Active Events Section */}
         <Box sx={{ mb: 4 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontWeight: 700, color: '#1e293b' }}>Active Gatherings</Typography>
+            <Typography sx={{ fontWeight: 700, color: '#1e293b' }}>Active</Typography>
             
             {/* 快速操作按鈕 */}
             <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
