@@ -129,23 +129,23 @@ export default function Events() {
 
         {/* Active Events Section */}
         <Box sx={{ mb: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
             <Typography sx={{ fontWeight: 700, color: '#1e293b' }}>Active Gatherings</Typography>
             
             {/* 快速操作按鈕 */}
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
               {/* 建立新聚會按鈕 */}
               <Box
                 onClick={() => navigate('/events/new')}
                 sx={{
                   bgcolor: '#2563eb',
                   color: 'white',
-                  px: 2,
+                  px: { xs: 1.5, sm: 2 },
                   py: 1,
                   borderRadius: 3,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 1,
+                  gap: 0.5,
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   boxShadow: '0 4px 12px -2px rgba(37, 99, 235, 0.3)',
@@ -157,7 +157,16 @@ export default function Events() {
                 }}
               >
                 <Plus size={18} />
-                <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', color: 'white' }}>建立新聚會</Typography>
+                <Typography 
+                  sx={{ 
+                    fontWeight: 700, 
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' }, 
+                    color: 'white',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  建立新聚會
+                </Typography>
               </Box>
 
               {/* 輸入邀請碼按鈕 */}
@@ -167,12 +176,12 @@ export default function Events() {
                   bgcolor: 'white',
                   border: '1px solid #e2e8f0',
                   color: '#0f172a',
-                  px: 2,
+                  px: { xs: 1.5, sm: 2 },
                   py: 1,
                   borderRadius: 3,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 1,
+                  gap: 0.5,
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
@@ -185,7 +194,15 @@ export default function Events() {
                 }}
               >
                 <LogIn size={18} />
-                <Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>輸入邀請碼</Typography>
+                <Typography 
+                  sx={{ 
+                    fontWeight: 700, 
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  輸入邀請碼
+                </Typography>
               </Box>
             </Box>
           </Box>
