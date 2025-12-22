@@ -488,6 +488,12 @@ export default function CreateEvent() {
 
   // Share using Web Share API
   const handleShare = async () => {
+    console.log('[CreateEvent] handleShare called', { 
+      hasShare: typeof navigator.share === 'function',
+      shareUrl,
+      shareToken 
+    });
+    
     if (navigator.share) {
       try {
         await navigator.share({
@@ -495,10 +501,21 @@ export default function CreateEvent() {
           text: `加入我的聚會：${formData.name}\n邀請碼：${shareToken}`,
           url: shareUrl,
         });
-      } catch (err) {
-        console.error('Share failed:', err);
+        // 分享成功（用戶選擇了分享方式）
+        console.log('[CreateEvent] Share successful');
+        setSnackbar({ open: true, message: '分享成功！', severity: 'success' });
+      } catch (err: any) {
+        console.log('[CreateEvent] Share error:', err.name, err.message);
+        // 用戶取消分享（DOMException: "AbortError"）是正常的，不顯示錯誤
+        if (err.name !== 'AbortError') {
+          console.error('Share failed:', err);
+          // 如果分享失敗，回退到複製連結
+          handleCopyLink();
+        }
       }
     } else {
+      console.log('[CreateEvent] Web Share API not supported, falling back to copy');
+      // 不支援 Web Share API，回退到複製連結
       handleCopyLink();
     }
   };
@@ -685,7 +702,7 @@ export default function CreateEvent() {
                                       </Typography>
                                       {friend.estimatedDistance && (
                                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                          ({friend.estimatedDistance})
+                                          ({friend.estimatedDistance || ''})
                                         </Typography>
                                       )}
                                     </Box>
@@ -696,7 +713,11 @@ export default function CreateEvent() {
                                 <Box sx={{ display: 'flex', gap: 0.5 }}>
                                   <IconButton
                                     size="small"
-                                    onClick={() => handleRemoveFriend(friend.userId)}
+                                    onClick={() => {
+                                      if (friend.userId) {
+                                        handleRemoveFriend(friend.userId);
+                                      }
+                                    }}
                                     sx={{ color: 'error.main' }}
                                   >
                                     <DeleteIcon fontSize="small" />
@@ -1024,7 +1045,7 @@ export default function CreateEvent() {
             </DialogTitle>
             <DialogContent>
               <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
-                分享以下連結給朋友，讓他們加入聚會：
+                選擇以下任一方式分享給朋友，讓他們加入聚會：
               </Typography>
 
               {/* 邀請碼顯示 */}
@@ -1034,7 +1055,6 @@ export default function CreateEvent() {
                   p: 2,
                   bgcolor: '#e3f2fd',
                   borderRadius: 2,
-                  mb: 2,
                   border: '1px solid #90caf9',
                 }}
               >
@@ -1050,6 +1070,9 @@ export default function CreateEvent() {
                       fontWeight: 600,
                       letterSpacing: '0.05em',
                       flex: 1,
+                      minWidth: 0,
+                      wordBreak: 'break-all',
+                      overflowWrap: 'break-word',
                     }}
                   >
                     {shareToken}
@@ -1059,6 +1082,7 @@ export default function CreateEvent() {
                     size="small"
                     sx={{
                       color: '#1976d2',
+                      flexShrink: 0,
                       '&:hover': {
                         bgcolor: '#1976d2',
                         color: '#fff',
@@ -1070,6 +1094,15 @@ export default function CreateEvent() {
                 </Box>
               </Paper>
 
+              {/* 分隔線 + "or" */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, my: 2 }}>
+                <Divider sx={{ flex: 1 }} />
+                <Typography variant="caption" sx={{ color: 'text.secondary', px: 1 }}>
+                  或
+                </Typography>
+                <Divider sx={{ flex: 1 }} />
+              </Box>
+
               {/* 連結顯示 */}
               <Paper
                 elevation={0}
@@ -1080,7 +1113,6 @@ export default function CreateEvent() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1,
-                  mb: 2,
                 }}
               >
                 <Typography
@@ -1093,38 +1125,30 @@ export default function CreateEvent() {
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    minWidth: 0,
                   }}
                 >
                   {shareUrl}
                 </Typography>
-                <IconButton onClick={handleCopyLink} size="small">
-                  <CopyIcon fontSize="small" />
+                <IconButton
+                  onClick={typeof navigator.share === 'function' ? handleShare : handleCopyLink}
+                  size="small"
+                  sx={{
+                    color: '#1976d2',
+                    flexShrink: 0,
+                    '&:hover': {
+                      bgcolor: '#1976d2',
+                      color: '#fff',
+                    },
+                  }}
+                >
+                  {typeof navigator.share === 'function' ? (
+                    <ShareIcon fontSize="small" />
+                  ) : (
+                    <CopyIcon fontSize="small" />
+                  )}
                 </IconButton>
               </Paper>
-
-              {/* 分享按鈕 */}
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<CopyIcon />}
-                  onClick={handleCopyLink}
-                  sx={{ textTransform: 'none' }}
-                >
-                  複製連結
-                </Button>
-                {typeof navigator.share === 'function' && (
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    startIcon={<ShareIcon />}
-                    onClick={handleShare}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    分享
-                  </Button>
-                )}
-              </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 3 }}>
               <Button
