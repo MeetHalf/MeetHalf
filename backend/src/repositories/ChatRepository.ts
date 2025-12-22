@@ -220,6 +220,38 @@ export class ChatRepository {
       }
     }
 
+    // Add groups that user is a member of but have no messages yet
+    const userGroups = await prisma.group.findMany({
+      where: {
+        members: {
+          some: {
+            userId,
+          },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+      },
+    });
+
+    // Add groups without messages to the conversation map
+    for (const group of userGroups) {
+      const key = `group-${group.id}`;
+      if (!conversationMap.has(key)) {
+        conversationMap.set(key, {
+          type: 'group',
+          id: group.id,
+          name: group.name,
+          avatar: null,
+          lastMessage: null,
+          unreadCount: 0,
+          createdAt: group.createdAt, // Use group creation time for sorting
+        });
+      }
+    }
+
     // Calculate unread counts
     for (const [key, conv] of conversationMap.entries()) {
       if (conv.type === 'user') {
@@ -253,14 +285,33 @@ export class ChatRepository {
 
     const conversations = Array.from(conversationMap.values()).sort(
       (a, b) => {
-        if (!a.lastMessage || !b.lastMessage) return 0;
-        const timeA = a.lastMessage.createdAt instanceof Date 
-          ? a.lastMessage.createdAt.getTime() 
-          : new Date(a.lastMessage.createdAt).getTime();
-        const timeB = b.lastMessage.createdAt instanceof Date 
-          ? b.lastMessage.createdAt.getTime() 
-          : new Date(b.lastMessage.createdAt).getTime();
-        return timeB - timeA;
+        // Prioritize conversations with messages
+        if (a.lastMessage && !b.lastMessage) return -1;
+        if (!a.lastMessage && b.lastMessage) return 1;
+        
+        // If both have messages, sort by message time
+        if (a.lastMessage && b.lastMessage) {
+          const timeA = a.lastMessage.createdAt instanceof Date 
+            ? a.lastMessage.createdAt.getTime() 
+            : new Date(a.lastMessage.createdAt).getTime();
+          const timeB = b.lastMessage.createdAt instanceof Date 
+            ? b.lastMessage.createdAt.getTime() 
+            : new Date(b.lastMessage.createdAt).getTime();
+          return timeB - timeA;
+        }
+        
+        // If neither has messages, sort by group creation time
+        if (a.createdAt && b.createdAt) {
+          const timeA = a.createdAt instanceof Date 
+            ? a.createdAt.getTime() 
+            : new Date(a.createdAt).getTime();
+          const timeB = b.createdAt instanceof Date 
+            ? b.createdAt.getTime() 
+            : new Date(b.createdAt).getTime();
+          return timeB - timeA;
+        }
+        
+        return 0;
       }
     );
     console.log('[ChatRepository] Conversations found:', conversations.length);
