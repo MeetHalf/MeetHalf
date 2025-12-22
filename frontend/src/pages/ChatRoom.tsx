@@ -279,11 +279,10 @@ export default function ChatRoom() {
           })
         ) : (
           <Box sx={{ textAlign: 'center', py: 12 }}>
-            <Typography sx={{ fontSize: '4rem', mb: 2 }}>💬</Typography>
-            <Typography sx={{ fontWeight: 700, color: '#64748b' }}>
+            <Typography sx={{ fontWeight: 700, color: '#64748b', fontSize: '1rem', mb: 1 }}>
               還沒有訊息
             </Typography>
-            <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8', mt: 1 }}>
+            <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8' }}>
               開始聊天吧！
             </Typography>
           </Box>

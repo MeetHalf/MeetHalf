@@ -367,8 +367,7 @@ export default function Events() {
                 textAlign: 'center',
               }}
             >
-              <Typography sx={{ fontSize: '2rem', mb: 1 }}>📭</Typography>
-              <Typography sx={{ fontWeight: 700, color: '#64748b', mb: 0.5 }}>
+              <Typography sx={{ fontWeight: 700, color: '#64748b', fontSize: '1rem', mb: 1 }}>
                 No active gatherings
               </Typography>
               <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8' }}>

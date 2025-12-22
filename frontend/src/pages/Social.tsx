@@ -294,9 +294,8 @@ export default function Social() {
               ))
             ) : (
               <Box sx={{ textAlign: 'center', py: 12 }}>
-                <Typography sx={{ fontSize: '4rem', mb: 2 }}>👥</Typography>
-                <Typography sx={{ fontWeight: 700, color: '#64748b' }}>No friends yet</Typography>
-                <Typography sx={{ color: '#94a3b8', mt: 1, mb: 3 }}>
+                <Typography sx={{ fontWeight: 700, color: '#64748b', fontSize: '1rem', mb: 1 }}>No friends yet</Typography>
+                <Typography sx={{ color: '#94a3b8', fontSize: '0.875rem', mb: 3 }}>
                   Add friends to start chatting
                 </Typography>
                 <Button
@@ -351,11 +350,10 @@ export default function Social() {
               ))
             ) : (
               <Box sx={{ textAlign: 'center', py: 12 }}>
-                <Typography sx={{ fontSize: '4rem', mb: 2 }}>💬</Typography>
-                <Typography sx={{ fontWeight: 700, color: '#64748b' }}>
+                <Typography sx={{ fontWeight: 700, color: '#64748b', fontSize: '1rem', mb: 1 }}>
                   No conversations yet
                 </Typography>
-                <Typography sx={{ color: '#94a3b8', mt: 1, mb: 3 }}>
+                <Typography sx={{ color: '#94a3b8', fontSize: '0.875rem', mb: 3 }}>
                   Start a chat with your friends
                 </Typography>
                 <Button
