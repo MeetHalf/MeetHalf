@@ -70,10 +70,19 @@ function setAuthCookieAndRedirect(req: Request, res: Response, user: any) {
   const tempToken = generateTempAuthToken(user.id);
   const frontendOrigin = getFrontendOrigin();
   
-  // Pass temporary token in URL (safer: short-lived, one-time use)
-  // Frontend will exchange this for the real JWT via API call
-  // Redirect to /events directly to avoid frontend root redirect stripping params
-  const redirectUrl = `${frontendOrigin}/events?auth_temp=${encodeURIComponent(tempToken)}`;
+  // Check if user needs first-time setup
+  let redirectUrl: string;
+  if (user.needsSetup) {
+    // Redirect to first-time setup page
+    redirectUrl = `${frontendOrigin}/first-time-setup?auth_temp=${encodeURIComponent(tempToken)}`;
+    console.log('[AUTH] New user - redirecting to first-time setup');
+  } else {
+    // Pass temporary token in URL (safer: short-lived, one-time use)
+    // Frontend will exchange this for the real JWT via API call
+    // Redirect to /events directly to avoid frontend root redirect stripping params
+    redirectUrl = `${frontendOrigin}/events?auth_temp=${encodeURIComponent(tempToken)}`;
+    console.log('[AUTH] Existing user - redirecting to events');
+  }
   
   console.log('[AUTH] Redirecting to frontend with temp token (for mobile fallback)');
   res.redirect(redirectUrl);
@@ -273,6 +282,7 @@ router.get('/me', optionalAuthMiddleware, async (req: Request, res: Response): P
         name: true,
         avatar: true,
         provider: true,
+        needsSetup: true,
         createdAt: true,
       },
     });
@@ -418,6 +428,7 @@ router.post('/exchange-temp-token', async (req: Request, res: Response): Promise
         name: true,
         avatar: true,
         provider: true,
+        needsSetup: true,
         createdAt: true,
       },
     });

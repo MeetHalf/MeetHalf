@@ -3,11 +3,12 @@ import api from '../api/axios';
 
 interface User {
   id: number;
-  userId?: string; // User.userId (string identifier)
+  userId?: string | null; // User.userId (string identifier)
   email: string;
   name: string;
   avatar?: string | null;
   provider?: string | null;
+  needsSetup?: boolean; // Whether user needs first-time setup
   createdAt: string;
 }
 
@@ -16,6 +17,7 @@ interface AuthContextType {
   loading: boolean;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  refreshUser: () => Promise<void>; // Alias for refreshMe
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -99,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return React.createElement(
     AuthContext.Provider,
-    { value: { user, loading, logout, refreshMe } },
+    { value: { user, loading, logout, refreshMe, refreshUser: refreshMe } },
     children
   );
 }

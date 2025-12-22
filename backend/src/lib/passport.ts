@@ -57,16 +57,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
           if (user) {
             // Update existing user with Google info
-            // Generate userId if missing
-            let userId = user.userId;
-            if (!userId) {
-              userId = await generateUserId(email);
-            }
-            
             user = await prisma.user.update({
               where: { id: user.id },
               data: {
-                userId,
                 googleId: profile.id,
                 name: user.name || name,
                 email,
@@ -76,16 +69,15 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
               },
             });
           } else {
-            // Create new user with generated userId
-            const userId = await generateUserId(email);
+            // Create new user WITHOUT userId (will be set during first-time setup)
             user = await prisma.user.create({
               data: {
-                userId,
                 googleId: profile.id,
                 email,
                 name,
                 avatar,
                 provider: 'GOOGLE',
+                needsSetup: true, // Mark as needing first-time setup
               },
             });
           }
@@ -144,16 +136,9 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 
           if (user) {
             // Update existing user with GitHub info
-            // Generate userId if missing
-            let userId = user.userId;
-            if (!userId) {
-              userId = await generateUserId(email);
-            }
-            
             user = await prisma.user.update({
               where: { id: user.id },
               data: {
-                userId,
                 githubId: profile.id.toString(),
                 name: user.name || name,
                 email,
@@ -163,16 +148,15 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
               },
             });
           } else {
-            // Create new user with generated userId
-            const userId = await generateUserId(email);
+            // Create new user WITHOUT userId (will be set during first-time setup)
             user = await prisma.user.create({
               data: {
-                userId,
                 githubId: profile.id.toString(),
                 email,
                 name,
                 avatar,
                 provider: 'GITHUB',
+                needsSetup: true, // Mark as needing first-time setup
               },
             });
           }

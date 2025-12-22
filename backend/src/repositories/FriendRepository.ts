@@ -69,10 +69,13 @@ export class FriendRepository {
 
     // Map users with their friendship createdAt
     const friendMap = new Map(friends.map((f) => [f.friendId, f.createdAt]));
-    return users.map((user) => ({
-      ...user,
-      createdAt: friendMap.get(user.userId)?.toISOString() || new Date().toISOString(),
-    }));
+    return users
+      .filter((user) => user.userId !== null) // Filter out users without userId
+      .map((user) => ({
+        ...user,
+        userId: user.userId!, // Safe to assert non-null after filter
+        createdAt: friendMap.get(user.userId!)?.toISOString() || new Date().toISOString(),
+      }));
   }
 
   /**

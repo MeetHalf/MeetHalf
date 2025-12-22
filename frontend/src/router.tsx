@@ -12,6 +12,7 @@ import Profile from './pages/Profile';
 import Friends from './pages/Friends';
 import ChatRoom from './pages/ChatRoom';
 import Notifications from './pages/Notifications';
+import FirstTimeSetup from './pages/FirstTimeSetup';
 import { Box, CircularProgress } from '@mui/material';
 
 // Root layout that wraps all routes
@@ -65,6 +66,10 @@ export const router = createBrowserRouter([
       {
         path: '/login',
         element: <Login />,
+      },
+      {
+        path: '/first-time-setup',
+        element: <FirstTimeSetup />,
       },
       {
         path: '/invite/:token',

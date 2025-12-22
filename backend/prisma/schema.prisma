@@ -9,7 +9,7 @@ generator client {
 
 model User {
   id                  Int      @id @default(autoincrement())
-  userId              String   @unique // email前綴 + "_" + 三個字母數字亂碼
+  userId              String?  @unique // email前綴 + "_" + 三個字母數字亂碼（首次設定時才填入）
   email               String   @unique
   name                String   // User display name (from OAuth or email)
   passwordHash        String?  // Optional: keep for existing users, new users via OAuth
@@ -21,6 +21,8 @@ model User {
   defaultLng          Float?   // 預設出發點經度
   defaultAddress      String?  // 預設出發點地址
   defaultLocationName String?  // 預設出發點名稱
+  defaultTravelMode   String?  // 預設交通方式: driving, transit, walking, bicycling
+  needsSetup          Boolean  @default(true) // 是否需要首次設定
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   

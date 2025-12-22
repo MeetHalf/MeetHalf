@@ -9,13 +9,25 @@ import {
   Button,
   Snackbar,
   Alert,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
 } from '@mui/material';
-import { Settings, ChevronRight, Bell, Lock, Info, LogOut, Calendar, MapPin } from 'lucide-react';
+import { Settings, ChevronRight, Bell, Lock, Info, LogOut, Calendar, MapPin, Car, Bus, PersonStanding, Bike } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { eventsApi, Event } from '../api/events';
 import { usersApi } from '../api/users';
 import { format } from 'date-fns';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
+
+const travelModeOptions = [
+  { value: 'driving', label: '開車', icon: Car, color: '#2563eb' },
+  { value: 'transit', label: '大眾運輸', icon: Bus, color: '#10b981' },
+  { value: 'walking', label: '步行', icon: PersonStanding, color: '#f59e0b' },
+  { value: 'bicycling', label: '騎車', icon: Bike, color: '#8b5cf6' },
+];
 
 // 模擬徽章數據
 const badges = [
@@ -34,6 +46,7 @@ export default function Profile() {
     address: '',
     name: '',
   });
+  const [travelMode, setTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling'>('driving');
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({
@@ -67,6 +80,7 @@ export default function Profile() {
             address: response.user.defaultAddress || '',
             name: response.user.defaultLocationName || '',
           });
+          setTravelMode(response.user.defaultTravelMode || 'driving');
         }
       } catch (error) {
         console.error('Failed to fetch profile:', error);
@@ -139,8 +153,9 @@ export default function Profile() {
         defaultLng: defaultLocation.lng,
         defaultAddress: defaultLocation.address,
         defaultLocationName: defaultLocation.name,
+        defaultTravelMode: travelMode,
       });
-      setSnackbar({ open: true, message: '預設出發點已儲存', severity: 'success' });
+      setSnackbar({ open: true, message: '設定已儲存', severity: 'success' });
     } catch (error) {
       console.error('Failed to save default location:', error);
       setSnackbar({ open: true, message: '儲存失敗', severity: 'error' });
@@ -381,10 +396,10 @@ export default function Profile() {
         </Box>
       </Box>
 
-      {/* Default Location */}
+      {/* Default Location & Travel Mode */}
       <Box sx={{ px: 3, mt: 4 }}>
         <Typography sx={{ fontWeight: 700, color: '#0f172a', mb: 2, px: 1 }}>
-          預設出發點
+          預設設定
         </Typography>
         <Box
           sx={{
@@ -394,28 +409,85 @@ export default function Profile() {
             p: 3,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <MapPin size={20} style={{ color: '#2563eb' }} />
-            <Typography sx={{ fontWeight: 600, color: '#475569' }}>
-              設定常用出發地點
-            </Typography>
+          {/* Default Location */}
+          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <MapPin size={20} style={{ color: '#2563eb' }} />
+              <Typography sx={{ fontWeight: 600, color: '#475569' }}>
+                預設出發點
+              </Typography>
+            </Box>
+            <TextField
+              inputRef={autocompleteInputRef}
+              fullWidth
+              placeholder="搜尋地點..."
+              value={defaultLocation.name || defaultLocation.address}
+              onChange={(e) =>
+                setDefaultLocation((prev) => ({ ...prev, name: e.target.value }))
+              }
+              sx={{ mb: 1 }}
+              size="small"
+            />
+            {defaultLocation.lat && defaultLocation.lng && (
+              <Typography sx={{ fontSize: '0.75rem', color: '#94a3b8', mb: 1 }}>
+                已選擇：{defaultLocation.name || defaultLocation.address}
+              </Typography>
+            )}
           </Box>
-          <TextField
-            inputRef={autocompleteInputRef}
-            fullWidth
-            placeholder="搜尋地點..."
-            value={defaultLocation.name || defaultLocation.address}
-            onChange={(e) =>
-              setDefaultLocation((prev) => ({ ...prev, name: e.target.value }))
-            }
-            sx={{ mb: 2 }}
-            size="small"
-          />
-          {defaultLocation.lat && defaultLocation.lng && (
-            <Typography sx={{ fontSize: '0.75rem', color: '#94a3b8', mb: 2 }}>
-              已選擇：{defaultLocation.name || defaultLocation.address}
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Default Travel Mode */}
+          <Box sx={{ mb: 3 }}>
+            <Typography sx={{ fontWeight: 600, color: '#475569', mb: 2 }}>
+              預設交通方式
             </Typography>
-          )}
+            <Typography sx={{ fontSize: '0.875rem', color: '#64748b', mb: 2 }}>
+              系統將依此計算預估到達時間
+            </Typography>
+            <FormControl component="fieldset" fullWidth>
+              <RadioGroup
+                value={travelMode}
+                onChange={(e) => setTravelMode(e.target.value as any)}
+              >
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                  {travelModeOptions.map((option) => {
+                    const Icon = option.icon;
+                    return (
+                      <FormControlLabel
+                        key={option.value}
+                        value={option.value}
+                        control={<Radio />}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Icon size={16} style={{ color: option.color }} />
+                            <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                              {option.label}
+                            </Typography>
+                          </Box>
+                        }
+                        sx={{
+                          bgcolor: travelMode === option.value ? '#f0f9ff' : 'transparent',
+                          border: `2px solid ${
+                            travelMode === option.value ? option.color : '#e2e8f0'
+                          }`,
+                          borderRadius: 2,
+                          m: 0,
+                          p: 1,
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            bgcolor: '#f8fafc',
+                            borderColor: option.color,
+                          },
+                        }}
+                      />
+                    );
+                  })}
+                </Box>
+              </RadioGroup>
+            </FormControl>
+          </Box>
+
           <Button
             variant="contained"
             fullWidth
@@ -427,7 +499,7 @@ export default function Profile() {
               fontWeight: 600,
             }}
           >
-            {saving ? '儲存中...' : '儲存預設出發點'}
+            {saving ? '儲存中...' : '儲存設定'}
           </Button>
         </Box>
       </Box>

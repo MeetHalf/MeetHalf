@@ -88,9 +88,11 @@ export class ChatService {
         // Send push notification to all group members except sender
         const memberUserIds = group.members
           .map((m) => m.userId)
-          .filter((uid) => uid !== data.senderId);
+          .filter((uid) => uid !== null && uid !== data.senderId); // Filter out null userIds
 
         for (const memberId of memberUserIds) {
+          if (!memberId) continue; // Extra safety check
+
           await sendPushNotification(
             `user-${memberId}`,
             `${group.name}`,

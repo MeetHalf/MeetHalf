@@ -1,5 +1,5 @@
 export interface User {
-  userId: string;
+  userId: string | null;
   name: string;
   email: string;
   avatar: string | null;
@@ -7,6 +7,8 @@ export interface User {
   defaultLng?: number | null;
   defaultAddress?: string | null;
   defaultLocationName?: string | null;
+  defaultTravelMode?: 'driving' | 'transit' | 'walking' | 'bicycling' | null;
+  needsSetup?: boolean;
 }
 
 export interface Friend extends User {
