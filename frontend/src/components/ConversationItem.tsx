@@ -85,17 +85,19 @@ export default function ConversationItem({ conversation, onClick }: Conversation
           >
             {name}
           </Typography>
-          <Typography
-            sx={{
-              fontSize: '0.75rem',
-              color: '#94a3b8',
-              fontWeight: 500,
-              whiteSpace: 'nowrap',
-              ml: 1,
-            }}
-          >
-            {formatTimestamp(lastMessage.createdAt)}
-          </Typography>
+          {lastMessage && (
+            <Typography
+              sx={{
+                fontSize: '0.75rem',
+                color: '#94a3b8',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                ml: 1,
+              }}
+            >
+              {formatTimestamp(lastMessage.createdAt)}
+            </Typography>
+          )}
         </Box>
         <Typography
           sx={{
@@ -105,10 +107,17 @@ export default function ConversationItem({ conversation, onClick }: Conversation
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            fontStyle: !lastMessage ? 'italic' : 'normal',
           }}
         >
-          {lastMessage.sender?.name && type === 'group' ? `${lastMessage.sender.name}: ` : ''}
-          {lastMessage.content}
+          {lastMessage ? (
+            <>
+              {lastMessage.sender?.name && type === 'group' ? `${lastMessage.sender.name}: ` : ''}
+              {lastMessage.content}
+            </>
+          ) : (
+            '還沒有訊息'
+          )}
         </Typography>
       </Box>
     </Box>
