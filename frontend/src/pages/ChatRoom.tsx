@@ -24,14 +24,20 @@ export default function ChatRoom() {
   const [sending, setSending] = useState(false);
   const [chatName, setChatName] = useState('');
   const [chatAvatar, setChatAvatar] = useState<string | null>(null);
+  const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load conversations to get chat name and avatar
   useEffect(() => {
     if (user) {
-      loadConversations().catch((err) => {
-        console.error('[ChatRoom] Failed to load conversations:', err);
-      });
+      loadConversations()
+        .then(() => {
+          setConversationsLoaded(true);
+        })
+        .catch((err) => {
+          console.error('[ChatRoom] Failed to load conversations:', err);
+          setConversationsLoaded(true); // Still mark as loaded even on error
+        });
     }
   }, [user, loadConversations]);
 
@@ -49,13 +55,27 @@ export default function ChatRoom() {
       if (conversation) {
         setChatName(conversation.name);
         setChatAvatar(conversation.avatar);
-      } else {
-        // Fallback to ID if conversation not found
-        setChatName(type === 'user' ? id : `群組 ${id}`);
-        setChatAvatar(null);
+        return; // Found conversation, no need for fallback
       }
     }
-  }, [conversations, type, id]);
+
+    // Fallback: Get name from messages if conversation not found
+    // Only try fallback if conversations have been loaded
+    if (conversationsLoaded && type === 'user' && messages.length > 0 && !chatName) {
+      // Find the first message from the other user
+      const otherUserMessage = messages.find((msg) => msg.senderId !== user?.userId);
+      if (otherUserMessage?.sender?.name) {
+        setChatName(otherUserMessage.sender.name);
+        setChatAvatar(otherUserMessage.sender.avatar || null);
+      } else if (id) {
+        // Still show ID if no name found
+        setChatName(id);
+      }
+    } else if (conversationsLoaded && type === 'group' && !chatName && id) {
+      // For groups, use ID as fallback
+      setChatName(`群組 ${id}`);
+    }
+  }, [conversations, type, id, messages, user?.userId, chatName, conversationsLoaded]);
 
   // Load messages and mark as read
   useEffect(() => {
@@ -356,4 +376,5 @@ export default function ChatRoom() {
     </Box>
   );
 }
+
 

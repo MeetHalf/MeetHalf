@@ -10,7 +10,7 @@ import {
   Typography,
   CircularProgress,
 } from '@mui/material';
-import { X, MessageCircle, Trash2 } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useFriends } from '../hooks/useFriends';
 
@@ -81,7 +81,7 @@ export default function FriendListDialog({ open, onClose }: FriendListDialogProp
           <X size={20} />
         </Box>
       </DialogTitle>
-      <DialogContent sx={{ px: 3, pb: 2 }}>
+      <DialogContent sx={{ px: 3, pb: 2, '&.MuiDialogContent-root': { px: 3 } }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
             <CircularProgress />
@@ -93,13 +93,22 @@ export default function FriendListDialog({ open, onClose }: FriendListDialogProp
                 key={friend.userId}
                 sx={{
                   bgcolor: 'white',
-                  p: 2,
+                  pl: 2,
+                  pr: 1,
+                  py: 2,
                   borderRadius: '1.5rem',
                   border: '1px solid #f1f5f9',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 2,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    bgcolor: '#f8fafc',
+                    '& .friend-name': { color: '#2563eb' },
+                  },
                 }}
+                onClick={() => handleSendMessage(friend.userId)}
               >
                 <Avatar
                   src={friend.avatar || undefined}
@@ -116,50 +125,33 @@ export default function FriendListDialog({ open, onClose }: FriendListDialogProp
                   {friend.name.charAt(0).toUpperCase()}
                 </Avatar>
                 <Box sx={{ flex: 1 }}>
-                  <Typography sx={{ fontWeight: 700, color: '#0f172a', fontSize: '0.875rem' }}>
+                  <Typography className="friend-name" sx={{ fontWeight: 700, color: '#0f172a', fontSize: '0.875rem', transition: 'color 0.2s ease' }}>
                     {friend.name}
                   </Typography>
                   <Typography sx={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
                     {friend.userId}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Box
-                    onClick={() => handleSendMessage(friend.userId)}
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 3,
-                      bgcolor: '#f1f5f9',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#2563eb',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      '&:hover': { bgcolor: '#dbeafe' },
-                    }}
-                  >
-                    <MessageCircle size={18} />
-                  </Box>
-                  <Box
-                    onClick={() => handleDeleteFriend(friend.userId, friend.name)}
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 3,
-                      bgcolor: '#f1f5f9',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ef4444',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      '&:hover': { bgcolor: '#fee2e2' },
-                    }}
-                  >
-                    <Trash2 size={18} />
-                  </Box>
+                <Box
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteFriend(friend.userId, friend.name);
+                  }}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 3,
+                    bgcolor: '#f1f5f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    '&:hover': { bgcolor: '#fee2e2' },
+                  }}
+                >
+                  <Trash2 size={18} />
                 </Box>
               </Box>
             ))}
