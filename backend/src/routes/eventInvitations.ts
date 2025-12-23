@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { getUserUserId } from '../lib/userUtils';
 import prisma from '../lib/prisma';
+import { Prisma } from '@prisma/client';
 import { 
   createInvitationsSchema, 
   invitationIdSchema,
@@ -356,6 +357,7 @@ router.post('/:id/invitations/:invitationId/accept', authMiddleware, async (req:
     // 1. Update invitation status
     // 2. Create member record
     // 3. Add user to group if exists
+    let memberId: number | null = null;
     await prisma.$transaction(async (tx) => {
       // Update invitation status
       await tx.eventInvitation.update({
@@ -371,10 +373,9 @@ router.post('/:id/invitations/:invitationId/accept', authMiddleware, async (req:
         },
       });
 
-      let member;
       if (!existingMember) {
         // Create member record with default location
-        member = await tx.member.create({
+        const newMember = await tx.member.create({
           data: {
             eventId,
             userId: currentUserUserId,
@@ -386,8 +387,9 @@ router.post('/:id/invitations/:invitationId/accept', authMiddleware, async (req:
             travelMode: 'transit',
           },
         });
+        memberId = newMember.id;
       } else {
-        member = existingMember;
+        memberId = existingMember.id;
       }
 
       // Add user to group if event has a group
@@ -414,32 +416,56 @@ router.post('/:id/invitations/:invitationId/accept', authMiddleware, async (req:
           });
         }
       }
-
-      // Trigger Pusher event for member joined
-      triggerEventChannel(eventId, 'member-joined', {
-        memberId: member.id,
-        nickname: member.nickname || member.userId || 'Unknown',
-        userId: member.userId,
-        shareLocation: member.shareLocation,
-        travelMode: member.travelMode,
-        createdAt: member.createdAt.toISOString(),
-      });
-
-      // Notify event owner
-      await notificationService.createNotification({
-        userId: invitation.event.ownerId,
-        type: 'EVENT_UPDATE',
-        title: '新成員加入',
-        body: `${user.name} 接受了你的邀請，加入活動「${invitation.event.name}」`,
-        data: {
-          eventId: invitation.event.id,
-          eventName: invitation.event.name,
-          memberId: member.id,
-          memberName: user.name,
-        },
-        sendPush: true,
-      });
+    }, {
+      timeout: 10000, // Increase timeout to 10 seconds for complex operations
     });
+
+    // Move external service calls outside transaction to avoid timeout
+    // These operations don't need to be part of the database transaction
+    // Re-fetch member to ensure we have the latest data
+    const finalMember = memberId ? await prisma.member.findUnique({
+      where: { id: memberId },
+      select: {
+        id: true,
+        userId: true,
+        nickname: true,
+        shareLocation: true,
+        travelMode: true,
+        createdAt: true,
+      },
+    }) : null;
+
+    if (finalMember) {
+      try {
+        // Trigger Pusher event for member joined
+        triggerEventChannel(eventId, 'member-joined', {
+          memberId: finalMember.id,
+          nickname: finalMember.nickname || finalMember.userId || 'Unknown',
+          userId: finalMember.userId,
+          shareLocation: finalMember.shareLocation,
+          travelMode: finalMember.travelMode,
+          createdAt: finalMember.createdAt.toISOString(),
+        });
+
+        // Notify event owner
+        await notificationService.createNotification({
+          userId: invitation.event.ownerId,
+          type: 'EVENT_UPDATE',
+          title: '新成員加入',
+          body: `${user.name} 接受了你的邀請，加入活動「${invitation.event.name}」`,
+          data: {
+            eventId: invitation.event.id,
+            eventName: invitation.event.name,
+            memberId: finalMember.id,
+            memberName: user.name,
+          },
+          sendPush: true,
+        });
+      } catch (externalError) {
+        // Log error but don't fail the request since database transaction already succeeded
+        console.error('Error sending external notifications (Pusher/push):', externalError);
+      }
+    }
 
     res.json({ success: true });
   } catch (error) {

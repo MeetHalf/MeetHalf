@@ -81,6 +81,11 @@ export default function Notifications() {
     [notificationId: number]: 'accepted' | 'rejected'
   }>({});
 
+  // Track loading states for accept/reject actions
+  const [loadingActions, setLoadingActions] = useState<{
+    [notificationId: number]: 'accept' | 'reject' | null
+  }>({});
+
   useEffect(() => {
     if (user) {
       loadNotifications();
@@ -117,22 +122,37 @@ export default function Notifications() {
 
   const handleAcceptFriendRequest = async (notification: Notification) => {
     if (notification.data?.requestId) {
-      await acceptRequest(notification.data.requestId);
-      setProcessedInvitations(prev => ({...prev, [notification.id]: 'accepted'}));
-      loadNotifications();
+      setLoadingActions(prev => ({...prev, [notification.id]: 'accept'}));
+      try {
+        await acceptRequest(notification.data.requestId);
+        setProcessedInvitations(prev => ({...prev, [notification.id]: 'accepted'}));
+        loadNotifications();
+      } catch (error) {
+        console.error('Failed to accept friend request:', error);
+      } finally {
+        setLoadingActions(prev => ({...prev, [notification.id]: null}));
+      }
     }
   };
 
   const handleRejectFriendRequest = async (notification: Notification) => {
     if (notification.data?.requestId) {
-      await rejectRequest(notification.data.requestId);
-      setProcessedInvitations(prev => ({...prev, [notification.id]: 'rejected'}));
-      loadNotifications();
+      setLoadingActions(prev => ({...prev, [notification.id]: 'reject'}));
+      try {
+        await rejectRequest(notification.data.requestId);
+        setProcessedInvitations(prev => ({...prev, [notification.id]: 'rejected'}));
+        loadNotifications();
+      } catch (error) {
+        console.error('Failed to reject friend request:', error);
+      } finally {
+        setLoadingActions(prev => ({...prev, [notification.id]: null}));
+      }
     }
   };
 
   const handleAcceptEventInvite = async (notification: Notification) => {
     if (notification.data?.eventId && notification.data?.invitationId) {
+      setLoadingActions(prev => ({...prev, [notification.id]: 'accept'}));
       try {
         await eventInvitationsApi.acceptInvitation(
           notification.data.eventId,
@@ -143,12 +163,15 @@ export default function Notifications() {
         navigate(`/events/${notification.data.eventId}`);
       } catch (error) {
         console.error('Failed to accept event invitation:', error);
+      } finally {
+        setLoadingActions(prev => ({...prev, [notification.id]: null}));
       }
     }
   };
 
   const handleRejectEventInvite = async (notification: Notification) => {
     if (notification.data?.eventId && notification.data?.invitationId) {
+      setLoadingActions(prev => ({...prev, [notification.id]: 'reject'}));
       try {
         await eventInvitationsApi.rejectInvitation(
           notification.data.eventId,
@@ -158,6 +181,8 @@ export default function Notifications() {
         loadNotifications();
       } catch (error) {
         console.error('Failed to reject event invitation:', error);
+      } finally {
+        setLoadingActions(prev => ({...prev, [notification.id]: null}));
       }
     }
   };
@@ -348,14 +373,25 @@ export default function Notifications() {
                             <Button
                               variant="contained"
                               size="small"
-                              startIcon={<Check size={16} />}
+                              startIcon={
+                                loadingActions[notification.id] === 'accept' ? (
+                                  <CircularProgress size={14} sx={{ color: 'white' }} />
+                                ) : (
+                                  <Check size={16} />
+                                )
+                              }
                               onClick={() => handleAcceptFriendRequest(notification)}
+                              disabled={loadingActions[notification.id] === 'accept' || loadingActions[notification.id] === 'reject'}
                               sx={{
                                 borderRadius: 3,
                                 bgcolor: '#22c55e',
                                 '&:hover': { bgcolor: '#16a34a' },
                                 textTransform: 'none',
                                 fontWeight: 700,
+                                '&:disabled': {
+                                  bgcolor: '#94a3b8',
+                                  color: 'white',
+                                },
                               }}
                             >
                               接受
@@ -363,14 +399,25 @@ export default function Notifications() {
                             <Button
                               variant="outlined"
                               size="small"
-                              startIcon={<X size={16} />}
+                              startIcon={
+                                loadingActions[notification.id] === 'reject' ? (
+                                  <CircularProgress size={14} />
+                                ) : (
+                                  <X size={16} />
+                                )
+                              }
                               onClick={() => handleRejectFriendRequest(notification)}
+                              disabled={loadingActions[notification.id] === 'accept' || loadingActions[notification.id] === 'reject'}
                               sx={{
                                 borderRadius: 3,
                                 borderColor: '#e2e8f0',
                                 color: '#64748b',
                                 textTransform: 'none',
                                 fontWeight: 700,
+                                '&:disabled': {
+                                  borderColor: '#cbd5e1',
+                                  color: '#94a3b8',
+                                },
                               }}
                             >
                               拒絕
@@ -408,14 +455,25 @@ export default function Notifications() {
                             <Button
                               variant="contained"
                               size="small"
-                              startIcon={<Check size={16} />}
+                              startIcon={
+                                loadingActions[notification.id] === 'accept' ? (
+                                  <CircularProgress size={14} sx={{ color: 'white' }} />
+                                ) : (
+                                  <Check size={16} />
+                                )
+                              }
                               onClick={() => handleAcceptEventInvite(notification)}
+                              disabled={loadingActions[notification.id] === 'accept' || loadingActions[notification.id] === 'reject'}
                               sx={{
                                 borderRadius: 3,
                                 bgcolor: '#2563eb',
                                 '&:hover': { bgcolor: '#1d4ed8' },
                                 textTransform: 'none',
                                 fontWeight: 700,
+                                '&:disabled': {
+                                  bgcolor: '#94a3b8',
+                                  color: 'white',
+                                },
                               }}
                             >
                               接受並加入
@@ -423,14 +481,25 @@ export default function Notifications() {
                             <Button
                               variant="outlined"
                               size="small"
-                              startIcon={<X size={16} />}
+                              startIcon={
+                                loadingActions[notification.id] === 'reject' ? (
+                                  <CircularProgress size={14} />
+                                ) : (
+                                  <X size={16} />
+                                )
+                              }
                               onClick={() => handleRejectEventInvite(notification)}
+                              disabled={loadingActions[notification.id] === 'accept' || loadingActions[notification.id] === 'reject'}
                               sx={{
                                 borderRadius: 3,
                                 borderColor: '#e2e8f0',
                                 color: '#64748b',
                                 textTransform: 'none',
                                 fontWeight: 700,
+                                '&:disabled': {
+                                  borderColor: '#cbd5e1',
+                                  color: '#94a3b8',
+                                },
                               }}
                             >
                               拒絕
@@ -439,11 +508,15 @@ export default function Notifications() {
                               variant="text"
                               size="small"
                               onClick={() => handleNotificationClick(notification)}
+                              disabled={loadingActions[notification.id] === 'accept' || loadingActions[notification.id] === 'reject'}
                               sx={{
                                 borderRadius: 3,
                                 color: '#2563eb',
                                 textTransform: 'none',
                                 fontWeight: 700,
+                                '&:disabled': {
+                                  color: '#94a3b8',
+                                },
                               }}
                             >
                               查看詳情
