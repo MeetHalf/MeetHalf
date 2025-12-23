@@ -2615,7 +2615,7 @@ export default function EventRoom() {
               {marking ? (
                 <CircularProgress size={24} sx={{ color: 'white' }} />
               ) : canMarkArrival ? (
-                "I'M HERE 🏁"
+                "我到了 🏁"
               ) : distanceToMeetingPoint !== null && distanceToMeetingPoint !== undefined ? (
                 `距離 ${Math.round(distanceToMeetingPoint as number)}m`
               ) : (
