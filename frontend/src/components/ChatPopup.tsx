@@ -27,7 +27,7 @@ interface ChatPopupProps {
 
 export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPopupProps) {
   const theme = useTheme();
-  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
   const { messages, loadMessages, sendMessage, markConversationAsRead, loading } = useChat(
     user?.userId ?? undefined,
@@ -104,15 +104,22 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
     <Dialog
       open={open}
       onClose={onClose}
-      fullScreen={fullScreen}
-      maxWidth="sm"
-      fullWidth
+      fullScreen={false}
+      maxWidth={false}
+      fullWidth={false}
       PaperProps={{
         sx: {
-          height: fullScreen ? '100%' : '80vh',
-          maxHeight: '80vh',
+          width: isMobile ? '90vw' : '480px',
+          maxWidth: isMobile ? '90vw' : '90vw',
+          height: isMobile ? '80vh' : '75vh',
+          minHeight: isMobile ? '400px' : '400px',
+          maxHeight: isMobile ? '80vh' : '75vh',
+          borderRadius: '2rem',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+          margin: 'auto',
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
         },
       }}
     >
@@ -124,9 +131,10 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          py: 2,
-          px: 3,
+          py: 2.5,
+          px: isMobile ? 2.5 : 3,
           flexShrink: 0,
+          borderRadius: '2rem 2rem 0 0',
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -173,16 +181,18 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
           flexDirection: 'column',
           overflow: 'hidden',
           flex: 1,
+          minHeight: 0, // 確保 flex 子元素可以正確縮小
         }}
       >
         <Box
           sx={{
             flex: 1,
             overflowY: 'auto',
-            p: 2,
+            p: isMobile ? 2 : 2.5,
             display: 'flex',
             flexDirection: 'column',
             gap: 1.5,
+            minHeight: 0, // 確保可以正確滾動
           }}
         >
           {loading ? (
@@ -293,13 +303,14 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
       {/* Input Area */}
       <Box
         sx={{
-          p: 2,
+          p: isMobile ? 2 : 2.5,
           bgcolor: 'white',
           borderTop: '1px solid #f1f5f9',
           display: 'flex',
           gap: 1.5,
           alignItems: 'flex-end',
           flexShrink: 0,
+          borderRadius: '0 0 2rem 2rem',
         }}
       >
         <TextField
