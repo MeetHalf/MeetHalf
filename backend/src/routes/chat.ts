@@ -13,6 +13,56 @@ import {
 const router = Router();
 
 /**
+ * @swagger
+ * /chat/messages:
+ *   post:
+ *     summary: Send a message
+ *     tags: [Chat]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 minLength: 1
+ *                 description: Message content
+ *               receiverId:
+ *                 type: string
+ *                 description: Receiver user ID (for direct messages)
+ *               groupId:
+ *                 type: integer
+ *                 description: Group ID (for group messages)
+ *     responses:
+ *       200:
+ *         description: Message sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   $ref: '#/components/schemas/ChatMessage'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * POST /api/chat/messages - Send a message
  */
 router.post('/messages', authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -53,6 +103,68 @@ router.post('/messages', authMiddleware, async (req: Request, res: Response): Pr
   }
 });
 
+/**
+ * @swagger
+ * /chat/messages:
+ *   get:
+ *     summary: Get messages
+ *     tags: [Chat]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: receiverId
+ *         schema:
+ *           type: string
+ *         description: Receiver user ID (for direct messages)
+ *       - in: query
+ *         name: groupId
+ *         schema:
+ *           type: integer
+ *         description: Group ID (for group messages)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Maximum number of messages to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of messages to skip
+ *     responses:
+ *       200:
+ *         description: Messages retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 messages:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ChatMessage'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Not a member of this group
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 /**
  * GET /api/chat/messages - Get messages
  */
@@ -100,6 +212,44 @@ router.get('/messages', authMiddleware, async (req: Request, res: Response): Pro
 });
 
 /**
+ * @swagger
+ * /chat/messages/{id}/read:
+ *   put:
+ *     summary: Mark message as read
+ *     tags: [Chat]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Message ID
+ *     responses:
+ *       200:
+ *         description: Message marked as read successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * PUT /api/chat/messages/:id/read - Mark message as read
  */
 router.put('/messages/:id/read', authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -134,6 +284,33 @@ router.put('/messages/:id/read', authMiddleware, async (req: Request, res: Respo
 });
 
 /**
+ * @swagger
+ * /chat/conversations:
+ *   get:
+ *     summary: Get conversation list
+ *     tags: [Chat]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Conversations retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 conversations:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Conversation'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * GET /api/chat/conversations - Get conversation list
  */
 router.get('/conversations', authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -165,6 +342,53 @@ router.get('/conversations', authMiddleware, async (req: Request, res: Response)
   }
 });
 
+/**
+ * @swagger
+ * /chat/conversations/read:
+ *   put:
+ *     summary: Mark conversation as read
+ *     tags: [Chat]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               receiverId:
+ *                 type: string
+ *                 description: Receiver user ID (for direct messages)
+ *               groupId:
+ *                 type: integer
+ *                 description: Group ID (for group messages)
+ *     responses:
+ *       200:
+ *         description: Conversation marked as read successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 count:
+ *                   type: integer
+ *                   description: Number of messages marked as read
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 /**
  * PUT /api/chat/conversations/read - Mark conversation as read
  */
@@ -204,6 +428,32 @@ router.put('/conversations/read', authMiddleware, async (req: Request, res: Resp
 });
 
 /**
+ * @swagger
+ * /chat/unread-count:
+ *   get:
+ *     summary: Get unread message count
+ *     tags: [Chat]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Unread count retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 count:
+ *                   type: integer
+ *                   description: Total number of unread messages
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * GET /api/chat/unread-count - Get unread message count
  */
 router.get('/unread-count', authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -229,6 +479,46 @@ router.get('/unread-count', authMiddleware, async (req: Request, res: Response):
   }
 });
 
+/**
+ * @swagger
+ * /chat/search:
+ *   get:
+ *     summary: Search messages
+ *     tags: [Chat]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Search query
+ *     responses:
+ *       200:
+ *         description: Search results retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 messages:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ChatMessage'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 /**
  * GET /api/chat/search - Search messages
  */
