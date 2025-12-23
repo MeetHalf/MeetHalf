@@ -89,8 +89,8 @@ export default function CreateEvent() {
   // Form state
   const [formData, setFormData] = useState({
     name: '',
-    startTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 明天
-    endTime: new Date(Date.now() + 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000), // 明天 + 2小時
+    startTime: new Date(), // 今天
+    endTime: new Date(Date.now() + 2 * 60 * 60 * 1000), // 今天 + 2小時
     useMeetHalf: false,
     meetingPointName: '',
     meetingPointAddress: '',
