@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { getUserUserId } from '../lib/userUtils';
 import { chatService } from '../services/ChatService';
+import { logger } from '../lib/logger';
 import {
   sendMessageSchema,
   getMessagesSchema,
@@ -152,7 +153,7 @@ router.get('/conversations', authMiddleware, async (req: Request, res: Response)
     }
 
     const conversations = await chatService.getConversations(userUserId);
-    console.log('[Chat] Conversations fetched:', { count: conversations.length, userId: userUserId });
+    logger.debug('[Chat] Conversations fetched:', { count: conversations.length, userId: userUserId });
     res.json({ conversations });
   } catch (error) {
     console.error('[Chat] Error fetching conversations:', {

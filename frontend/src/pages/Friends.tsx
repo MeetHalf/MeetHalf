@@ -162,7 +162,7 @@ export default function Friends() {
         {/* Error Alert */}
         {error && (
           <Alert severity="error" sx={{ mb: 2, borderRadius: 4 }} onClose={() => {}}>
-            {error}
+            {typeof error === 'string' ? error : 'An error occurred'}
           </Alert>
         )}
 

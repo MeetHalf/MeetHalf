@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 export class ChatRepository {
   /**
@@ -120,7 +121,7 @@ export class ChatRepository {
    * Get conversation list for a user (recent chats)
    */
   async getConversations(userId: string) {
-    console.log('[ChatRepository] Getting conversations for user:', userId);
+    logger.debug('[ChatRepository] Getting conversations for user:', userId);
     // Get all messages where user is sender or receiver
     const messages = await prisma.chatMessage.findMany({
       where: {
@@ -314,7 +315,7 @@ export class ChatRepository {
         return 0;
       }
     );
-    console.log('[ChatRepository] Conversations found:', conversations.length);
+    logger.debug('[ChatRepository] Conversations found:', conversations.length);
     return conversations;
   }
 

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Typography,
@@ -32,31 +33,27 @@ const getEventStatus = (event: Event): EventStatus => {
 
 export default function Events() {
   const navigate = useNavigate();
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteToken, setInviteToken] = useState('');
   const [resolving, setResolving] = useState(false);
 
-  const fetchEvents = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Use React Query to fetch events
+  const {
+    data: events = [],
+    isLoading: loading,
+    error: queryError,
+  } = useQuery<Event[]>({
+    queryKey: ['events'],
+    queryFn: async () => {
       const response = await eventsApi.getEvents();
-      setEvents(response.events);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load events');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return response.events;
+    },
+    staleTime: 30 * 1000, // 30 seconds - events don't change too frequently
+  });
 
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  const error = queryError instanceof Error ? queryError.message : (queryError ? 'Failed to load events' : null);
 
   const { activeEvents, upcomingEvents, pastEvents } = useMemo(() => {
     const active: Event[] = [];
@@ -122,7 +119,7 @@ export default function Events() {
       {/* Main Content */}
       <Box sx={{ p: 3 }}>
         {error && (
-          <Alert severity="error" sx={{ mb: 3, borderRadius: 4 }} onClose={() => setError(null)}>
+          <Alert severity="error" sx={{ mb: 3, borderRadius: 4 }}>
             {error}
           </Alert>
         )}

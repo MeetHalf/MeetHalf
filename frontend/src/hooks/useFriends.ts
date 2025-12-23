@@ -1,157 +1,185 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { friendsApi } from '../api/friends';
 import { Friend, FriendRequest, User } from '../types/friend';
 
 export function useFriends() {
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [requests, setRequests] = useState<FriendRequest[]>([]);
-  const [searchResults, setSearchResults] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [requestType, setRequestType] = useState<'received' | 'sent'>('received');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Load friends list
-  const loadFriends = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('[useFriends] Loading friends...');
+  // Query for friends list
+  const {
+    data: friends = [],
+    isLoading: friendsLoading,
+    error: friendsError,
+    refetch: loadFriends,
+  } = useQuery<Friend[]>({
+    queryKey: ['friends'],
+    queryFn: async () => {
       const { friends: data } = await friendsApi.getFriends();
-      console.log('[useFriends] Friends loaded:', data);
-      setFriends(data);
-    } catch (err: any) {
-      const errorMessage = err?.response?.data?.message || err?.message || 'Failed to load friends';
-      console.error('[useFriends] Error loading friends:', {
-        message: errorMessage,
-        status: err?.response?.status,
-        data: err?.response?.data,
-        fullError: err,
+      return data;
+    },
+    staleTime: 30 * 1000, // 30 seconds
+  });
+
+  // Query for friend requests
+  const {
+    data: requests = [],
+    isLoading: requestsLoading,
+    error: requestsError,
+    refetch: loadRequests,
+  } = useQuery<FriendRequest[]>({
+    queryKey: ['friendRequests', requestType],
+    queryFn: async () => {
+      const { requests: data } = await friendsApi.getRequests(requestType);
+      return data;
+    },
+    staleTime: 10 * 1000, // 10 seconds
+  });
+
+  // Query for user search (only when query is provided)
+  const {
+    data: searchResults = [],
+    isLoading: searchLoading,
+  } = useQuery<User[]>({
+    queryKey: ['userSearch', searchQuery],
+    queryFn: async () => {
+      if (!searchQuery.trim()) return [];
+      const { users } = await friendsApi.searchUsers(searchQuery);
+      return users;
+    },
+    enabled: !!searchQuery.trim(),
+    staleTime: 30 * 1000, // 30 seconds
+  });
+
+  // Mutation for sending friend request
+  const sendRequestMutation = useMutation({
+    mutationFn: async (toUserId: string) => {
+      await friendsApi.sendRequest(toUserId);
+      return toUserId;
+    },
+    onSuccess: () => {
+      // Invalidate requests to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+    },
+  });
+
+  // Mutation for accepting friend request
+  const acceptRequestMutation = useMutation({
+    mutationFn: async (requestId: number) => {
+      await friendsApi.acceptRequest(requestId);
+      return requestId;
+    },
+    onSuccess: (requestId) => {
+      // Optimistically remove from requests
+      queryClient.setQueryData<FriendRequest[]>(['friendRequests', requestType], (old = []) => {
+        return old.filter((r) => r.id !== requestId);
       });
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      // Invalidate friends to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['friends'] });
+      // Invalidate all request types
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+    },
+  });
 
-  // Load friend requests
-  const loadRequests = useCallback(async (type: 'received' | 'sent' = 'received') => {
-    try {
-      setLoading(true);
-      setError(null);
-      const { requests: data } = await friendsApi.getRequests(type);
-      setRequests(data);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load requests');
-      console.error('Error loading requests:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Mutation for rejecting friend request
+  const rejectRequestMutation = useMutation({
+    mutationFn: async (requestId: number) => {
+      await friendsApi.rejectRequest(requestId);
+      return requestId;
+    },
+    onSuccess: (requestId) => {
+      // Optimistically remove from requests
+      queryClient.setQueryData<FriendRequest[]>(['friendRequests', requestType], (old = []) => {
+        return old.filter((r) => r.id !== requestId);
+      });
+      // Invalidate all request types
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+    },
+  });
 
-  // Send friend request
+  // Mutation for deleting friend
+  const deleteFriendMutation = useMutation({
+    mutationFn: async (friendId: string) => {
+      await friendsApi.deleteFriend(friendId);
+      return friendId;
+    },
+    onSuccess: (friendId) => {
+      // Optimistically remove from friends
+      queryClient.setQueryData<Friend[]>(['friends'], (old = []) => {
+        return old.filter((f) => f.userId !== friendId);
+      });
+    },
+  });
+
+  // Wrapper functions for backward compatibility
   const sendRequest = useCallback(async (toUserId: string) => {
     try {
-      setLoading(true);
-      setError(null);
-      await friendsApi.sendRequest(toUserId);
+      await sendRequestMutation.mutateAsync(toUserId);
       return true;
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to send request');
       console.error('Error sending request:', err);
       return false;
-    } finally {
-      setLoading(false);
     }
-  }, []);
+  }, [sendRequestMutation]);
 
-  // Accept friend request
   const acceptRequest = useCallback(async (requestId: number) => {
     try {
-      setLoading(true);
-      setError(null);
-      await friendsApi.acceptRequest(requestId);
-      // Remove from requests list
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
-      // Reload friends to include new friend
-      await loadFriends();
+      await acceptRequestMutation.mutateAsync(requestId);
       return true;
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to accept request');
       console.error('Error accepting request:', err);
       return false;
-    } finally {
-      setLoading(false);
     }
-  }, [loadFriends]);
+  }, [acceptRequestMutation]);
 
-  // Reject friend request
   const rejectRequest = useCallback(async (requestId: number) => {
     try {
-      setLoading(true);
-      setError(null);
-      await friendsApi.rejectRequest(requestId);
-      // Remove from requests list
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
+      await rejectRequestMutation.mutateAsync(requestId);
       return true;
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to reject request');
       console.error('Error rejecting request:', err);
       return false;
-    } finally {
-      setLoading(false);
     }
-  }, []);
+  }, [rejectRequestMutation]);
 
-  // Delete friend
   const deleteFriend = useCallback(async (friendId: string) => {
     try {
-      setLoading(true);
-      setError(null);
-      await friendsApi.deleteFriend(friendId);
-      // Remove from friends list
-      setFriends((prev) => prev.filter((f) => f.userId !== friendId));
+      await deleteFriendMutation.mutateAsync(friendId);
       return true;
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to delete friend');
       console.error('Error deleting friend:', err);
       return false;
-    } finally {
-      setLoading(false);
     }
+  }, [deleteFriendMutation]);
+
+  const searchUsers = useCallback(async (query: string) => {
+    setSearchQuery(query);
+    // Query will automatically run when searchQuery changes
   }, []);
 
-  // Search users
-  const searchUsers = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const { users } = await friendsApi.searchUsers(query);
-      setSearchResults(users);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to search users');
-      console.error('Error searching users:', err);
-    } finally {
-      setLoading(false);
-    }
+  // Helper to change request type
+  const setRequestTypeAndLoad = useCallback((type: 'received' | 'sent') => {
+    setRequestType(type);
+    // Query will automatically refetch when requestType changes
   }, []);
 
   return {
     friends,
     requests,
     searchResults,
-    loading,
-    error,
+    loading: friendsLoading || requestsLoading || searchLoading,
+    error: friendsError || requestsError,
     loadFriends,
-    loadRequests,
+    loadRequests: () => loadRequests(),
     sendRequest,
     acceptRequest,
     rejectRequest,
     deleteFriend,
     searchUsers,
+    // Additional helpers
+    requestType,
+    setRequestType: setRequestTypeAndLoad,
   };
 }
-

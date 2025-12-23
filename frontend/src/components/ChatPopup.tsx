@@ -42,7 +42,7 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
   // Load messages when dialog opens
   useEffect(() => {
     if (open && user && groupId) {
-      loadMessages({ groupId });
+      loadMessages();
       markConversationAsRead({ groupId });
     }
   }, [open, user, groupId, loadMessages, markConversationAsRead]);

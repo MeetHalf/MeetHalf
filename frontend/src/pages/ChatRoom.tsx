@@ -106,16 +106,12 @@ export default function ChatRoom() {
   // Load messages and mark as read
   useEffect(() => {
     if (user && type && id) {
-      const loadData = async () => {
-        if (type === 'user') {
-          await loadMessages({ receiverId: id });
-          await markConversationAsRead({ receiverId: id });
-        } else {
-          await loadMessages({ groupId: parseInt(id) });
-          await markConversationAsRead({ groupId: parseInt(id) });
-        }
-      };
-      loadData();
+      loadMessages();
+      if (type === 'user') {
+        markConversationAsRead({ receiverId: id });
+      } else {
+        markConversationAsRead({ groupId: parseInt(id) });
+      }
     }
   }, [user, type, id, loadMessages, markConversationAsRead]);
 

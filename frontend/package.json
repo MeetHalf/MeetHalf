@@ -21,6 +21,7 @@
     "@mui/material": "^7.3.4",
     "@mui/x-date-pickers": "^8.19.0",
     "@pusher/push-notifications-web": "^2.1.0",
+    "@tanstack/react-query": "^5.90.12",
     "axios": "^1.6.5",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.26",
