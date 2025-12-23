@@ -122,6 +122,7 @@ export class ChatRepository {
    */
   async getConversations(userId: string) {
     logger.debug('[ChatRepository] Getting conversations for user:', userId);
+    const now = new Date(); // Use single now variable for the entire function
     // Get all messages where user is sender or receiver
     const messages = await prisma.chatMessage.findMany({
       where: {
@@ -150,6 +151,13 @@ export class ChatRepository {
                 avatar: true,
               },
             },
+            events: {
+              select: {
+                id: true,
+                status: true,
+                endTime: true,
+              },
+            },
           },
         },
       },
@@ -166,6 +174,21 @@ export class ChatRepository {
       let avatar: string | null = null;
 
       if (message.groupId) {
+        // Group conversation - check if all associated events have ended
+        const group = message.group;
+        if (group && group.events && group.events.length > 0) {
+          // Check if all events have ended by comparing endTime with current time
+          const allEventsEnded = group.events.every((event: any) => {
+            if (!event.endTime) return false; // If no endTime, consider it not ended
+            return new Date(event.endTime) < now;
+          });
+
+          // Skip this group if all events have ended
+          if (allEventsEnded) {
+            continue;
+          }
+        }
+
         // Group conversation
         key = `group-${message.groupId}`;
         type = 'group';
@@ -222,6 +245,7 @@ export class ChatRepository {
     }
 
     // Add groups that user is a member of but have no messages yet
+    // Also filter out groups where all associated events have ended
     const userGroups = await prisma.group.findMany({
       where: {
         members: {
@@ -234,22 +258,56 @@ export class ChatRepository {
         id: true,
         name: true,
         createdAt: true,
+        events: {
+          select: {
+            id: true,
+            status: true,
+            endTime: true,
+          },
+        },
       },
     });
 
     // Add groups without messages to the conversation map
+    // Filter out groups where all associated events have ended
     for (const group of userGroups) {
-      const key = `group-${group.id}`;
-      if (!conversationMap.has(key)) {
-        conversationMap.set(key, {
-          type: 'group',
-          id: group.id,
-          name: group.name,
-          avatar: null,
-          lastMessage: null,
-          unreadCount: 0,
-          createdAt: group.createdAt, // Use group creation time for sorting
-        });
+      // If group has no events, show it (manually created group)
+      if (group.events.length === 0) {
+        const key = `group-${group.id}`;
+        if (!conversationMap.has(key)) {
+          conversationMap.set(key, {
+            type: 'group',
+            id: group.id,
+            name: group.name,
+            avatar: null,
+            lastMessage: null,
+            unreadCount: 0,
+            createdAt: group.createdAt, // Use group creation time for sorting
+          });
+        }
+        continue;
+      }
+
+      // Check if all events have ended by comparing endTime with current time
+      const allEventsEnded = group.events.every((event) => {
+        if (!event.endTime) return false; // If no endTime, consider it not ended
+        return new Date(event.endTime) < now;
+      });
+
+      // Only add group if not all events have ended
+      if (!allEventsEnded) {
+        const key = `group-${group.id}`;
+        if (!conversationMap.has(key)) {
+          conversationMap.set(key, {
+            type: 'group',
+            id: group.id,
+            name: group.name,
+            avatar: null,
+            lastMessage: null,
+            unreadCount: 0,
+            createdAt: group.createdAt, // Use group creation time for sorting
+          });
+        }
       }
     }
 

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { notificationService } from '../services/NotificationService';
+import { eventService } from '../services/EventService';
 
 const router = Router();
 
@@ -32,6 +33,15 @@ async function checkEventReminders(req: Request, res: Response): Promise<void> {
 
   try {
     const now = new Date();
+    
+    // Update event statuses based on current time (upcoming -> ongoing -> ended)
+    try {
+      await eventService.updateEventStatuses();
+      console.log('[CRON] Event statuses updated');
+    } catch (statusError) {
+      console.error('[CRON] Error updating event statuses:', statusError);
+      // Continue with reminders even if status update fails
+    }
     // Calculate the time window: events starting in 30 minutes (±1 minute tolerance)
     const reminderTimeMin = new Date(now.getTime() + 29 * 60 * 1000); // 29 minutes
     const reminderTimeMax = new Date(now.getTime() + 31 * 60 * 1000); // 31 minutes
