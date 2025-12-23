@@ -61,6 +61,7 @@ export interface PokeRecord {
 export interface RankingItem {
   memberId: number;
   nickname: string;
+  avatar?: string | null;
   arrivalTime?: string;
   status: MemberStatus;
   lateMinutes?: number;

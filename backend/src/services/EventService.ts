@@ -61,18 +61,20 @@ export class EventService {
       memberId: number;
       nickname: string;
       userId: string | null;
+      avatar: string | null;
       arrivalTime: Date | null;
       status: 'early' | 'ontime' | 'late' | 'absent';
       lateMinutes: number | null;
       rank: number | null;
       pokeCount: number;
     }> = members
-      .map((member) => {
+      .map((member: any) => {
         if (!member.arrivalTime) {
           return {
             memberId: member.id,
             nickname: member.nickname || member.userId || 'Unknown',
             userId: member.userId,
+            avatar: member.avatar || null,
             arrivalTime: null,
             status: 'absent' as const,
             lateMinutes: null,
@@ -86,6 +88,7 @@ export class EventService {
           memberId: member.id,
           nickname: member.nickname || member.userId || 'Unknown',
           userId: member.userId,
+          avatar: member.avatar || null,
           arrivalTime: member.arrivalTime,
           status: arrivalStatus.status,
           lateMinutes: arrivalStatus.lateMinutes,
@@ -118,6 +121,10 @@ export class EventService {
       }
     }
 
+    // Get poke statistics (mostPoked, mostPoker, totalPokes)
+    const pokeStats = await pokeRecordRepository.getPokeStats(eventId);
+    const memberMap = new Map(members.map((m) => [m.id, m.nickname || m.userId || 'Unknown']));
+
     // Calculate stats
     const arrivedCount = rankings.filter((r) => r.arrivalTime !== null).length;
     const lateCount = rankings.filter((r) => r.status === 'late').length;
@@ -131,6 +138,27 @@ export class EventService {
         arrivedCount,
         lateCount,
         absentCount,
+        totalPokes: pokeStats.totalPokes,
+      },
+      pokes: {
+        mostPoked: pokeStats.mostPoked
+          ? {
+              nickname: memberMap.get(pokeStats.mostPoked.memberId) || 'Unknown',
+              count: pokeStats.mostPoked.count,
+            }
+          : {
+              nickname: '無',
+              count: 0,
+            },
+        mostPoker: pokeStats.mostPoker
+          ? {
+              nickname: memberMap.get(pokeStats.mostPoker.memberId) || 'Unknown',
+              count: pokeStats.mostPoker.count,
+            }
+          : {
+              nickname: '無',
+              count: 0,
+            },
       },
     };
   }
