@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   TextField,
@@ -22,6 +22,7 @@ import { zhTW } from 'date-fns/locale';
 export default function ChatRoom() {
   const { type, id } = useParams<{ type: 'user' | 'group'; id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const chatId = id ? (type === 'group' ? parseInt(id) : id) : undefined;
   const { messages, conversations, loadMessages, loadConversations, sendMessage, markConversationAsRead, loading } = useChat(user?.userId ?? undefined, type ?? undefined, chatId);
@@ -38,9 +39,21 @@ export default function ChatRoom() {
   const [groupInfo, setGroupInfo] = useState<Group | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  // Load conversations to get chat name and avatar
+  // Initialize from location.state if available (passed from previous page)
   useEffect(() => {
-    if (user) {
+    const state = location.state as { conversation?: { name: string; avatar: string | null } } | null;
+    if (state?.conversation) {
+      setChatName(state.conversation.name);
+      setChatAvatar(state.conversation.avatar);
+      setConversationsLoaded(true); // Mark as loaded since we have the data
+      return; // Don't load conversations if we already have the data
+    }
+  }, [location.state]);
+
+  // Load conversations to get chat name and avatar (only if not provided via location.state)
+  useEffect(() => {
+    const state = location.state as { conversation?: { name: string; avatar: string | null } } | null;
+    if (user && !state?.conversation) {
       loadConversations()
         .then(() => {
           setConversationsLoaded(true);
@@ -50,10 +63,12 @@ export default function ChatRoom() {
           setConversationsLoaded(true); // Still mark as loaded even on error
         });
     }
-  }, [user, loadConversations]);
+  }, [user, loadConversations, location.state]);
 
-  // Find conversation info from conversations list
+  // Find conversation info from conversations list (only if not already set from location.state)
   useEffect(() => {
+    if (chatName) return; // Already set from location.state
+
     if (conversations.length > 0 && type && id) {
       const conversation = conversations.find((conv) => {
         if (type === 'user') {
