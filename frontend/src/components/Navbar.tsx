@@ -7,17 +7,22 @@ import { useNotifications } from '../hooks/useNotifications';
 export default function Navbar() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { unreadCount } = useNotifications(user?.userId);
+  const { unreadCount } = useNotifications(user?.userId || undefined);
 
   return (
     <Box
       sx={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000,
         bgcolor: 'white',
         borderBottom: '1px solid',
         borderColor: '#f1f5f9',
         px: 3,
         pt: 5,
         pb: 3,
+        backdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
