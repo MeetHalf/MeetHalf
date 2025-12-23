@@ -61,6 +61,11 @@ export class NotificationService {
           url = `/events/${notification.data.eventId}`;
         }
         break;
+      case 'EVENT_UPDATE':
+        if (notification.data?.eventId) {
+          url = `/events/${notification.data.eventId}`;
+        }
+        break;
       default:
         url = '/notifications';
     }
