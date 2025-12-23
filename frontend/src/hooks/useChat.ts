@@ -40,7 +40,7 @@ function deduplicateMessages(prev: ChatMessage[], newMessage: ChatMessage): Chat
   return [...prev, newMessage];
 }
 
-export function useChat(userId?: string, type?: 'user' | 'group', id?: string | number) {
+export function useChat(userId?: string, type?: 'user' | 'group', id?: string) {
   const queryClient = useQueryClient();
 
   // Query for conversations list
@@ -60,7 +60,7 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
   });
 
   // Query for messages in current conversation
-  const chatId = id ? (type === 'group' ? parseInt(String(id)) : id) : undefined;
+  const chatId = id;
   const {
     data: messages = [],
     isLoading: messagesLoading,
@@ -70,11 +70,11 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     queryKey: ['messages', type, chatId],
     queryFn: async () => {
       if (!type || !id) return [];
-      const params: { receiverId?: string; groupId?: number } = {};
+      const params: { receiverId?: string; groupId?: string } = {};
       if (type === 'user') {
-        params.receiverId = String(id);
+        params.receiverId = id;
       } else {
-        params.groupId = parseInt(String(id));
+        params.groupId = id;
       }
       const { messages: data } = await chatApi.getMessages(params);
       return data;
@@ -100,7 +100,7 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
 
   // Mutation for sending messages with optimistic update
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ content, receiverId, groupId }: { content: string; receiverId?: string; groupId?: number }) => {
+    mutationFn: async ({ content, receiverId, groupId }: { content: string; receiverId?: string; groupId?: string }) => {
       const { message } = await chatApi.sendMessage({ content, receiverId, groupId });
       return message;
     },
@@ -177,7 +177,7 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
 
   // Mutation for marking conversation as read
   const markConversationAsReadMutation = useMutation({
-    mutationFn: async (params: { receiverId?: string; groupId?: number }) => {
+    mutationFn: async (params: { receiverId?: string; groupId?: string }) => {
       const result = await chatApi.markConversationAsRead(params);
       return result.count;
     },
@@ -270,12 +270,12 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
   }, [userId, queryClient]);
 
   // Wrapper functions for backward compatibility
-  const loadMessagesWrapper = useCallback(async (_params?: { receiverId?: string; groupId?: number; limit?: number; offset?: number }) => {
+  const loadMessagesWrapper = useCallback(async (_params?: { receiverId?: string; groupId?: string; limit?: number; offset?: number }) => {
     // Parameters are ignored because query is already based on type and id
     return loadMessages();
   }, [loadMessages]);
 
-  const sendMessage = useCallback(async (content: string, receiverId?: string, groupId?: number) => {
+  const sendMessage = useCallback(async (content: string, receiverId?: string, groupId?: string) => {
     try {
       const message = await sendMessageMutation.mutateAsync({ content, receiverId, groupId });
       return message;
@@ -289,7 +289,7 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     markAsReadMutation.mutate(messageId);
   }, [markAsReadMutation]);
 
-  const markConversationAsRead = useCallback(async (params: { receiverId?: string; groupId?: number }) => {
+  const markConversationAsRead = useCallback(async (params: { receiverId?: string; groupId?: string }) => {
     return await markConversationAsReadMutation.mutateAsync(params);
   }, [markConversationAsReadMutation]);
 

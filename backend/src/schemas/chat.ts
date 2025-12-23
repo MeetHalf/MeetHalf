@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const sendMessageSchema = z.object({
   content: z.string().min(1, 'Message content is required').max(5000, 'Message too long'),
   receiverId: z.string().optional(),
-  groupId: z.number().int().positive().optional(),
+  groupId: z.string().min(1).optional(),
 }).refine(
   (data) => {
     // Either receiverId or groupId must be provided, but not both
@@ -17,7 +17,7 @@ export const sendMessageSchema = z.object({
 
 export const getMessagesSchema = z.object({
   receiverId: z.string().optional(),
-  groupId: z.coerce.number().int().positive().optional(),
+  groupId: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 }).refine(

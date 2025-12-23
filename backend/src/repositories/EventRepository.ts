@@ -1,11 +1,12 @@
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { nanoid } from 'nanoid';
 
 export class EventRepository {
   /**
    * Find event by ID with members (including user avatars)
    */
-  async findById(id: number) {
+  async findById(id: string) {
     const event = await prisma.event.findUnique({
       where: { id },
       include: {
@@ -111,11 +112,12 @@ export class EventRepository {
     meetingPointAddress?: string | null;
     status?: 'upcoming' | 'ongoing' | 'ended';
     useMeetHalf?: boolean;
-    groupId?: number | null;
+    groupId?: string | null;
     memberUserId?: string | null;
   }) {
     return prisma.event.create({
       data: {
+        id: nanoid(12),
         name: data.name,
         ownerId: data.ownerId,
         startTime: data.startTime,
@@ -149,7 +151,7 @@ export class EventRepository {
   /**
    * Update event
    */
-  async update(id: number, data: Partial<{
+  async update(id: string, data: Partial<{
     name: string;
     meetingPointLat: number | null;
     meetingPointLng: number | null;
@@ -159,7 +161,7 @@ export class EventRepository {
     endTime: Date;
     status: 'upcoming' | 'ongoing' | 'ended';
     useMeetHalf: boolean;
-    groupId: number | null;
+    groupId: string | null;
   }>) {
     return prisma.event.update({
       where: { id },
@@ -208,7 +210,7 @@ export class EventRepository {
   /**
    * Delete event
    */
-  async delete(id: number) {
+  async delete(id: string) {
     return prisma.event.delete({
       where: { id },
     });

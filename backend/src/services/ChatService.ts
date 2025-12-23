@@ -12,7 +12,7 @@ export class ChatService {
     content: string;
     senderId: string;
     receiverId?: string;
-    groupId?: number;
+    groupId?: string;
   }) {
     // Validate that either receiverId or groupId is provided
     if (!data.receiverId && !data.groupId) {
@@ -130,7 +130,7 @@ export class ChatService {
   async getMessages(data: {
     userId: string;
     receiverId?: string;
-    groupId?: number;
+    groupId?: string;
     limit?: number;
     offset?: number;
   }) {

@@ -57,7 +57,7 @@ export class EventService {
   /**
    * Get event result (rankings)
    */
-  async getEventResult(eventId: number) {
+  async getEventResult(eventId: string) {
     const event = await eventRepository.findById(eventId);
     if (!event) {
       throw new Error('Event not found');

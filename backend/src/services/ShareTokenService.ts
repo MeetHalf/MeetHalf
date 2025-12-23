@@ -66,7 +66,7 @@ export class ShareTokenService {
   /**
    * 根據 token 獲取 event ID
    */
-  async getEventIdByToken(token: string): Promise<number | null> {
+  async getEventIdByToken(token: string): Promise<string | null> {
     const shareToken = await prisma.shareToken.findUnique({
       where: { token },
       select: { eventId: true },
@@ -78,7 +78,7 @@ export class ShareTokenService {
   /**
    * 根據 event ID 獲取 token
    */
-  async getTokenByEventId(eventId: number): Promise<string | null> {
+  async getTokenByEventId(eventId: string): Promise<string | null> {
     const shareToken = await prisma.shareToken.findFirst({
       where: { eventId },
       select: { token: true },
@@ -90,7 +90,7 @@ export class ShareTokenService {
   /**
    * 確保 event 有 share token（如果沒有則生成）
    */
-  async ensureToken(eventId: number): Promise<string> {
+  async ensureToken(eventId: string): Promise<string> {
     const existingToken = await this.getTokenByEventId(eventId);
     if (existingToken) {
       return existingToken;

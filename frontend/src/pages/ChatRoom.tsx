@@ -25,7 +25,7 @@ export default function ChatRoom() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const chatId = id ? (type === 'group' ? parseInt(id) : id) : undefined;
+  const chatId = id ? id : undefined;
   const { messages, conversations, loadMessages, loadConversations, sendMessage, markConversationAsRead, loading } = useChat(user?.userId ?? undefined, type ?? undefined, chatId);
   
   const [inputMessage, setInputMessage] = useState('');
@@ -40,10 +40,10 @@ export default function ChatRoom() {
   
   // Use React Query for group info (with cache)
   const { data: groupData, isLoading: loadingMembers } = useQuery<{ group: Group }>({
-    queryKey: ['group', type === 'group' ? parseInt(id || '0') : null],
+    queryKey: ['group', type === 'group' ? id : null],
     queryFn: async () => {
       if (type !== 'group' || !id) throw new Error('Not a group chat');
-      return await groupsApi.getGroup(parseInt(id));
+      return await groupsApi.getGroup(id);
     },
     enabled: type === 'group' && !!id && membersDialogOpen, // Only fetch when dialog is open
     staleTime: 30 * 1000, // 30 seconds
@@ -86,7 +86,7 @@ export default function ChatRoom() {
         if (type === 'user') {
           return conv.type === 'user' && conv.id === id;
         } else {
-          return conv.type === 'group' && conv.id === parseInt(id);
+          return conv.type === 'group' && conv.id === id;
         }
       });
 
@@ -134,7 +134,7 @@ export default function ChatRoom() {
         if (type === 'user') {
           markConversationAsRead({ receiverId: id });
         } else {
-          markConversationAsRead({ groupId: parseInt(id) });
+          markConversationAsRead({ groupId: id });
         }
       }
     }
@@ -150,7 +150,7 @@ export default function ChatRoom() {
 
     setSending(true);
     const receiverId = type === 'user' ? id : undefined;
-    const groupId = type === 'group' ? parseInt(id!) : undefined;
+    const groupId = type === 'group' ? id : undefined;
 
     await sendMessage(inputMessage.trim(), receiverId, groupId);
     setInputMessage('');

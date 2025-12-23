@@ -830,7 +830,7 @@ export default function EventRoom() {
   const currentMember = members.find(m => m.id === currentMemberId);
   useLocationTracking({
     enabled: hasJoined && (currentMember?.shareLocation || false),
-    eventId: Number(id || 0),
+    eventId: id || '',
     shareLocation: currentMember?.shareLocation || false,
     hasJoined,
     startTime: event?.startTime || '',
@@ -909,7 +909,7 @@ export default function EventRoom() {
 
     const fetchInitialETA = async () => {
       try {
-        const response = await eventsApi.getMembersETA(Number(id));
+        const response = await eventsApi.getMembersETA(id!);
         const etaMap = new Map<number, ETAState>();
         const now = Date.now();
         response.members.forEach((member) => {
@@ -1043,7 +1043,7 @@ export default function EventRoom() {
     // 呼叫真實 API
     const fetchEvent = async () => {
       try {
-        const response = await eventsApi.getEvent(parseInt(id));
+        const response = await eventsApi.getEvent(id!);
 
         if (!response || !response.event) {
           setError('找不到此聚會');
@@ -1152,7 +1152,7 @@ export default function EventRoom() {
     
     try {
       // 使用真實 API
-      const response = await eventsApi.joinEvent(Number(id), {
+      const response = await eventsApi.joinEvent(id!, {
         nickname: joinForm.nickname.trim(),
         shareLocation: joinForm.shareLocation,
         travelMode: joinForm.travelMode,
@@ -1178,7 +1178,7 @@ export default function EventRoom() {
       setCurrentMemberId(member.id);
       
       // 重新獲取 event 以獲取最新成員列表（包含新加入的成員）
-      const eventResponse = await eventsApi.getEvent(Number(id));
+      const eventResponse = await eventsApi.getEvent(id!);
       const updatedMembers = (eventResponse.event.members || []).sort((a, b) => {
         if (a.arrivalTime && !b.arrivalTime) return -1;
         if (!a.arrivalTime && b.arrivalTime) return 1;
@@ -1214,7 +1214,7 @@ export default function EventRoom() {
     
     try {
       // 使用真實 API
-      const response = await eventsApi.markArrival(Number(id));
+      const response = await eventsApi.markArrival(id!);
       
       // 更新本地狀態
       setHasArrived(true);
@@ -1229,7 +1229,7 @@ export default function EventRoom() {
       }
       
       // 重新獲取 event 以獲取最新成員列表
-      const eventResponse = await eventsApi.getEvent(Number(id));
+      const eventResponse = await eventsApi.getEvent(id!);
       const updatedMembers = (eventResponse.event.members || []).sort((a, b) => {
         if (a.arrivalTime && !b.arrivalTime) return -1;
         if (!a.arrivalTime && b.arrivalTime) return 1;
@@ -1530,7 +1530,7 @@ export default function EventRoom() {
         }
       }
       
-      const response = await eventsApi.updateEvent(Number(id), updateData);
+      const response = await eventsApi.updateEvent(id!, updateData);
       
       // 更新本地狀態
       setEvent(response.event);
@@ -1581,7 +1581,7 @@ export default function EventRoom() {
     setPokingMemberId(targetMemberId);
     
     try {
-      const response = await eventsApi.pokeMember(Number(id), targetMemberId);
+      const response = await eventsApi.pokeMember(id!, targetMemberId);
       
       console.log('[EventRoom] ✓ Poke API response:', response);
       
@@ -2719,7 +2719,7 @@ export default function EventRoom() {
         <EventResultPopup
           open={showResultPopup}
           onClose={() => setShowResultPopup(false)}
-          eventId={Number(id)}
+          eventId={id!}
         />
       )}
 
@@ -3126,7 +3126,7 @@ export default function EventRoom() {
         <ChatPopup
           open={chatPopupOpen}
           onClose={() => setChatPopupOpen(false)}
-          groupId={event.groupId as number}
+          groupId={event.groupId}
           groupName={event.name}
         />
       )}

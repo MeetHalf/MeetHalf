@@ -1,10 +1,11 @@
 import prisma from '../lib/prisma';
+import { nanoid } from 'nanoid';
 
 export class GroupRepository {
   /**
    * Find group by ID with members
    */
-  async findById(id: number) {
+  async findById(id: string) {
     const group = await prisma.group.findUnique({
       where: { id },
       include: {
@@ -111,6 +112,7 @@ export class GroupRepository {
   async create(data: { name: string; ownerId: string; memberIds?: number[] }) {
     const group = await prisma.group.create({
       data: {
+        id: nanoid(12),
         name: data.name,
         ownerId: data.ownerId,
         members: data.memberIds
@@ -158,7 +160,7 @@ export class GroupRepository {
   /**
    * Update group name
    */
-  async update(id: number, data: { name: string }) {
+  async update(id: string, data: { name: string }) {
     const group = await prisma.group.update({
       where: { id },
       data: { name: data.name },
@@ -201,7 +203,7 @@ export class GroupRepository {
   /**
    * Delete a group
    */
-  async delete(id: number) {
+  async delete(id: string) {
     return prisma.group.delete({
       where: { id },
     });
@@ -210,7 +212,7 @@ export class GroupRepository {
   /**
    * Check if user is a member of the group
    */
-  async isMember(groupId: number, userId: string): Promise<boolean> {
+  async isMember(groupId: string, userId: string): Promise<boolean> {
     const group = await prisma.group.findFirst({
       where: {
         id: groupId,
@@ -227,7 +229,7 @@ export class GroupRepository {
   /**
    * Check if user is the owner of the group
    */
-  async isOwner(groupId: number, userId: string): Promise<boolean> {
+  async isOwner(groupId: string, userId: string): Promise<boolean> {
     const group = await prisma.group.findFirst({
       where: {
         id: groupId,

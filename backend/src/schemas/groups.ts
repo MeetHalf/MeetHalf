@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const groupIdSchema = z.object({
-  id: z.coerce.number().int().positive('Group ID must be a positive integer'),
+  id: z.string().min(1, 'Group ID is required'),
 });
 
 export const createGroupSchema = z.object({

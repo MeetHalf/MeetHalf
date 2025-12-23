@@ -28,7 +28,7 @@ export class MemberRepository {
   /**
    * Find member by event ID and user ID
    */
-  async findByEventIdAndUserId(eventId: number, userId: string) {
+  async findByEventIdAndUserId(eventId: string, userId: string) {
     return prisma.member.findFirst({
       where: {
         eventId,
@@ -40,7 +40,7 @@ export class MemberRepository {
   /**
    * Find all members by event ID with user avatars
    */
-  async findByEventId(eventId: number) {
+  async findByEventId(eventId: string) {
     const members = await prisma.member.findMany({
       where: { eventId },
       orderBy: { id: 'asc' },

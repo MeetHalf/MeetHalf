@@ -30,7 +30,7 @@ model User {
 }
 
 model Event {
-  id                  Int      @id @default(autoincrement())
+  id                  String   @id
   name                String
   ownerId             String   // Owner's userId (not foreign key - allows anonymous users)
   meetingPointLat     Float?   // 集合點緯度（可選）
@@ -41,7 +41,7 @@ model Event {
   endTime             DateTime
   status              EventStatus @default(upcoming)
   useMeetHalf         Boolean  @default(false) // 是否使用 MeetHalf
-  groupId             Int?     // 關聯到朋友群組（可選）
+  groupId             String?  // 關聯到朋友群組（可選）
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   
@@ -65,7 +65,7 @@ enum EventStatus {
 model Member {
   id            Int       @id @default(autoincrement())
   userId        String?   // User's userId or anonymous identifier (nullable for offline members)
-  eventId       Int
+  eventId       String
   lat           Float?
   lng           Float?
   address       String?
@@ -83,7 +83,7 @@ model Member {
 }
 
 model Group {
-  id        Int      @id @default(autoincrement())
+  id        String   @id
   name      String   // 群組名稱，例如「大學同學」
   ownerId   String   // 建立者 userId（對應 User.userId）
   createdAt DateTime @default(now())
@@ -98,7 +98,7 @@ model Group {
 
 model PokeRecord {
   id           String   @id @default(cuid())
-  eventId      Int      // 關聯到 Event
+  eventId      String   // 關聯到 Event
   fromMemberId Int      // 戳人者的 Member ID
   toMemberId   Int      // 被戳者的 Member ID
   createdAt    DateTime @default(now()) // 戳人時間
@@ -111,7 +111,7 @@ model PokeRecord {
 
 model ShareToken {
   id        String   @id @default(cuid())
-  eventId   Int      // 關聯到 Event
+  eventId   String   // 關聯到 Event
   token     String   @unique // 32字元 NanoID token
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -124,7 +124,7 @@ model ShareToken {
 
 model EventInvitation {
   id         Int                    @id @default(autoincrement())
-  eventId    Int                    // 關聯到 Event
+  eventId    String                 // 關聯到 Event
   fromUserId String                 // 邀請者 userId
   toUserId   String                 // 被邀請者 userId
   status     EventInvitationStatus  @default(pending)
@@ -181,7 +181,7 @@ model ChatMessage {
   content    String   @db.Text // 訊息內容
   senderId   String   // 發送者 userId
   receiverId String?  // 個人聊天對象 userId（可選）
-  groupId    Int?     // 群組聊天（可選）
+  groupId    String?  // 群組聊天（可選）
   readBy     Json     @default("[]") // 已讀列表 userId[]
   createdAt  DateTime @default(now())
   

@@ -9,7 +9,7 @@ export interface User {
 }
 
 export interface Group {
-  id: number;
+  id: string;
   name: string;
   ownerId: string; // userId (String) from backend
   createdAt: string;
@@ -25,7 +25,7 @@ export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
 export interface Member {
   id: number;
   userId: number | null;  // ✅ Nullable for offline members
-  groupId: number;
+  groupId: string;
   lat: number | null;
   lng: number | null;
   address: string | null;
@@ -50,7 +50,7 @@ export interface UpdateGroupRequest {
 
 export interface AddMemberRequest {
   userId: number;
-  groupId: number;
+  groupId: string;
   lat?: number;
   lng?: number;
   address?: string;
@@ -138,37 +138,37 @@ export const groupsApi = {
   },
 
   // Get group details
-  async getGroup(id: number): Promise<{ group: Group }> {
+  async getGroup(id: string): Promise<{ group: Group }> {
     const response = await api.get(`/groups/${id}`);
     return response.data;
   },
 
   // Update group name (owner only)
-  async updateGroup(id: number, data: UpdateGroupRequest): Promise<{ group: Group }> {
+  async updateGroup(id: string, data: UpdateGroupRequest): Promise<{ group: Group }> {
     const response = await api.patch(`/groups/${id}`, data);
     return response.data;
   },
 
   // Delete group (owner only)
-  async deleteGroup(id: number): Promise<{ message: string }> {
+  async deleteGroup(id: string): Promise<{ message: string }> {
     const response = await api.delete(`/groups/${id}`);
     return response.data;
   },
 
   // Get midpoint calculation
-  async getMidpoint(id: number): Promise<MidpointResponse> {
+  async getMidpoint(id: string): Promise<MidpointResponse> {
     const response = await api.get(`/groups/${id}/midpoint`);
     return response.data;
   },
 
   // Get time-based midpoint calculation
-  async getTimeMidpoint(id: number, params: { objective: string; forceRecalculate?: boolean }): Promise<TimeMidpointResponse> {
+  async getTimeMidpoint(id: string, params: { objective: string; forceRecalculate?: boolean }): Promise<TimeMidpointResponse> {
     const response = await api.get(`/groups/${id}/midpoint_by_time`, { params });
     return response.data;
   },
 
   // Get routes to midpoint
-  async getRoutesToMidpoint(id: number, params: { midpointLat: number; midpointLng: number }): Promise<RoutesResponse> {
+  async getRoutesToMidpoint(id: string, params: { midpointLat: number; midpointLng: number }): Promise<RoutesResponse> {
     const response = await api.get(`/groups/${id}/routes_to_midpoint`, { params });
     return response.data;
   },
@@ -221,7 +221,7 @@ export const groupUtils = {
 // ✅ NEW: API functions for offline members
 export const offlineMembersApi = {
   async create(data: {
-    groupId: number;
+    groupId: string;
     nickname: string;
     lat: number;
     lng: number;

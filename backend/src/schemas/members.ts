@@ -4,7 +4,7 @@ const travelModes = ['driving', 'transit', 'walking', 'bicycling'] as const;
 
 export const addMemberSchema = z.object({
   username: z.string().min(1, 'Username is required').max(255, 'Username must be less than 255 characters'),
-  eventId: z.number().int().positive('Event ID must be a positive integer'),
+  eventId: z.string().min(1, 'Event ID is required'),
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
   address: z.string().max(255).optional(),
@@ -24,7 +24,7 @@ export const memberParamsSchema = z.object({
 
 // Schema for creating offline member
 export const createOfflineMemberSchema = z.object({
-  eventId: z.number().int().positive('Event ID must be a positive integer'),
+  eventId: z.string().min(1, 'Event ID is required'),
   nickname: z.string().min(1, 'Nickname is required').max(100, 'Nickname must be less than 100 characters'),
   lat: z.number().min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90'),
   lng: z.number().min(-180, 'Longitude must be between -180 and 180').max(180, 'Longitude must be between -180 and 180'),

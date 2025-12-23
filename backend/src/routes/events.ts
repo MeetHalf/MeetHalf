@@ -35,6 +35,7 @@ import { eventRepository } from '../repositories/EventRepository';
 import { memberRepository } from '../repositories/MemberRepository';
 import { generateGuestToken } from '../utils/jwt';
 import { shareTokenService } from '../services/ShareTokenService';
+import { nanoid } from 'nanoid';
 
 const router = Router();
 
@@ -319,6 +320,7 @@ router.post('/', optionalAuthMiddleware, async (req: Request, res: Response): Pr
     
     const event = await prisma.event.create({
       data: {
+        id: nanoid(12),
         name,
         ownerId,
         startTime,

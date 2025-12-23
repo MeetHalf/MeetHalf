@@ -11,7 +11,7 @@ export const chatApi = {
   // Get messages for a conversation
   getMessages: async (params: {
     receiverId?: string;
-    groupId?: number;
+    groupId?: string;
     limit?: number;
     offset?: number;
   }): Promise<{ messages: ChatMessage[] }> => {
@@ -28,7 +28,7 @@ export const chatApi = {
   // Mark entire conversation as read
   markConversationAsRead: async (params: {
     receiverId?: string;
-    groupId?: number;
+    groupId?: string;
   }): Promise<{ success: boolean; count: number }> => {
     const response = await api.put('/chat/conversations/read', params);
     return response.data;

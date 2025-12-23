@@ -9,7 +9,7 @@ export interface User {
 }
 
 export interface Event {
-  id: number;
+  id: string;
   name: string;
   ownerId: string; // Owner's userId (not foreign key - allows anonymous users)
   meetingPointLat?: number | null;
@@ -20,7 +20,7 @@ export interface Event {
   endTime: string; // ISO 8601
   status: 'upcoming' | 'ongoing' | 'ended';
   useMeetHalf: boolean;
-  groupId?: number | null;
+  groupId?: string | null;
   createdAt: string;
   updatedAt: string;
   members: Member[];
@@ -34,7 +34,7 @@ export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
 export interface Member {
   id: number;
   userId: string | null;
-  eventId: number;
+  eventId: string;
   lat: number | null;
   lng: number | null;
   address: string | null;
@@ -83,7 +83,7 @@ export interface CreateEventRequest {
   meetingPointLng?: number | null;
   meetingPointName?: string | null;
   meetingPointAddress?: string | null;
-  groupId?: number | null;
+  groupId?: string | null;
   // 主辦信息（可選，如果提供則自動創建 member）
   ownerNickname?: string;
   ownerTravelMode?: TravelMode;
@@ -104,7 +104,7 @@ export interface UpdateEventRequest {
 
 export interface AddMemberRequest {
   username: string;
-  eventId: number;
+  eventId: string;
   lat?: number;
   lng?: number;
   address?: string;
@@ -196,49 +196,49 @@ export const eventsApi = {
   },
 
   // Get event details
-  async getEvent(id: number): Promise<{ event: Event }> {
+  async getEvent(id: string): Promise<{ event: Event }> {
     const response = await api.get(`/events/${id}`);
     return response.data;
   },
 
   // Update event name
-  async updateEvent(id: number, data: UpdateEventRequest): Promise<{ event: Event }> {
+  async updateEvent(id: string, data: UpdateEventRequest): Promise<{ event: Event }> {
     const response = await api.patch(`/events/${id}`, data);
     return response.data;
   },
 
   // Delete event
-  async deleteEvent(id: number): Promise<{ message: string }> {
+  async deleteEvent(id: string): Promise<{ message: string }> {
     const response = await api.delete(`/events/${id}`);
     return response.data;
   },
 
   // Get midpoint calculation
-  async getMidpoint(id: number): Promise<MidpointResponse> {
+  async getMidpoint(id: string): Promise<MidpointResponse> {
     const response = await api.get(`/events/${id}/midpoint`);
     return response.data;
   },
 
   // Get time-based midpoint calculation
-  async getTimeMidpoint(id: number, params: { objective: string; forceRecalculate?: boolean }): Promise<TimeMidpointResponse> {
+  async getTimeMidpoint(id: string, params: { objective: string; forceRecalculate?: boolean }): Promise<TimeMidpointResponse> {
     const response = await api.get(`/events/${id}/midpoint_by_time`, { params });
     return response.data;
   },
 
   // Get routes to midpoint
-  async getRoutesToMidpoint(id: number, params: { midpointLat: number; midpointLng: number }): Promise<RoutesResponse> {
+  async getRoutesToMidpoint(id: string, params: { midpointLat: number; midpointLng: number }): Promise<RoutesResponse> {
     const response = await api.get(`/events/${id}/routes_to_midpoint`, { params });
     return response.data;
   },
 
   // Poke a member
-  async pokeMember(eventId: number, targetMemberId: number): Promise<{ success: boolean; pokeCount: number; totalPokes: number }> {
+  async pokeMember(eventId: string, targetMemberId: number): Promise<{ success: boolean; pokeCount: number; totalPokes: number }> {
     const response = await api.post(`/events/${eventId}/poke`, { targetMemberId });
     return response.data;
   },
 
   // Join event as guest
-  async joinEvent(eventId: number, data: {
+  async joinEvent(eventId: string, data: {
     nickname: string;
     shareLocation: boolean;
     travelMode?: TravelMode;
@@ -248,7 +248,7 @@ export const eventsApi = {
   },
 
   // Mark arrival
-  async markArrival(eventId: number): Promise<{
+  async markArrival(eventId: string): Promise<{
     success: boolean;
     arrivalTime: string;
     status: 'early' | 'ontime' | 'late';
@@ -259,7 +259,7 @@ export const eventsApi = {
   },
 
   // Update location
-  async updateLocation(eventId: number, data: {
+  async updateLocation(eventId: string, data: {
     lat: number;
     lng: number;
     address?: string;
@@ -270,25 +270,25 @@ export const eventsApi = {
   },
 
   // Get members ETA
-  async getMembersETA(eventId: number): Promise<{ members: MemberETA[] }> {
+  async getMembersETA(eventId: string): Promise<{ members: MemberETA[] }> {
     const response = await api.get(`/events/${eventId}/members/eta`);
     return response.data;
   },
 
   // Get event result (rankings)
-  async getEventResult(eventId: number): Promise<import('../types/events').GetEventResultResponse> {
+  async getEventResult(eventId: string): Promise<import('../types/events').GetEventResultResponse> {
     const response = await api.get(`/events/${eventId}/result`);
     return response.data;
   },
 
   // Get share token for event
-  async getShareToken(eventId: number): Promise<{ token: string }> {
+  async getShareToken(eventId: string): Promise<{ token: string }> {
     const response = await api.get(`/events/${eventId}/share-token`);
     return response.data;
   },
 
   // Generate or regenerate share token for event
-  async createShareToken(eventId: number): Promise<{ token: string }> {
+  async createShareToken(eventId: string): Promise<{ token: string }> {
     const response = await api.post(`/events/${eventId}/share-token`);
     return response.data;
   },
@@ -297,7 +297,7 @@ export const eventsApi = {
 // Invite API
 export const inviteApi = {
   // Resolve invite token to event ID
-  async resolveInviteToken(token: string): Promise<{ eventId: number }> {
+  async resolveInviteToken(token: string): Promise<{ eventId: string }> {
     const response = await api.get(`/invite/${token}`);
     return response.data;
   },
@@ -351,7 +351,7 @@ export const eventUtils = {
 // API functions for offline members
 export const offlineMembersApi = {
   async create(data: {
-    eventId: number;
+    eventId: string;
     nickname: string;
     lat: number;
     lng: number;

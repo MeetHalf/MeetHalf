@@ -9,7 +9,7 @@ export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
  * 聚會活動
  */
 export interface Event {
-  id: number;
+  id: string;
   name: string;
   ownerName: string;
   startTime: string; // ISO 8601 - 聚會開始時間
@@ -20,7 +20,7 @@ export interface Event {
   meetingPointAddress?: string;
   status: EventStatus;
   useMeetHalf: boolean;
-  groupId?: number;
+  groupId?: string;
   createdAt: string;
   updatedAt: string;
   members?: EventMember[];
@@ -32,7 +32,7 @@ export interface Event {
 export interface EventMember {
   id: number;
   userId?: string | null;  // User.userId 或 "guest_abc123"
-  eventId: number;
+  eventId: string;
   nickname?: string;
   lat?: number;
   lng?: number;
@@ -49,7 +49,7 @@ export interface EventMember {
  */
 export interface PokeRecord {
   id: string;
-  eventId: number;
+  eventId: string;
   fromMemberId: number;
   toMemberId: number;
   createdAt: string;
@@ -107,7 +107,7 @@ export interface PokeStats {
  * 聚會結果（排行榜）
  */
 export interface EventResult {
-  eventId: number;
+  eventId: string;
   rankings: RankingItem[];
   stats: EventStats;
   pokes: PokeStats;
@@ -117,7 +117,7 @@ export interface EventResult {
  * 我的聚會列表項目
  */
 export interface MyEventItem {
-  id: number;
+  id: string;
   name: string;
   startTime: string;
   endTime: string;
@@ -191,7 +191,7 @@ export interface PokeEvent {
  * Pusher 事件: 聚會結束
  */
 export interface EventEndedEvent {
-  eventId: number;
+  eventId: string;
   endedAt: string;
 }
 
@@ -210,7 +210,7 @@ export interface CreateEventRequest {
   meetingPointName?: string;
   meetingPointAddress?: string;
   useMeetHalf?: boolean;
-  groupId?: number;
+  groupId?: string;
 }
 
 /**

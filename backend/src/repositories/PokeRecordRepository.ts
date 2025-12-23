@@ -35,7 +35,7 @@ export class PokeRecordRepository {
   /**
    * Get poke statistics for an event
    */
-  async getPokeStats(eventId: number) {
+  async getPokeStats(eventId: string) {
     // Get all poke records for this event
     const pokes = await prisma.pokeRecord.findMany({
       where: { eventId },
@@ -88,7 +88,7 @@ export class PokeRecordRepository {
   /**
    * Get poke records for a member
    */
-  async getPokesForMember(eventId: number, memberId: number) {
+  async getPokesForMember(eventId: string, memberId: number) {
     return prisma.pokeRecord.findMany({
       where: {
         eventId,

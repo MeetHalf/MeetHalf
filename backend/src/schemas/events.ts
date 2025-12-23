@@ -23,7 +23,7 @@ export const createEventSchema = z.object({
   meetingPointLng: z.number().optional().nullable(),
   meetingPointName: z.string().optional().nullable(),
   meetingPointAddress: z.string().optional().nullable(),
-  groupId: z.number().int().positive().optional().nullable(),
+  groupId: z.string().min(1).optional().nullable(),
   // 主辦加入活動的信息（可選，如果提供則自動創建 member）
   ownerNickname: z.string().min(1, 'Owner nickname is required').max(100).optional(),
   ownerTravelMode: z.enum(['driving', 'transit', 'walking', 'bicycling']).optional(),
@@ -87,7 +87,7 @@ export const updateEventSchema = z.object({
 );
 
 export const eventParamsSchema = z.object({
-  id: z.coerce.number().int().positive('Event ID must be a positive integer'),
+  id: z.string().min(1, 'Event ID is required'),
 });
 
 export const timeMidpointQuerySchema = z.object({

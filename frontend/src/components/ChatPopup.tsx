@@ -21,7 +21,7 @@ import { zhTW } from 'date-fns/locale';
 interface ChatPopupProps {
   open: boolean;
   onClose: () => void;
-  groupId: number;
+  groupId: string;
   groupName: string;
 }
 
@@ -32,7 +32,7 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
   const { messages, loadMessages, sendMessage, markConversationAsRead, loading } = useChat(
     user?.userId ?? undefined,
     'group',
-    groupId.toString()
+    groupId
   );
 
   const [inputMessage, setInputMessage] = useState('');

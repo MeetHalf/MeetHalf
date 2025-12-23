@@ -9,7 +9,7 @@ export class ChatRepository {
     content: string;
     senderId: string;
     receiverId?: string;
-    groupId?: number;
+    groupId?: string;
   }) {
     return prisma.chatMessage.create({
       data: {
@@ -64,7 +64,7 @@ export class ChatRepository {
   /**
    * Get messages in a group
    */
-  async getGroupMessages(groupId: number, limit = 50, offset = 0) {
+  async getGroupMessages(groupId: string, limit = 50, offset = 0) {
     const messages = await prisma.chatMessage.findMany({
       where: { groupId },
       orderBy: { createdAt: 'desc' },
@@ -331,7 +331,7 @@ export class ChatRepository {
         // For groups, count messages not read by user
         const unreadCount = await prisma.chatMessage.count({
           where: {
-            groupId: conv.id as number,
+            groupId: conv.id as string,
             AND: [
               { NOT: { senderId: userId } }, // Don't count own messages
               { NOT: { readBy: { array_contains: userId } } }, // Don't count read messages
@@ -380,7 +380,7 @@ export class ChatRepository {
   /**
    * Mark all messages in a conversation as read
    */
-  async markConversationAsRead(userId: string, receiverId?: string, groupId?: number) {
+  async markConversationAsRead(userId: string, receiverId?: string, groupId?: string) {
     const where: any = {
       NOT: {
         senderId: userId, // Don't mark own messages

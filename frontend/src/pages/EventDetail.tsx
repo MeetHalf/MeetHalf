@@ -28,7 +28,7 @@ export default function EventDetail() {
     // 呼叫真實 API
     const fetchEvent = async () => {
       try {
-        const response = await eventsApi.getEvent(parseInt(id));
+        const response = await eventsApi.getEvent(id);
         
         if (!response || !response.event) {
           setError('找不到此聚會');

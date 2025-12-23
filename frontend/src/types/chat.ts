@@ -3,7 +3,7 @@ export interface ChatMessage {
   content: string;
   senderId: string;
   receiverId: string | null;
-  groupId: number | null;
+  groupId: string | null;
   readBy: string[];
   createdAt: string;
   sender?: {
@@ -25,6 +25,6 @@ export interface Conversation {
 export interface SendMessageRequest {
   content: string;
   receiverId?: string;
-  groupId?: number;
+  groupId?: string;
 }
 
