@@ -1874,6 +1874,7 @@ export default function EventRoom() {
                   <MenuItem value="transit">🚇 大眾運輸</MenuItem>
                   <MenuItem value="walking">🚶 步行</MenuItem>
                   <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                  
                 </Select>
               </FormControl>
 
@@ -2387,7 +2388,7 @@ export default function EventRoom() {
             ) : (
               <NotificationsIcon sx={{ fontSize: 18, color: 'white' }} />
             )}
-            <Typography sx={{ 
+            {/* <Typography sx={{ 
               fontSize: '0.75rem', 
               fontWeight: 600, 
               color: 'white',
@@ -2396,7 +2397,7 @@ export default function EventRoom() {
               {notificationPermission === 'denied' 
                 ? '通知已被拒絕，點擊再次嘗試' 
                 : '點擊啟用通知，接收戳一下提醒'}
-            </Typography>
+            </Typography> */}
             {requestingPermission ? (
               <CircularProgress size={16} sx={{ color: 'white' }} />
             ) : (
