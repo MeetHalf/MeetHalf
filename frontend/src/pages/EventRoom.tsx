@@ -49,6 +49,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
+import Countdown from 'react-countdown';
 import { eventsApi, type Event as ApiEvent, type Member, type TravelMode, type MemberETA, type ETAUpdateEvent } from '../api/events';
 import { useEventProgress } from '../hooks/useEventProgress';
 import { usePusher } from '../hooks/usePusher';
@@ -2028,10 +2029,56 @@ export default function EventRoom() {
                 <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: '#1e293b' }}>
                   {event.name}
                 </Typography>
-                <TimeIcon sx={{ fontSize: 14, color: '#94a3b8' }} />
-                <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
-                  {format(new Date(event.startTime), 'HH:mm')}
-                </Typography>
+                {event.status === 'upcoming' ? (
+                  <Countdown
+                    date={new Date(event.startTime)}
+                    renderer={({ total, completed }) => {
+                      // 計算總分鐘數（向上取整，確保顯示準確）
+                      const totalMinutes = Math.ceil(total / (1000 * 60));
+                      
+                      // 如果已經開始或超過 30 分鐘，顯示時間
+                      if (completed || totalMinutes > 30) {
+                        return (
+                          <>
+                            <TimeIcon sx={{ fontSize: 14, color: '#94a3b8' }} />
+                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+                              {format(new Date(event.startTime), 'HH:mm')}
+                            </Typography>
+                          </>
+                        );
+                      }
+                      
+                      // 如果少於 1 分鐘，顯示「即將開始」
+                      if (totalMinutes < 1) {
+                        return (
+                          <>
+                            <TimeIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
+                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                              即將開始
+                            </Typography>
+                          </>
+                        );
+                      }
+                      
+                      // 顯示倒數計時
+                      return (
+                        <>
+                          <TimeIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                            還有 {totalMinutes} 分鐘
+                          </Typography>
+                        </>
+                      );
+                    }}
+                  />
+                ) : (
+                  <>
+                    <TimeIcon sx={{ fontSize: 14, color: '#94a3b8' }} />
+                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+                      {format(new Date(event.startTime), 'HH:mm')}
+                    </Typography>
+                  </>
+                )}
               </Box>
             ) : (
               // 展開狀態

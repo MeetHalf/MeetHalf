@@ -18,6 +18,7 @@ import { LogIn, Plus, ChevronRight, Trophy, Clock, MessageCircle, MapPin } from 
 import { format, isAfter, isBefore, isToday } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { eventsApi, Event, inviteApi } from '../api/events';
+import Countdown from 'react-countdown';
 
 type EventStatus = 'ongoing' | 'upcoming' | 'ended';
 
@@ -25,9 +26,24 @@ const getEventStatus = (event: Event): EventStatus => {
   const now = new Date();
   const startTime = new Date(event.startTime);
   const endTime = new Date(event.endTime);
+  const THIRTY_MINUTES = 30 * 60 * 1000; // 30 分鐘的毫秒數
 
   if (isAfter(now, endTime)) return 'ended';
+  
+  // 如果已經開始且在結束時間之前，視為 ongoing
+  if (!isBefore(now, startTime) && !isAfter(now, endTime)) {
+    return 'ongoing';
+  }
+  
+  // 如果距離開始時間 <= 30 分鐘，視為 ongoing（active）
+  const timeUntilStart = startTime.getTime() - now.getTime();
+  if (isBefore(now, startTime) && timeUntilStart <= THIRTY_MINUTES) {
+    return 'ongoing';
+  }
+  
+  // 如果距離開始時間 > 30 分鐘，視為 upcoming
   if (isBefore(now, startTime)) return 'upcoming';
+  
   return 'ongoing';
 };
 
@@ -210,7 +226,8 @@ export default function Events() {
                 const status = getEventStatus(event);
                 const memberCount = event._count?.members || event.members?.length || 0;
                 const startTime = new Date(event.startTime);
-                const isLive = status === 'ongoing';
+                const now = new Date();
+                const isLive = !isBefore(now, startTime); // 活動已經真正開始
 
                 return (
                   <Box
@@ -282,7 +299,42 @@ export default function Events() {
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#94a3b8', flexWrap: 'wrap' }}>
                           <Clock size={12} />
-                          {isToday(startTime) ? (
+                          {status === 'ongoing' && !isLive ? (
+                            // 活動開始前 30 分鐘內，顯示倒數計時
+                            <Countdown
+                              date={startTime}
+                              renderer={({ total, completed }) => {
+                                const totalMinutes = Math.ceil(total / (1000 * 60));
+                                
+                                // 如果已經開始，顯示時間
+                                if (completed || totalMinutes > 30) {
+                                  return (
+                                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                      {isToday(startTime)
+                                        ? format(startTime, 'h:mm a', { locale: zhTW })
+                                        : `${format(startTime, 'MM/dd', { locale: zhTW })} ${format(startTime, 'h:mm a', { locale: zhTW })}`}
+                                    </Typography>
+                                  );
+                                }
+                                
+                                // 如果少於 1 分鐘，顯示「即將開始」
+                                if (totalMinutes < 1) {
+                                  return (
+                                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                                      即將開始
+                                    </Typography>
+                                  );
+                                }
+                                
+                                // 顯示倒數計時
+                                return (
+                                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                                    還有 {totalMinutes} 分鐘
+                                  </Typography>
+                                );
+                              }}
+                            />
+                          ) : isToday(startTime) ? (
                             <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
                               {format(startTime, 'h:mm a', { locale: zhTW })}
                             </Typography>
