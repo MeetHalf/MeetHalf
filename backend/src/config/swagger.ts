@@ -157,6 +157,266 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
+        Event: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              format: 'int64',
+            },
+            name: {
+              type: 'string',
+            },
+            ownerId: {
+              type: 'string',
+            },
+            startTime: {
+              type: 'string',
+              format: 'date-time',
+            },
+            endTime: {
+              type: 'string',
+              format: 'date-time',
+            },
+            status: {
+              type: 'string',
+              enum: ['upcoming', 'ongoing', 'ended'],
+            },
+            useMeetHalf: {
+              type: 'boolean',
+            },
+            meetingPointLat: {
+              type: 'number',
+              format: 'float',
+              nullable: true,
+            },
+            meetingPointLng: {
+              type: 'number',
+              format: 'float',
+              nullable: true,
+            },
+            meetingPointName: {
+              type: 'string',
+              nullable: true,
+            },
+            meetingPointAddress: {
+              type: 'string',
+              nullable: true,
+            },
+            groupId: {
+              type: 'integer',
+              format: 'int64',
+              nullable: true,
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            members: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/Member',
+              },
+            },
+          },
+        },
+        ChatMessage: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              format: 'int64',
+            },
+            content: {
+              type: 'string',
+            },
+            senderId: {
+              type: 'string',
+            },
+            receiverId: {
+              type: 'string',
+              nullable: true,
+            },
+            groupId: {
+              type: 'integer',
+              format: 'int64',
+              nullable: true,
+            },
+            readBy: {
+              type: 'array',
+              items: {
+                type: 'string',
+              },
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            sender: {
+              type: 'object',
+              properties: {
+                userId: {
+                  type: 'string',
+                },
+                name: {
+                  type: 'string',
+                },
+                avatar: {
+                  type: 'string',
+                  nullable: true,
+                },
+              },
+            },
+          },
+        },
+        Conversation: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+            },
+            type: {
+              type: 'string',
+              enum: ['user', 'group'],
+            },
+            receiverId: {
+              type: 'string',
+              nullable: true,
+            },
+            groupId: {
+              type: 'integer',
+              format: 'int64',
+              nullable: true,
+            },
+            lastMessage: {
+              $ref: '#/components/schemas/ChatMessage',
+              nullable: true,
+            },
+            unreadCount: {
+              type: 'integer',
+            },
+            participant: {
+              type: 'object',
+              nullable: true,
+            },
+            group: {
+              $ref: '#/components/schemas/Group',
+              nullable: true,
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
+        Friend: {
+          type: 'object',
+          properties: {
+            userId: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+            avatar: {
+              type: 'string',
+              nullable: true,
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
+        FriendRequest: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              format: 'int64',
+            },
+            fromUserId: {
+              type: 'string',
+            },
+            toUserId: {
+              type: 'string',
+            },
+            status: {
+              type: 'string',
+              enum: ['pending', 'accepted', 'rejected'],
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            fromUser: {
+              type: 'object',
+              properties: {
+                userId: {
+                  type: 'string',
+                },
+                name: {
+                  type: 'string',
+                },
+                avatar: {
+                  type: 'string',
+                  nullable: true,
+                },
+              },
+            },
+            toUser: {
+              type: 'object',
+              properties: {
+                userId: {
+                  type: 'string',
+                },
+                name: {
+                  type: 'string',
+                },
+                avatar: {
+                  type: 'string',
+                  nullable: true,
+                },
+              },
+            },
+          },
+        },
+        Notification: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              format: 'int64',
+            },
+            userId: {
+              type: 'string',
+            },
+            type: {
+              type: 'string',
+              enum: ['EVENT_INVITE', 'EVENT_UPDATE', 'FRIEND_REQUEST', 'MESSAGE'],
+            },
+            title: {
+              type: 'string',
+            },
+            body: {
+              type: 'string',
+            },
+            data: {
+              type: 'object',
+            },
+            read: {
+              type: 'boolean',
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
       },
     },
     tags: [
@@ -166,7 +426,7 @@ const options: swaggerJsdoc.Options = {
       },
       {
         name: 'Events',
-        description: 'Group management endpoints',
+        description: 'Event management endpoints',
       },
       {
         name: 'Members',
@@ -175,6 +435,34 @@ const options: swaggerJsdoc.Options = {
       {
         name: 'Maps',
         description: 'Google Maps API proxy endpoints',
+      },
+      {
+        name: 'Groups',
+        description: 'Group management endpoints',
+      },
+      {
+        name: 'Users',
+        description: 'User profile and statistics endpoints',
+      },
+      {
+        name: 'Chat',
+        description: 'Chat and messaging endpoints',
+      },
+      {
+        name: 'Friends',
+        description: 'Friend management endpoints',
+      },
+      {
+        name: 'Notifications',
+        description: 'Notification endpoints',
+      },
+      {
+        name: 'Invites',
+        description: 'Event invitation endpoints',
+      },
+      {
+        name: 'Event Invitations',
+        description: 'Event invitation management endpoints',
       },
     ],
   },

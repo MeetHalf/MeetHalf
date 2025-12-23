@@ -221,6 +221,9 @@ export default function InvitePage() {
                 color: 'primary.main',
                 letterSpacing: '0.05em',
                 flex: 1,
+                minWidth: 0, // 允許 flex item 縮小
+                wordBreak: 'break-all', // 允許在任何字符處換行
+                overflowWrap: 'break-word', // 更好的換行處理
               }}
             >
               {shareToken}
@@ -230,6 +233,7 @@ export default function InvitePage() {
               size="small"
               sx={{
                 color: 'primary.main',
+                flexShrink: 0, // 防止按鈕被壓縮
                 '&:hover': {
                   bgcolor: 'primary.light',
                   color: 'primary.contrastText',

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Conversation } from '../types/chat';
 import {
   Box,
   Typography,
@@ -25,7 +26,7 @@ export default function Friends() {
     loading,
     error,
     loadConversations,
-  } = useChat(user?.userId);
+  } = useChat(user?.userId ?? undefined);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [addFriendDrawerOpen, setAddFriendDrawerOpen] = useState(false);
@@ -46,8 +47,15 @@ export default function Friends() {
     conv.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleConversationClick = (type: 'user' | 'group', id: string | number) => {
-    navigate(`/chat/${type}/${id}`);
+  const handleConversationClick = (conversation: Conversation) => {
+    navigate(`/chat/${conversation.type}/${conversation.id}`, {
+      state: {
+        conversation: {
+          name: conversation.name,
+          avatar: conversation.avatar,
+        },
+      },
+    });
   };
 
   return (
@@ -154,7 +162,7 @@ export default function Friends() {
         {/* Error Alert */}
         {error && (
           <Alert severity="error" sx={{ mb: 2, borderRadius: 4 }} onClose={() => {}}>
-            {error}
+            {typeof error === 'string' ? error : 'An error occurred'}
           </Alert>
         )}
 
@@ -167,7 +175,7 @@ export default function Friends() {
             {filteredConversations.map((conversation) => (
               <Box
                 key={`${conversation.type}-${conversation.id}`}
-                onClick={() => handleConversationClick(conversation.type, conversation.id)}
+                onClick={() => handleConversationClick(conversation)}
                 sx={{
                   bgcolor: 'white',
                   borderBottom: '1px solid #f1f5f9',
@@ -187,7 +195,7 @@ export default function Friends() {
               >
                 <ConversationItem
                   conversation={conversation}
-                  onClick={() => handleConversationClick(conversation.type, conversation.id)}
+                  onClick={() => handleConversationClick(conversation)}
                 />
               </Box>
             ))}

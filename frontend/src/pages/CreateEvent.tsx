@@ -47,8 +47,9 @@ import {
   DirectionsWalk as WalkIcon,
   DirectionsBike as BikeIcon,
   AccessTime as TimeIcon,
-  Delete as DeleteIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
+import { Trash2 } from 'lucide-react';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -140,6 +141,7 @@ export default function CreateEvent() {
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [recommendedPlaces, setRecommendedPlaces] = useState<any[]>([]);
   const [midpointData, setMidpointData] = useState<any>(null);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -221,10 +223,6 @@ export default function CreateEvent() {
     setInvitedFriends(newInvitedFriends);
   };
 
-  // Remove invited friend
-  const handleRemoveFriend = (userId: string) => {
-    setInvitedFriends(prev => prev.filter(f => f.userId !== userId));
-  };
 
   // Add dummy member
   const handleAddDummyMember = () => {
@@ -267,6 +265,20 @@ export default function CreateEvent() {
       calculateDummyTravelTimes();
     }
   }, [formData.meetingPointLat, formData.meetingPointLng, dummyMembers.length, mapsLoaded]);
+
+  // Owner estimated travel time state
+  const [ownerEstimatedDuration, setOwnerEstimatedDuration] = useState<string>('');
+  const [ownerEstimatedDistance, setOwnerEstimatedDistance] = useState<string>('');
+
+  // Calculate travel time for owner when meeting point is selected
+  useEffect(() => {
+    if (formData.meetingPointLat && formData.meetingPointLng && formData.ownerLat && formData.ownerLng && mapsLoaded) {
+      calculateOwnerTravelTime();
+    } else {
+      setOwnerEstimatedDuration('');
+      setOwnerEstimatedDistance('');
+    }
+  }, [formData.meetingPointLat, formData.meetingPointLng, formData.ownerLat, formData.ownerLng, formData.ownerTravelMode, mapsLoaded]);
 
   const calculateTravelTimes = async () => {
     if (!formData.meetingPointLat || !formData.meetingPointLng || !window.google?.maps) return;
@@ -356,6 +368,43 @@ export default function CreateEvent() {
     setDummyMembers(updatedDummies);
   };
 
+  const calculateOwnerTravelTime = async () => {
+    if (!formData.meetingPointLat || !formData.meetingPointLng || !formData.ownerLat || !formData.ownerLng || !window.google?.maps) {
+      setOwnerEstimatedDuration('');
+      setOwnerEstimatedDistance('');
+      return;
+    }
+
+    try {
+      const directionsService = new google.maps.DirectionsService();
+      const travelModeMap: Record<string, google.maps.TravelMode> = {
+        driving: google.maps.TravelMode.DRIVING,
+        transit: google.maps.TravelMode.TRANSIT,
+        walking: google.maps.TravelMode.WALKING,
+        bicycling: google.maps.TravelMode.BICYCLING,
+      };
+      
+      const result = await directionsService.route({
+        origin: { lat: formData.ownerLat, lng: formData.ownerLng },
+        destination: { lat: formData.meetingPointLat, lng: formData.meetingPointLng },
+        travelMode: travelModeMap[formData.ownerTravelMode] || google.maps.TravelMode.TRANSIT,
+      });
+
+      if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
+        const leg = result.routes[0].legs[0];
+        setOwnerEstimatedDuration(leg.duration?.text || 'N/A');
+        setOwnerEstimatedDistance(leg.distance?.text || 'N/A');
+      } else {
+        setOwnerEstimatedDuration('計算失敗');
+        setOwnerEstimatedDistance('-');
+      }
+    } catch (error) {
+      console.error('Failed to calculate owner travel time:', error);
+      setOwnerEstimatedDuration('計算失敗');
+      setOwnerEstimatedDistance('-');
+    }
+  };
+
   // Calculate midpoint and recommend places
   const handleCalculateMidpoint = async () => {
     // Check if owner has departure point
@@ -392,12 +441,30 @@ export default function CreateEvent() {
     }
 
     setCalculatingMidpoint(true);
+    
+    // Clear previous results to force recalculation
+    setMidpointData(null);
+    setRecommendedPlaces([]);
+    setSelectedPlaceId(null);
+    setShowRecommendations(false);
+    
+    // Clear selected meeting point if it was from a previous recommendation
+    if (formData.useMeetHalf) {
+      setFormData(prev => ({
+        ...prev,
+        meetingPointName: '',
+        meetingPointAddress: '',
+        meetingPointLat: null,
+        meetingPointLng: null,
+      }));
+    }
+    
     try {
       // Collect all locations (owner + invited friends + dummy members)
       const locations = [
         {
-          lat: formData.ownerLat,
-          lng: formData.ownerLng,
+          lat: formData.ownerLat!,
+          lng: formData.ownerLng!,
           travelMode: formData.ownerTravelMode,
         },
         ...invitedFriends.map(f => ({
@@ -412,11 +479,13 @@ export default function CreateEvent() {
         })),
       ];
 
+      // Add timestamp to force new API call (prevent caching)
       const response = await calculateTempMidpoint({
         locations,
         useMeetHalf: true,
       });
 
+      // Set new results
       setMidpointData(response);
       setRecommendedPlaces(response.suggested_places || []);
       setShowRecommendations(true);
@@ -440,7 +509,30 @@ export default function CreateEvent() {
       meetingPointLat: midpointData.midpoint.lat,
       meetingPointLng: midpointData.midpoint.lng,
     }));
+    setSelectedPlaceId(place.place_id || null);
     setSnackbar({ open: true, message: `已選擇：${place.name}`, severity: 'success' });
+  };
+
+  // Open place in Google Maps
+  const handleOpenInGoogleMaps = (e: React.MouseEvent, place: any) => {
+    e.stopPropagation(); // Prevent card click event
+    
+    let mapsUrl = '';
+    if (place.place_id) {
+      // Use place_id if available (most accurate)
+      mapsUrl = `https://www.google.com/maps/place/?q=place_id:${place.place_id}`;
+    } else if (place.lat && place.lng) {
+      // Use coordinates if available
+      mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
+    } else if (place.address) {
+      // Fallback to address search
+      mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`;
+    } else {
+      setSnackbar({ open: true, message: '無法打開地圖：缺少地點資訊', severity: 'error' });
+      return;
+    }
+    
+    window.open(mapsUrl, '_blank', 'noopener,noreferrer');
   };
 
   // Initialize Google Places Autocomplete
@@ -1000,12 +1092,71 @@ export default function CreateEvent() {
                       sx={{ mb: 2 }}
                     />
 
-                    {/* 已邀請好友列表 */}
-                    {invitedFriends.length > 0 && (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 2 }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                          已邀請 {invitedFriends.length} 位好友
-                        </Typography>
+                  </Box>
+                  <Divider sx={{ my: 2 }} />
+                </>
+              )}
+
+              {/* 使用 MeetHalf 選項 */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: formData.useMeetHalf ? '#e3f2fd' : '#f5f5f5',
+                  border: '1px solid',
+                  borderColor: formData.useMeetHalf ? '#2196f3' : '#e0e0e0',
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.useMeetHalf}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormData({
+                          ...formData,
+                          useMeetHalf: checked,
+                          // 如果選擇 MeetHalf，清空地點信息
+                          ...(checked
+                            ? {
+                                meetingPointName: '',
+                                meetingPointAddress: '',
+                                meetingPointLat: null,
+                                meetingPointLng: null,
+                              }
+                            : {}),
+                        });
+                        // 如果取消勾選，也關閉推薦地點
+                        if (!checked) {
+                          setShowRecommendations(false);
+                          setSelectedPlaceId(null);
+                        }
+                      }}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        使用 MeetHalf 計算中間點
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        讓系統根據所有人的位置自動計算最佳集合地點
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
+
+              {/* MeetHalf 相關區塊（好友出發點/交通方式、假人、你的參與資訊）- 使用 Collapse */}
+              <Collapse in={formData.useMeetHalf} timeout="auto">
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {/* 已邀請好友的出發點和交通方式 */}
+                  {user && invitedFriends.length > 0 && (
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'text.secondary' }}>
+                        好友出發點設定
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                         {invitedFriends.map((friend) => (
                           <Card key={friend.userId} variant="outlined" sx={{ borderRadius: 2 }}>
                             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -1023,21 +1174,19 @@ export default function CreateEvent() {
                                     placeholder="搜尋地點或地址..."
                                     value={friend.editableLocationName || friend.editableAddress || ''}
                                     onChange={(e) => {
-                                      // Clear location when user types manually
-                                      if (e.target.value !== (friend.editableLocationName || friend.editableAddress || '')) {
-                                        const updatedFriends = invitedFriends.map(f =>
-                                          f.userId === friend.userId
-                                            ? {
-                                                ...f,
-                                                editableLocationName: null,
-                                                editableAddress: null,
-                                                editableLat: null,
-                                                editableLng: null,
-                                              }
-                                            : f
-                                        );
-                                        setInvitedFriends(updatedFriends);
-                                      }
+                                      // Update the input value when user types manually
+                                      const updatedFriends = invitedFriends.map(f =>
+                                        f.userId === friend.userId
+                                          ? {
+                                              ...f,
+                                              editableLocationName: e.target.value || null,
+                                              editableAddress: e.target.value || null,
+                                              editableLat: null,
+                                              editableLng: null,
+                                            }
+                                          : f
+                                      );
+                                      setInvitedFriends(updatedFriends);
                                     }}
                                     inputRef={(el) => {
                                       if (el && friend.userId) {
@@ -1055,7 +1204,7 @@ export default function CreateEvent() {
                                     }}
                                     fullWidth
                                     sx={{ mb: 0.5 }}
-                                    helperText={friend.editableLocationName || friend.editableAddress ? `✓ ${friend.editableLocationName || friend.editableAddress}` : '開始輸入以搜尋地點'}
+                                    // helperText={friend.editableLocationName || friend.editableAddress ? `✓ ${friend.editableLocationName || friend.editableAddress}` : '開始輸入以搜尋地點'}
                                   />
 
                                   {/* 交通方式 */}
@@ -1107,106 +1256,15 @@ export default function CreateEvent() {
                                     </Box>
                                   )}
                                 </Box>
-
-                                {/* 操作按鈕 */}
-                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => {
-                                      if (friend.userId) {
-                                        handleRemoveFriend(friend.userId);
-                                      }
-                                    }}
-                                    sx={{ color: 'error.main' }}
-                                  >
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
-                                </Box>
                               </Box>
                             </CardContent>
                           </Card>
                         ))}
                       </Box>
-                    )}
-                  </Box>
-                  <Divider sx={{ my: 2 }} />
-                </>
-              )}
-
-              {/* 使用 MeetHalf 選項 */}
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: formData.useMeetHalf ? '#e3f2fd' : '#f5f5f5',
-                  border: '1px solid',
-                  borderColor: formData.useMeetHalf ? '#2196f3' : '#e0e0e0',
-                }}
-              >
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={formData.useMeetHalf}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setFormData({
-                          ...formData,
-                          useMeetHalf: checked,
-                          // 如果選擇 MeetHalf，清空地點信息
-                          ...(checked
-                            ? {
-                                meetingPointName: '',
-                                meetingPointAddress: '',
-                                meetingPointLat: null,
-                                meetingPointLng: null,
-                              }
-                            : {}),
-                        });
-                        // 如果取消勾選，也關閉推薦地點
-                        if (!checked) {
-                          setShowRecommendations(false);
-                        }
-                      }}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        使用 MeetHalf 計算中間點
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        讓系統根據所有人的位置自動計算最佳集合地點
-                      </Typography>
                     </Box>
-                  }
-                />
+                  )}
 
-                {/* 計算推薦地點按鈕 (當勾選 MeetHalf 且有邀請好友或假人時顯示) */}
-                {formData.useMeetHalf && user && (invitedFriends.length > 0 || dummyMembers.length > 0) && (
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    startIcon={calculatingMidpoint ? <CircularProgress size={16} color="inherit" /> : <CalculateIcon />}
-                    onClick={handleCalculateMidpoint}
-                    disabled={calculatingMidpoint}
-                    sx={{
-                      mt: 2,
-                      borderRadius: 2,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      bgcolor: '#2196f3',
-                      '&:hover': { bgcolor: '#1976d2' },
-                    }}
-                  >
-                    {calculatingMidpoint ? '計算中...' : '計算推薦集合地點'}
-                  </Button>
-                )}
-              </Box>
-
-              {/* 假人管理區塊 (只在勾選 MeetHalf 時顯示) */}
-              {formData.useMeetHalf && (
-                <Box sx={{ mt: 2 }}>
-                  <Divider sx={{ my: 2 }} />
+                  {/* 假人管理區塊 */}
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
                       <PersonAddIcon fontSize="small" />
@@ -1244,117 +1302,106 @@ export default function CreateEvent() {
                           已新增 {dummyMembers.length} 個假人
                         </Typography>
                         {dummyMembers.map((dummy) => (
-                          <Card key={dummy.id} variant="outlined" sx={{ borderRadius: 2, bgcolor: '#f9fafb' }}>
+                          <Card key={dummy.id} variant="outlined" sx={{ borderRadius: 2 }}>
                             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                {/* 假人標題和刪除按鈕 */}
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Avatar sx={{ width: 32, height: 32, bgcolor: '#e0e0e0', color: '#64748b' }}>
-                                      {dummy.nickname.charAt(0)}
-                                    </Avatar>
-                                    <Box>
-                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                          {dummy.nickname}
-                                        </Typography>
-                                        <Chip
-                                          label="假人"
-                                          size="small"
-                                          sx={{
-                                            height: 18,
-                                            fontSize: '0.625rem',
-                                            bgcolor: '#e0e0e0',
-                                            color: '#64748b',
-                                            fontWeight: 600,
-                                          }}
-                                        />
-                                      </Box>
-                                    </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                                <Avatar sx={{ width: 40, height: 40, bgcolor: '#e0e0e0', color: '#64748b' }}>
+                                  {dummy.nickname.charAt(0)}
+                                </Avatar>
+                                <Box sx={{ flex: 1 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                      {dummy.nickname}
+                                    </Typography>
                                   </Box>
+                                  
+                                  {/* 出發點選擇 */}
+                                  <TextField
+                                    label="出發點"
+                                    size="small"
+                                    placeholder="搜尋地點或地址..."
+                                    value={dummy.editableLocationName || dummy.editableAddress || ''}
+                                    onChange={(e) => {
+                                      // Update the input value when user types manually
+                                      handleUpdateDummyMember(dummy.id, {
+                                        editableLocationName: e.target.value || null,
+                                        editableAddress: e.target.value || null,
+                                        editableLat: null,
+                                        editableLng: null,
+                                      });
+                                    }}
+                                    inputRef={(el) => {
+                                      if (el) {
+                                        dummyInputRefs.current.set(dummy.id, el);
+                                      } else {
+                                        dummyInputRefs.current.delete(dummy.id);
+                                      }
+                                    }}
+                                    InputProps={{
+                                      startAdornment: (
+                                        <InputAdornment position="start">
+                                          <LocationIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                        </InputAdornment>
+                                      ),
+                                    }}
+                                    fullWidth
+                                    sx={{ mb: 0.5 }}
+                                    // helperText={dummy.editableLocationName || dummy.editableAddress ? `✓ ${dummy.editableLocationName || dummy.editableAddress}` : '開始輸入以搜尋地點'}
+                                  />
+
+                                  {/* 交通方式 */}
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                    {dummy.travelMode === 'driving' && <CarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    {dummy.travelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    {dummy.travelMode === 'walking' && <WalkIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    {dummy.travelMode === 'bicycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                                      <Select
+                                        value={dummy.travelMode}
+                                        onChange={(e) => handleUpdateDummyMember(dummy.id, { travelMode: e.target.value as any })}
+                                        sx={{
+                                          fontSize: '0.75rem',
+                                          height: 24,
+                                          '& .MuiSelect-select': {
+                                            py: 0.5,
+                                            px: 1,
+                                          },
+                                        }}
+                                      >
+                                        <MenuItem value="driving">🚗 開車</MenuItem>
+                                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
+                                        <MenuItem value="walking">🚶 步行</MenuItem>
+                                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                                      </Select>
+                                    </FormControl>
+                                  </Box>
+
+                                  {/* 預計交通時間 (如果已選擇集合地點) */}
+                                  {formData.meetingPointLat && formData.meetingPointLng && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      <TimeIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                                      <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                                        預計 {dummy.estimatedDuration || '計算中...'}
+                                      </Typography>
+                                      {dummy.estimatedDistance && (
+                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                          ({dummy.estimatedDistance})
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  )}
+                                </Box>
+
+                                {/* 操作按鈕 */}
+                                <Box sx={{ display: 'flex', gap: 0.5 }}>
                                   <IconButton
                                     size="small"
                                     onClick={() => handleRemoveDummyMember(dummy.id)}
                                     sx={{ color: 'error.main' }}
                                   >
-                                    <DeleteIcon fontSize="small" />
+                                    <Trash2 size={16} />
                                   </IconButton>
                                 </Box>
-
-                                {/* 暱稱編輯 */}
-                                <TextField
-                                  label="暱稱"
-                                  size="small"
-                                  value={dummy.nickname}
-                                  onChange={(e) => handleUpdateDummyMember(dummy.id, { nickname: e.target.value })}
-                                  fullWidth
-                                  required
-                                />
-
-                                {/* 出發點選擇 */}
-                                <TextField
-                                  label="出發點"
-                                  size="small"
-                                  placeholder="搜尋地點或地址..."
-                                  value={dummy.editableLocationName || dummy.editableAddress || ''}
-                                  onChange={(e) => {
-                                    // Clear location when user types manually
-                                    if (e.target.value !== (dummy.editableLocationName || dummy.editableAddress || '')) {
-                                      handleUpdateDummyMember(dummy.id, {
-                                        editableLocationName: null,
-                                        editableAddress: null,
-                                        editableLat: null,
-                                        editableLng: null,
-                                      });
-                                    }
-                                  }}
-                                  inputRef={(el) => {
-                                    if (el) {
-                                      dummyInputRefs.current.set(dummy.id, el);
-                                    } else {
-                                      dummyInputRefs.current.delete(dummy.id);
-                                    }
-                                  }}
-                                  InputProps={{
-                                    startAdornment: (
-                                      <InputAdornment position="start">
-                                        <LocationIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                                      </InputAdornment>
-                                    ),
-                                  }}
-                                  fullWidth
-                                  helperText={dummy.editableLocationName || dummy.editableAddress ? `✓ ${dummy.editableLocationName || dummy.editableAddress}` : '開始輸入以搜尋地點'}
-                                />
-
-                                {/* 交通方式選擇 */}
-                                <FormControl fullWidth size="small">
-                                  <InputLabel>交通方式</InputLabel>
-                                  <Select
-                                    value={dummy.travelMode}
-                                    onChange={(e) => handleUpdateDummyMember(dummy.id, { travelMode: e.target.value as any })}
-                                    label="交通方式"
-                                  >
-                                    <MenuItem value="driving">🚗 開車</MenuItem>
-                                    <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                                    <MenuItem value="walking">🚶 步行</MenuItem>
-                                    <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                                  </Select>
-                                </FormControl>
-
-                                {/* 預計交通時間 (如果已選擇集合地點) */}
-                                {formData.meetingPointLat && formData.meetingPointLng && (
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <TimeIcon sx={{ fontSize: 14, color: 'primary.main' }} />
-                                    <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
-                                      預計 {dummy.estimatedDuration || '計算中...'}
-                                    </Typography>
-                                    {dummy.estimatedDistance && (
-                                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                        ({dummy.estimatedDistance})
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                )}
                               </Box>
                             </CardContent>
                           </Card>
@@ -1362,8 +1409,126 @@ export default function CreateEvent() {
                       </Box>
                     )}
                   </Box>
+
+                  {/* 你的參與資訊 */}
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: 'text.secondary' }}>
+                      你的參與資訊
+                    </Typography>
+
+                    {/* 主辦暱稱 */}
+                    <TextField
+                      label="你的暱稱"
+                      placeholder="例如：小明"
+                      value={formData.ownerNickname}
+                      onChange={(e) => setFormData({ ...formData, ownerNickname: e.target.value })}
+                      fullWidth
+                      required
+                      helperText="這個暱稱會顯示在活動成員列表中"
+                      sx={{ mb: 2 }}
+                    />
+
+                    {/* 出發點編輯 */}
+                    <TextField
+                      label="你的出發點"
+                      placeholder="搜尋地點或地址..."
+                      value={formData.ownerLocationName || formData.ownerAddress || ''}
+                      onChange={(e) => {
+                        // Update the input value when user types manually
+                        setFormData(prev => ({
+                          ...prev,
+                          ownerLocationName: e.target.value || null,
+                          ownerAddress: e.target.value || null,
+                          ownerLat: null,
+                          ownerLng: null,
+                        }));
+                      }}
+                      inputRef={ownerAutocompleteInputRef}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <LocationIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                      fullWidth
+                      // helperText={formData.ownerLocationName || formData.ownerAddress ? `✓ ${formData.ownerLocationName || formData.ownerAddress}` : '開始輸入以搜尋地點'}
+                      sx={{ mb: 2 }}
+                    />
+
+                    {/* 交通方式 */}
+                    <FormControl fullWidth sx={{ mb: 2 }}>
+                      <InputLabel>交通方式</InputLabel>
+                      <Select
+                        value={formData.ownerTravelMode}
+                        onChange={(e) => setFormData({ ...formData, ownerTravelMode: e.target.value as any })}
+                        label="交通方式"
+                      >
+                        <MenuItem value="driving">🚗 開車</MenuItem>
+                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
+                        <MenuItem value="walking">🚶 步行</MenuItem>
+                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    {/* 預計交通時間 (如果已選擇集合地點) */}
+                    {formData.meetingPointLat && formData.meetingPointLng && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
+                        <TimeIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                        <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                          預計 {ownerEstimatedDuration || '計算中...'}
+                        </Typography>
+                        {ownerEstimatedDistance && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            ({ownerEstimatedDistance})
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* 是否分享位置 */}
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.ownerShareLocation}
+                          onChange={(e) => setFormData({ ...formData, ownerShareLocation: e.target.checked })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            分享我的位置
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            我們會在聚會前後 30 分鐘內追蹤你的位置
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Box>
+
+                  {/* 計算推薦地點按鈕 */}
+                  {user && (invitedFriends.length > 0 || dummyMembers.length > 0) && (
+                    <Button
+                      variant="contained"
+                      fullWidth
+                      startIcon={calculatingMidpoint ? <CircularProgress size={16} color="inherit" /> : <CalculateIcon />}
+                      onClick={handleCalculateMidpoint}
+                      disabled={calculatingMidpoint}
+                      sx={{
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        bgcolor: '#2196f3',
+                        '&:hover': { bgcolor: '#1976d2' },
+                      }}
+                    >
+                      {calculatingMidpoint ? '計算中...' : '計算推薦集合地點'}
+                    </Button>
+                  )}
                 </Box>
-              )}
+              </Collapse>
+
 
               {/* 推薦地點展開列表 */}
               <Collapse in={showRecommendations} timeout="auto">
@@ -1394,23 +1559,28 @@ export default function CreateEvent() {
 
                   {recommendedPlaces.length > 0 ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      {recommendedPlaces.map((place, index) => (
-                        <Card
-                          key={place.place_id || index}
-                          variant="outlined"
-                          sx={{
-                            borderRadius: 2,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                              borderColor: 'primary.main',
-                              bgcolor: 'primary.50',
-                              transform: 'translateY(-2px)',
-                              boxShadow: 1,
-                            },
-                          }}
-                          onClick={() => handleSelectRecommendedPlace(place)}
-                        >
+                      {recommendedPlaces.map((place, index) => {
+                        const isSelected = selectedPlaceId === (place.place_id || null);
+                        return (
+                          <Card
+                            key={`${place.place_id || index}-${midpointData?.midpoint?.lat}-${midpointData?.midpoint?.lng}`}
+                            variant="outlined"
+                            sx={{
+                              borderRadius: 2,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              border: isSelected ? '2px solid' : '1px solid',
+                              borderColor: isSelected ? 'primary.main' : 'divider',
+                              bgcolor: isSelected ? 'primary.50' : 'white',
+                              '&:hover': {
+                                borderColor: 'primary.main',
+                                bgcolor: isSelected ? 'primary.50' : 'primary.50',
+                                transform: 'translateY(-2px)',
+                                boxShadow: 1,
+                              },
+                            }}
+                            onClick={() => handleSelectRecommendedPlace(place)}
+                          >
                           <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                               <LocationIcon sx={{ color: 'primary.main', mt: 0.5 }} />
@@ -1422,7 +1592,7 @@ export default function CreateEvent() {
                                   {place.address}
                                 </Typography>
                                 {place.rating && (
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                                     <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600 }}>
                                       ⭐ {place.rating}
                                     </Typography>
@@ -1433,11 +1603,41 @@ export default function CreateEvent() {
                                     )}
                                   </Box>
                                 )}
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
+                                  onClick={(e) => handleOpenInGoogleMaps(e, place)}
+                                  sx={{
+                                    mt: 0.5,
+                                    textTransform: 'none',
+                                    fontSize: '0.75rem',
+                                    minWidth: 'auto',
+                                    py: 0.5,
+                                    px: 1.5,
+                                    borderColor: 'primary.main',
+                                    color: 'primary.main',
+                                    '&:hover': {
+                                      borderColor: 'primary.dark',
+                                      bgcolor: 'primary.50',
+                                    },
+                                  }}
+                                >
+                                  在 Google Maps 中查看
+                                </Button>
                               </Box>
                             </Box>
+                            {isSelected && (
+                              <Box sx={{ borderColor: 'primary.main' }}>
+                                {/* <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                                  ✓ 已選擇此地點
+                                </Typography> */}
+                              </Box>
+                            )}
                           </CardContent>
                         </Card>
-                      ))}
+                        );
+                      })}
                     </Box>
                   ) : (
                     <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 2 }}>
@@ -1469,119 +1669,38 @@ export default function CreateEvent() {
                 </Paper>
               </Collapse>
 
-              {/* 地點選擇（如果沒有選擇 MeetHalf） */}
-              {!formData.useMeetHalf && (
-                <TextField
-                  label="集合地點"
-                  placeholder="搜尋地點或地址..."
-                  value={formData.meetingPointName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, meetingPointName: e.target.value })
-                  }
-                  inputRef={autocompleteInputRef}
-                  fullWidth
-                  required={!formData.useMeetHalf}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <LocationIcon sx={{ color: 'text.secondary' }} />
-                      </InputAdornment>
-                    ),
-                  }}
-                  helperText={
-                    formData.meetingPointLat && formData.meetingPointLng
-                      ? `✓ 已選擇：${formData.meetingPointAddress || formData.meetingPointName}`
-                      : '開始輸入以搜尋地點（使用 Google Places）'
-                  }
-                />
-              )}
-
-              {/* 分隔線 */}
-              <Box sx={{ 
-                my: 2, 
-                borderTop: '1px solid', 
-                borderColor: 'divider',
-                pt: 2 
-              }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: 'text.secondary' }}>
-                  你的參與資訊
-                </Typography>
-              </Box>
-
-              {/* 主辦暱稱 */}
+              {/* 集合地點欄位（始終顯示，使用 MeetHalf 時會帶入選擇的推薦地點） */}
               <TextField
-                label="你的暱稱"
-                placeholder="例如：小明"
-                value={formData.ownerNickname}
-                onChange={(e) => setFormData({ ...formData, ownerNickname: e.target.value })}
-                fullWidth
-                required
-                helperText="這個暱稱會顯示在活動成員列表中"
-              />
-
-              {/* 出發點編輯 */}
-              <TextField
-                label="你的出發點"
-                placeholder="搜尋地點或地址..."
-                value={formData.ownerLocationName || formData.ownerAddress || ''}
+                label="集合地點"
+                placeholder={formData.useMeetHalf ? "從推薦地點中選擇，或手動輸入..." : "搜尋地點或地址..."}
+                value={formData.meetingPointName}
                 onChange={(e) => {
-                  // Clear location when user types manually
-                  if (e.target.value !== (formData.ownerLocationName || formData.ownerAddress || '')) {
-                    setFormData(prev => ({
-                      ...prev,
-                      ownerLocationName: null,
-                      ownerAddress: null,
-                      ownerLat: null,
-                      ownerLng: null,
-                    }));
+                  setFormData({ ...formData, meetingPointName: e.target.value });
+                  // Clear selected place if user manually types
+                  if (e.target.value !== formData.meetingPointName) {
+                    setSelectedPlaceId(null);
                   }
                 }}
-                inputRef={ownerAutocompleteInputRef}
+                inputRef={autocompleteInputRef}
+                fullWidth
+                required={!formData.useMeetHalf}
+                disabled={formData.useMeetHalf && !!selectedPlaceId}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <LocationIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                      <LocationIcon sx={{ color: 'text.secondary' }} />
                     </InputAdornment>
                   ),
                 }}
-                fullWidth
-                helperText={formData.ownerLocationName || formData.ownerAddress ? `✓ ${formData.ownerLocationName || formData.ownerAddress}` : '開始輸入以搜尋地點'}
-              />
-
-              {/* 交通方式 */}
-              <FormControl fullWidth>
-                <InputLabel>交通方式</InputLabel>
-                <Select
-                  value={formData.ownerTravelMode}
-                  onChange={(e) => setFormData({ ...formData, ownerTravelMode: e.target.value as any })}
-                  label="交通方式"
-                >
-                  <MenuItem value="driving">🚗 開車</MenuItem>
-                  <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                  <MenuItem value="walking">🚶 步行</MenuItem>
-                  <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                </Select>
-              </FormControl>
-
-              {/* 是否分享位置 */}
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={formData.ownerShareLocation}
-                    onChange={(e) => setFormData({ ...formData, ownerShareLocation: e.target.checked })}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      分享我的位置
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      我們會在聚會前後 30 分鐘內追蹤你的位置
-                    </Typography>
-                  </Box>
+                helperText={
+                  formData.meetingPointLat && formData.meetingPointLng
+                    ? `✓ 已選擇：${formData.meetingPointAddress || formData.meetingPointName}${formData.useMeetHalf && selectedPlaceId ? '（來自推薦地點）' : ''}`
+                    : formData.useMeetHalf
+                    ? '從上方推薦地點中選擇，或手動輸入地點'
+                    : '開始輸入以搜尋地點（使用 Google Places）'
                 }
               />
+
 
               {/* 提交按鈕 */}
               <Button

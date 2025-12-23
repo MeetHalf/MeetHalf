@@ -194,17 +194,21 @@ export class ChatService {
   async markConversationAsRead(userId: string, receiverId?: string, groupId?: number) {
     const messages = await chatRepository.markConversationAsRead(userId, receiverId, groupId);
 
-    // Trigger read receipts for all marked messages
-    for (const message of messages) {
-      if (message.receiverId) {
-        triggerChatChannel('user', message.senderId, 'message-read', {
-          messageId: message.id,
-          readBy: userId,
+    // Only trigger read receipts if there are messages marked
+    // Batch trigger: send one event per conversation instead of per message
+    if (messages.length > 0) {
+      const firstMessage = messages[0];
+      if (firstMessage.receiverId) {
+        // Private conversation - trigger for sender
+        triggerChatChannel('user', firstMessage.senderId, 'conversation-read', {
+          receiverId: userId,
+          messageIds: messages.map(m => m.id),
         });
-      } else if (message.groupId) {
-        triggerChatChannel('group', message.groupId, 'message-read', {
-          messageId: message.id,
+      } else if (firstMessage.groupId) {
+        // Group conversation - trigger for group
+        triggerChatChannel('group', firstMessage.groupId, 'conversation-read', {
           readBy: userId,
+          messageIds: messages.map(m => m.id),
         });
       }
     }

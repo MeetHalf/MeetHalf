@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { CssBaseline, ThemeProvider, Box, CircularProgress } from '@mui/material';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { router } from './router';
 import { theme } from './theme';
 import { subscribeToInterest } from './lib/pusherBeams';
+import { queryClient } from './lib/queryClient';
 
 // Handle temporary auth token from URL (mobile fallback for when cookies are blocked)
 async function handleTempAuthTokenFromURL(): Promise<boolean> {
@@ -110,10 +112,12 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AuthProvider>
-        <PusherBeamsSubscriber />
-        <RouterProvider router={router} />
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <PusherBeamsSubscriber />
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }

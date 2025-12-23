@@ -17,6 +17,7 @@ import friendsRouter from './routes/friends';
 import chatRouter from './routes/chat';
 import notificationsRouter from './routes/notifications';
 import groupsRouter from './routes/groups';
+import cronRouter from './routes/cron';
 import { mapsRateLimiter } from './middleware/rateLimit';
 
 // Load environment variables
@@ -56,7 +57,7 @@ app.use(
         ],
         connectSrc: [
           "'self'",
-          // Allow connections to API endpoints for Swagger spec
+          'https://cdn.jsdelivr.net', // Allow Swagger UI to load resources from CDN
         ],
         fontSrc: ["'self'", 'https://cdn.jsdelivr.net'],
         imgSrc: ["'self'", 'data:', 'https:'],
@@ -80,20 +81,25 @@ const isVercelOrigin = (origin: string): boolean => {
   return /^https:\/\/.*\.vercel\.app$/.test(origin);
 };
 
+// Helper to conditionally log (only in development or when DEBUG=true)
+const shouldLog = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true';
+const debugLog = shouldLog ? console.log : () => {};
+const debugWarn = shouldLog ? console.warn : () => {};
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      console.log('[CORS] Checking origin:', origin);
+      debugLog('[CORS] Checking origin:', origin);
       
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) {
-        console.log('[CORS] ✓ No origin, allowing request');
+        debugLog('[CORS] ✓ No origin, allowing request');
         return callback(null, true);
       }
       
       // In development, allow all origins
       if (process.env.NODE_ENV === 'development') {
-        console.log('[CORS] ✓ Development mode, allowing origin:', origin);
+        debugLog('[CORS] ✓ Development mode, allowing origin:', origin);
         return callback(null, true);
       }
       
@@ -101,23 +107,23 @@ app.use(
       if (process.env.FRONTEND_ORIGIN) {
         const isAllowed = allowedOrigins.some(allowed => origin === allowed);
         if (isAllowed) {
-          console.log('[CORS] ✓ Origin allowed (FRONTEND_ORIGIN match):', origin);
+          debugLog('[CORS] ✓ Origin allowed (FRONTEND_ORIGIN match):', origin);
           return callback(null, true);
         }
         // If FRONTEND_ORIGIN is set but doesn't match, check if it's a Vercel origin
         // (useful for preview deployments that match the pattern)
         if (isVercelOrigin(origin)) {
-          console.log('[CORS] ✓ Origin allowed (Vercel origin):', origin);
+          debugLog('[CORS] ✓ Origin allowed (Vercel origin):', origin);
           return callback(null, true);
         }
-        console.warn(`[CORS] ✗ Blocked origin: ${origin} (FRONTEND_ORIGIN is set to: ${process.env.FRONTEND_ORIGIN})`);
+        debugWarn(`[CORS] ✗ Blocked origin: ${origin} (FRONTEND_ORIGIN is set to: ${process.env.FRONTEND_ORIGIN})`);
         return callback(new Error('Not allowed by CORS'));
       }
       
       // If FRONTEND_ORIGIN is not set, allow all Vercel preview deployments
       // (fallback for convenience when FRONTEND_ORIGIN is not configured)
       if (isVercelOrigin(origin)) {
-        console.log('[CORS] ✓ Origin allowed (Vercel origin, no FRONTEND_ORIGIN):', origin);
+        debugLog('[CORS] ✓ Origin allowed (Vercel origin, no FRONTEND_ORIGIN):', origin);
         return callback(null, true);
       }
       
@@ -125,10 +131,10 @@ app.use(
       const isAllowed = allowedOrigins.some(allowed => origin === allowed);
       
       if (isAllowed) {
-        console.log('[CORS] ✓ Origin allowed (explicit match):', origin);
+        debugLog('[CORS] ✓ Origin allowed (explicit match):', origin);
         callback(null, true);
       } else {
-        console.warn(`[CORS] ✗ Blocked origin: ${origin}`);
+        debugWarn(`[CORS] ✗ Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -142,20 +148,15 @@ app.use(passport.initialize());
 app.use(cookieParser());
 app.use(express.json());
 
-// Request logging middleware (log all incoming requests)
+// Request logging middleware (only log in development or when DEBUG=true)
 app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log('[REQUEST]', {
-    method: req.method,
-    path: req.path,
-    url: req.url,
-    originalUrl: req.originalUrl,
-    query: req.query,
-    headers: {
-      origin: req.headers.origin,
-      host: req.headers.host,
-      'user-agent': req.headers['user-agent'],
-    },
-  });
+  if (shouldLog) {
+    console.log('[REQUEST]', {
+      method: req.method,
+      path: req.path,
+      url: req.url,
+    });
+  }
   next();
 });
 
@@ -253,6 +254,8 @@ app.use('/notifications', notificationsRouter);
 console.log('[ROUTES] ✓ /notifications registered');
 app.use('/groups', groupsRouter);
 console.log('[ROUTES] ✓ /groups registered');
+app.use('/api/cron', cronRouter);
+console.log('[ROUTES] ✓ /api/cron registered');
 console.log('[ROUTES] All routes registered successfully');
 
 // 404 handler

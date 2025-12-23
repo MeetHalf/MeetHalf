@@ -7,7 +7,7 @@ import { useNotifications } from '../hooks/useNotifications';
 export default function Navbar() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { unreadCount } = useNotifications(user?.userId || undefined);
+  const { unreadCount } = useNotifications(user?.userId ?? undefined);
 
   return (
     <Box

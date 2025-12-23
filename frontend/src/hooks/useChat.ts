@@ -1,129 +1,203 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatApi } from '../api/chat';
 import { ChatMessage, Conversation } from '../types/chat';
 import { usePusher } from './usePusher';
 
+/**
+ * Helper function to deduplicate messages
+ */
+function deduplicateMessages(prev: ChatMessage[], newMessage: ChatMessage): ChatMessage[] {
+  // Check if message already exists by ID
+  const existingIndex = prev.findIndex((m) => m.id === newMessage.id);
+  if (existingIndex !== -1) {
+    console.log('[useChat] Duplicate message detected by ID, updating:', newMessage.id);
+    // Update existing message with server data (in case it has more complete info)
+    const updated = [...prev];
+    updated[existingIndex] = newMessage;
+    return updated;
+  }
+  
+  // Also check for duplicate by content, sender, and timestamp (within 2 seconds)
+  // This handles cases where ID might not match but it's the same message
+  const duplicateIndex = prev.findIndex((m) => {
+    const timeDiff = Math.abs(new Date(m.createdAt).getTime() - new Date(newMessage.createdAt).getTime());
+    return (
+      m.content === newMessage.content &&
+      m.senderId === newMessage.senderId &&
+      timeDiff < 2000 // 2 seconds
+    );
+  });
+  
+  if (duplicateIndex !== -1) {
+    console.log('[useChat] Duplicate message detected by content/timestamp, updating');
+    // Update existing message with server data
+    const updated = [...prev];
+    updated[duplicateIndex] = newMessage;
+    return updated;
+  }
+  
+  return [...prev, newMessage];
+}
+
 export function useChat(userId?: string, type?: 'user' | 'group', id?: string | number) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  // Load conversations
-  const loadConversations = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('[useChat] Loading conversations...');
+  // Query for conversations list
+  const {
+    data: conversations = [],
+    isLoading: conversationsLoading,
+    error: conversationsError,
+    refetch: loadConversations,
+  } = useQuery<Conversation[]>({
+    queryKey: ['conversations', userId],
+    queryFn: async () => {
       const { conversations: data } = await chatApi.getConversations();
-      console.log('[useChat] Conversations loaded:', data);
-      setConversations(data);
-    } catch (err: any) {
-      const errorMessage = err?.response?.data?.message || err?.message || 'Failed to load conversations';
-      console.error('[useChat] Error loading conversations:', {
-        message: errorMessage,
-        status: err?.response?.status,
-        data: err?.response?.data,
-        fullError: err,
-      });
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return data;
+    },
+    enabled: !!userId,
+    staleTime: 10 * 1000, // 10 seconds - conversations change frequently
+  });
 
-  // Load messages for a conversation
-  const loadMessages = useCallback(
-    async (params: { receiverId?: string; groupId?: number; limit?: number; offset?: number }) => {
-      try {
-        setLoading(true);
-        setError(null);
-        const { messages: data } = await chatApi.getMessages(params);
-        setMessages(data);
-      } catch (err: any) {
-        setError(err?.response?.data?.message || 'Failed to load messages');
-        console.error('Error loading messages:', err);
-      } finally {
-        setLoading(false);
+  // Query for messages in current conversation
+  const chatId = id ? (type === 'group' ? parseInt(String(id)) : id) : undefined;
+  const {
+    data: messages = [],
+    isLoading: messagesLoading,
+    error: messagesError,
+    refetch: loadMessages,
+  } = useQuery<ChatMessage[]>({
+    queryKey: ['messages', type, chatId],
+    queryFn: async () => {
+      if (!type || !id) return [];
+      const params: { receiverId?: string; groupId?: number } = {};
+      if (type === 'user') {
+        params.receiverId = String(id);
+      } else {
+        params.groupId = parseInt(String(id));
+      }
+      const { messages: data } = await chatApi.getMessages(params);
+      return data;
+    },
+    enabled: !!type && !!id && !!userId,
+    staleTime: 5 * 1000, // 5 seconds - messages are real-time via Pusher
+  });
+
+  // Query for unread count
+  const {
+    data: unreadCount = 0,
+    refetch: loadUnreadCount,
+  } = useQuery<number>({
+    queryKey: ['unreadCount', userId],
+    queryFn: async () => {
+      const { count } = await chatApi.getUnreadCount();
+      return count;
+    },
+    enabled: !!userId,
+    staleTime: 10 * 1000, // 10 seconds
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds
+  });
+
+  // Mutation for sending messages with optimistic update
+  const sendMessageMutation = useMutation({
+    mutationFn: async ({ content, receiverId, groupId }: { content: string; receiverId?: string; groupId?: number }) => {
+      const { message } = await chatApi.sendMessage({ content, receiverId, groupId });
+      return message;
+    },
+    onMutate: async ({ content, receiverId, groupId }) => {
+      // Cancel outgoing queries to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['messages', type, chatId] });
+      await queryClient.cancelQueries({ queryKey: ['conversations', userId] });
+
+      // Snapshot previous values
+      const previousMessages = queryClient.getQueryData<ChatMessage[]>(['messages', type, chatId]);
+      const previousConversations = queryClient.getQueryData<Conversation[]>(['conversations', userId]);
+
+      // Optimistically update messages
+      if (previousMessages && type && chatId) {
+        const optimisticMessage: ChatMessage = {
+          id: Date.now(), // Temporary ID
+          content,
+          senderId: userId || '',
+          receiverId: receiverId || null,
+          groupId: groupId || null,
+          readBy: [userId || ''],
+          createdAt: new Date().toISOString(),
+          sender: undefined, // Will be filled by server response
+        };
+        
+        queryClient.setQueryData<ChatMessage[]>(['messages', type, chatId], (old = []) => {
+          return [...old, optimisticMessage];
+        });
+      }
+
+      return { previousMessages, previousConversations };
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback optimistic update on error
+      if (context?.previousMessages) {
+        queryClient.setQueryData(['messages', type, chatId], context.previousMessages);
+      }
+      if (context?.previousConversations) {
+        queryClient.setQueryData(['conversations', userId], context.previousConversations);
       }
     },
-    []
-  );
+    onSuccess: (message) => {
+      // Update messages with server response (replaces optimistic message)
+      if (type && chatId) {
+        queryClient.setQueryData<ChatMessage[]>(['messages', type, chatId], (old = []) => {
+          return deduplicateMessages(old, message);
+        });
+      }
+      
+      // Invalidate conversations to refresh last message
+      queryClient.invalidateQueries({ queryKey: ['conversations', userId] });
+    },
+  });
 
-  // Load unread count
-  const loadUnreadCount = useCallback(async () => {
-    try {
-      const { count } = await chatApi.getUnreadCount();
-      setUnreadCount(count);
-    } catch (err: any) {
-      console.error('Error loading unread count:', err);
-    }
-  }, []);
-
-  // Send message
-  const sendMessage = useCallback(async (content: string, receiverId?: string, groupId?: number) => {
-    try {
-      setError(null);
-      const { message } = await chatApi.sendMessage({ content, receiverId, groupId });
-      // Add to local messages for optimistic update
-      // Pusher event will update it if it arrives (handled by duplicate check)
-      setMessages((prev) => {
-        // Check if message already exists (from Pusher event that arrived first)
-        if (prev.some((m) => m.id === message.id)) {
-          return prev;
-        }
-        return [...prev, message];
-      });
-      return message;
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to send message');
-      console.error('Error sending message:', err);
-      return null;
-    }
-  }, []);
-
-  // Mark message as read
-  const markAsRead = useCallback(async (messageId: number) => {
-    try {
+  // Mutation for marking message as read
+  const markAsReadMutation = useMutation({
+    mutationFn: async (messageId: number) => {
       await chatApi.markAsRead(messageId);
-    } catch (err: any) {
-      console.error('Error marking message as read:', err);
-    }
-  }, []);
+      return messageId;
+    },
+    onSuccess: (messageId) => {
+      // Update message readBy in cache
+      if (type && chatId) {
+        queryClient.setQueryData<ChatMessage[]>(['messages', type, chatId], (old = []) => {
+          return old.map((m) =>
+            m.id === messageId
+              ? { ...m, readBy: [...new Set([...m.readBy, userId || ''])] }
+              : m
+          );
+        });
+      }
+    },
+  });
 
-  // Mark entire conversation as read
-  const markConversationAsRead = useCallback(async (params: { receiverId?: string; groupId?: number }) => {
-    try {
+  // Mutation for marking conversation as read
+  const markConversationAsReadMutation = useMutation({
+    mutationFn: async (params: { receiverId?: string; groupId?: number }) => {
       const result = await chatApi.markConversationAsRead(params);
-      // Update local unread count
-      await loadUnreadCount();
-      
-      // Trigger event to notify other components to update their unread count
-      window.dispatchEvent(new CustomEvent('chat-unread-updated'));
-      
       return result.count;
-    } catch (err: any) {
-      console.error('Error marking conversation as read:', err);
-      return 0;
-    }
-  }, [loadUnreadCount]);
+    },
+    onSuccess: () => {
+      // Invalidate unread count and conversations
+      queryClient.invalidateQueries({ queryKey: ['unreadCount', userId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations', userId] });
+      
+      // Trigger event to notify other components
+      window.dispatchEvent(new CustomEvent('chat-unread-updated'));
+    },
+  });
 
-  // Search messages
-  const searchMessages = useCallback(async (query: string) => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Mutation for searching messages
+  const searchMessagesMutation = useMutation({
+    mutationFn: async (query: string) => {
       const { messages: data } = await chatApi.searchMessages(query);
       return data;
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to search messages');
-      console.error('Error searching messages:', err);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+  });
 
   // Set up Pusher for real-time messages
   const channelName = type && id
@@ -136,45 +210,25 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     channelName,
     eventName: 'new-message',
     onEvent: (data: ChatMessage) => {
-      console.log('[useChat] New message received:', data);
-      setMessages((prev) => {
-        // Check if message already exists by ID
-        const existingIndex = prev.findIndex((m) => m.id === data.id);
-        if (existingIndex !== -1) {
-          console.log('[useChat] Duplicate message detected by ID, updating:', data.id);
-          // Update existing message with server data (in case it has more complete info)
-          const updated = [...prev];
-          updated[existingIndex] = data;
-          return updated;
-        }
-        // Also check for duplicate by content, sender, and timestamp (within 2 seconds)
-        // This handles cases where ID might not match but it's the same message
-        const duplicateIndex = prev.findIndex((m) => {
-          const timeDiff = Math.abs(new Date(m.createdAt).getTime() - new Date(data.createdAt).getTime());
-          return (
-            m.content === data.content &&
-            m.senderId === data.senderId &&
-            timeDiff < 2000 // 2 seconds
-          );
+      console.log('[useChat] New message received via Pusher:', data);
+      
+      // Update messages cache with deduplication
+      if (type && chatId) {
+        queryClient.setQueryData<ChatMessage[]>(['messages', type, chatId], (old = []) => {
+          return deduplicateMessages(old, data);
         });
-        if (duplicateIndex !== -1) {
-          console.log('[useChat] Duplicate message detected by content/timestamp, updating');
-          // Update existing message with server data
-          const updated = [...prev];
-          updated[duplicateIndex] = data;
-          return updated;
-        }
-        return [...prev, data];
-      });
+      }
+      
+      // Invalidate conversations to refresh last message
+      queryClient.invalidateQueries({ queryKey: ['conversations', userId] });
       
       // If user is currently in this chat and the message is from someone else, mark as read
       if (userId && type && id && data.senderId !== userId) {
-        // Mark the message as read immediately
-        markAsRead(data.id);
+        markAsReadMutation.mutate(data.id);
       }
       
-      // Update unread count and notify other components
-      loadUnreadCount();
+      // Update unread count
+      queryClient.invalidateQueries({ queryKey: ['unreadCount', userId] });
       window.dispatchEvent(new CustomEvent('chat-unread-updated'));
     },
   });
@@ -184,33 +238,28 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     channelName,
     eventName: 'message-read',
     onEvent: (data: { messageId: number; readBy: string }) => {
-      console.log('[useChat] Message read receipt:', data);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === data.messageId
-            ? {
-                ...m,
-                readBy: [...new Set([...m.readBy, data.readBy])],
-              }
-            : m
-        )
-      );
+      console.log('[useChat] Message read receipt received:', data);
+      
+      // Update message readBy in cache
+      if (type && chatId) {
+        queryClient.setQueryData<ChatMessage[]>(['messages', type, chatId], (old = []) => {
+          return old.map((m) =>
+            m.id === data.messageId
+              ? {
+                  ...m,
+                  readBy: [...new Set([...m.readBy, data.readBy])],
+                }
+              : m
+          );
+        });
+      }
     },
   });
-
-  // Load initial data
-  useEffect(() => {
-    if (userId) {
-      loadUnreadCount();
-    }
-  }, [userId, loadUnreadCount]);
 
   // Listen for unread count updates from other components
   useEffect(() => {
     const handleUnreadUpdate = () => {
-      if (userId) {
-        loadUnreadCount();
-      }
+      queryClient.invalidateQueries({ queryKey: ['unreadCount', userId] });
     };
 
     window.addEventListener('chat-unread-updated', handleUnreadUpdate);
@@ -218,16 +267,49 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     return () => {
       window.removeEventListener('chat-unread-updated', handleUnreadUpdate);
     };
-  }, [userId, loadUnreadCount]);
+  }, [userId, queryClient]);
+
+  // Wrapper functions for backward compatibility
+  const loadMessagesWrapper = useCallback(async (_params?: { receiverId?: string; groupId?: number; limit?: number; offset?: number }) => {
+    // Parameters are ignored because query is already based on type and id
+    return loadMessages();
+  }, [loadMessages]);
+
+  const sendMessage = useCallback(async (content: string, receiverId?: string, groupId?: number) => {
+    try {
+      const message = await sendMessageMutation.mutateAsync({ content, receiverId, groupId });
+      return message;
+    } catch (err: any) {
+      console.error('Error sending message:', err);
+      return null;
+    }
+  }, [sendMessageMutation]);
+
+  const markAsRead = useCallback(async (messageId: number) => {
+    markAsReadMutation.mutate(messageId);
+  }, [markAsReadMutation]);
+
+  const markConversationAsRead = useCallback(async (params: { receiverId?: string; groupId?: number }) => {
+    return await markConversationAsReadMutation.mutateAsync(params);
+  }, [markConversationAsReadMutation]);
+
+  const searchMessages = useCallback(async (query: string) => {
+    try {
+      return await searchMessagesMutation.mutateAsync(query);
+    } catch (err: any) {
+      console.error('Error searching messages:', err);
+      return [];
+    }
+  }, [searchMessagesMutation]);
 
   return {
     messages,
     conversations,
     unreadCount,
-    loading,
-    error,
+    loading: conversationsLoading || messagesLoading,
+    error: conversationsError || messagesError,
     loadConversations,
-    loadMessages,
+    loadMessages: loadMessagesWrapper,
     sendMessage,
     markAsRead,
     markConversationAsRead,
@@ -235,4 +317,3 @@ export function useChat(userId?: string, type?: 'user' | 'group', id?: string | 
     searchMessages,
   };
 }
-

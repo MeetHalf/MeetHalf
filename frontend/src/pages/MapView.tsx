@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Typography,
   CircularProgress,
+  Alert,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -30,29 +32,30 @@ const getEventStatus = (event: Event): EventStatus => {
 
 export default function MapView() {
   const navigate = useNavigate();
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const response = await eventsApi.getEvents();
-        // 顯示所有 upcoming 和 ongoing events（有位置資訊的）
-        const eventsWithLocation = response.events.filter((e) => {
-          if (!e.meetingPointLat || !e.meetingPointLng) return false;
-          const status = getEventStatus(e);
-          return status === 'upcoming' || status === 'ongoing';
-        });
-        setEvents(eventsWithLocation);
-      } catch (error) {
-        console.error('Failed to fetch events:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEvents();
-  }, []);
+  // Use React Query to fetch events (reuses cache from /events page)
+  const {
+    data: allEvents = [],
+    isLoading: loading,
+    error: queryError,
+  } = useQuery<Event[]>({
+    queryKey: ['events'],
+    queryFn: async () => {
+      const response = await eventsApi.getEvents();
+      return response.events;
+    },
+    staleTime: 30 * 1000, // 30 seconds - reuse cache from Events page
+  });
+
+  // Filter events to only show upcoming and ongoing events with location
+  const events = useMemo(() => {
+    return allEvents.filter((e) => {
+      if (!e.meetingPointLat || !e.meetingPointLng) return false;
+      const status = getEventStatus(e);
+      return status === 'upcoming' || status === 'ongoing';
+    });
+  }, [allEvents]);
 
   const mapCenter = useMemo(() => {
     if (events.length === 0) {
@@ -98,7 +101,27 @@ export default function MapView() {
     return { ongoingCount: ongoing, upcomingCount: upcoming };
   }, [events]);
 
-  if (loading) {
+  // Show error if query failed
+  if (queryError) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%',
+          p: 3,
+        }}
+      >
+        <Alert severity="error" sx={{ maxWidth: 400 }}>
+          {queryError instanceof Error ? queryError.message : 'Failed to load events'}
+        </Alert>
+      </Box>
+    );
+  }
+
+  // Show loading only if we don't have cached data
+  if (loading && allEvents.length === 0) {
     return (
       <Box
         sx={{

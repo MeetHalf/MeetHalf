@@ -13,6 +13,49 @@ import {
 const router = Router();
 
 /**
+ * @swagger
+ * /friends/requests:
+ *   post:
+ *     summary: Send friend request
+ *     tags: [Friends]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - toUserId
+ *             properties:
+ *               toUserId:
+ *                 type: string
+ *                 description: User ID to send friend request to
+ *     responses:
+ *       200:
+ *         description: Friend request sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 request:
+ *                   $ref: '#/components/schemas/FriendRequest'
+ *       400:
+ *         description: Validation error or already friends/request exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * POST /api/friends/requests - Send friend request
  */
 router.post('/requests', authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -58,6 +101,47 @@ router.post('/requests', authMiddleware, async (req: Request, res: Response): Pr
 });
 
 /**
+ * @swagger
+ * /friends/requests:
+ *   get:
+ *     summary: Get friend requests
+ *     tags: [Friends]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [sent, received]
+ *           default: received
+ *         description: Type of requests to retrieve
+ *     responses:
+ *       200:
+ *         description: Friend requests retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 requests:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/FriendRequest'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * GET /api/friends/requests - Get friend requests
  */
 router.get('/requests', authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -91,6 +175,50 @@ router.get('/requests', authMiddleware, async (req: Request, res: Response): Pro
   }
 });
 
+/**
+ * @swagger
+ * /friends/requests/{id}/accept:
+ *   post:
+ *     summary: Accept friend request
+ *     tags: [Friends]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Friend request ID
+ *     responses:
+ *       200:
+ *         description: Friend request accepted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *       400:
+ *         description: Validation error or request not pending
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Friend request not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 /**
  * POST /api/friends/requests/:id/accept - Accept friend request
  */
@@ -132,6 +260,50 @@ router.post('/requests/:id/accept', authMiddleware, async (req: Request, res: Re
 });
 
 /**
+ * @swagger
+ * /friends/requests/{id}/reject:
+ *   post:
+ *     summary: Reject friend request
+ *     tags: [Friends]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Friend request ID
+ *     responses:
+ *       200:
+ *         description: Friend request rejected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *       400:
+ *         description: Validation error or request not pending
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Friend request not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * POST /api/friends/requests/:id/reject - Reject friend request
  */
 router.post('/requests/:id/reject', authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -172,6 +344,33 @@ router.post('/requests/:id/reject', authMiddleware, async (req: Request, res: Re
 });
 
 /**
+ * @swagger
+ * /friends:
+ *   get:
+ *     summary: Get friend list
+ *     tags: [Friends]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Friends retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 friends:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Friend'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+/**
  * GET /api/friends - Get friend list
  */
 router.get('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -197,6 +396,44 @@ router.get('/', authMiddleware, async (req: Request, res: Response): Promise<voi
   }
 });
 
+/**
+ * @swagger
+ * /friends/{friendId}:
+ *   delete:
+ *     summary: Delete friend
+ *     tags: [Friends]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: friendId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Friend user ID
+ *     responses:
+ *       200:
+ *         description: Friend deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *       400:
+ *         description: Validation error or not friends
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 /**
  * DELETE /api/friends/:friendId - Delete friend
  */
@@ -235,6 +472,46 @@ router.delete('/:friendId', authMiddleware, async (req: Request, res: Response):
   }
 });
 
+/**
+ * @swagger
+ * /friends/search:
+ *   get:
+ *     summary: Search users
+ *     tags: [Friends]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Search query
+ *     responses:
+ *       200:
+ *         description: Search results retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 /**
  * GET /api/friends/search - Search users
  */
