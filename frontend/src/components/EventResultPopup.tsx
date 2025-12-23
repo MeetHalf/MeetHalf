@@ -283,7 +283,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       lineHeight: 1.2,
                     }}
                   >
-                    總參加人數
+                    人數
                   </Typography>
                   <Typography
                     sx={{

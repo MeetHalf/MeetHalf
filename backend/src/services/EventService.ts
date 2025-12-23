@@ -20,13 +20,22 @@ export class EventService {
 
   /**
    * Calculate arrival status (early, ontime, late)
+   * Based on event startTime
    */
   calculateArrivalStatus(event: { startTime: Date }, arrivalTime: Date): {
     status: 'early' | 'ontime' | 'late';
     lateMinutes: number;
   } {
-    const eventTime = new Date(event.startTime);
-    const diffMinutes = (arrivalTime.getTime() - eventTime.getTime()) / 1000 / 60;
+    // Ensure startTime is a Date object
+    const eventStartTime = event.startTime instanceof Date 
+      ? event.startTime 
+      : new Date(event.startTime);
+    const arrival = arrivalTime instanceof Date 
+      ? arrivalTime 
+      : new Date(arrivalTime);
+    
+    // Calculate difference in minutes from event start time
+    const diffMinutes = (arrival.getTime() - eventStartTime.getTime()) / 1000 / 60;
 
     if (diffMinutes < 0) {
       return { status: 'early', lateMinutes: 0 };
