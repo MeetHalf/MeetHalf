@@ -3,7 +3,7 @@
 > 讓每次聚會都不再等待，即時掌握大家位置，記錄誰準時誰遲到
 
 網站連結：https://meet-half.vercel.app
-Public repo: https://github.com/MeetHalf/MeetHalf
+Public rep (with commit history): https://github.com/MeetHalf/MeetHalf
 
 ## 專案簡介
 
