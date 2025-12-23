@@ -39,11 +39,21 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Track if we've already marked this conversation as read
+  const hasMarkedAsReadRef = useRef(false);
+
   // Load messages when dialog opens
   useEffect(() => {
     if (open && user && groupId) {
       loadMessages();
-      markConversationAsRead({ groupId });
+      // Only mark as read once per dialog open
+      if (!hasMarkedAsReadRef.current) {
+        hasMarkedAsReadRef.current = true;
+        markConversationAsRead({ groupId });
+      }
+    } else if (!open) {
+      // Reset when dialog closes
+      hasMarkedAsReadRef.current = false;
     }
   }, [open, user, groupId, loadMessages, markConversationAsRead]);
 

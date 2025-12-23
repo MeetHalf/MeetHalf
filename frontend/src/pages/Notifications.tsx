@@ -218,7 +218,7 @@ export default function Notifications() {
         </Box>
         {unreadCount > 0 && (
           <Typography
-            onClick={markAllAsRead}
+            onClick={() => markAllAsRead()}
             sx={{
               color: '#2563eb',
               fontSize: '0.75rem',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -16,6 +16,7 @@ import { ArrowLeft, Send, Users } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
 import { groupsApi, Group } from '../api/groups';
+import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 
@@ -36,8 +37,19 @@ export default function ChatRoom() {
   
   // Group members dialog state
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
-  const [groupInfo, setGroupInfo] = useState<Group | null>(null);
-  const [loadingMembers, setLoadingMembers] = useState(false);
+  
+  // Use React Query for group info (with cache)
+  const { data: groupData, isLoading: loadingMembers } = useQuery<{ group: Group }>({
+    queryKey: ['group', type === 'group' ? parseInt(id || '0') : null],
+    queryFn: async () => {
+      if (type !== 'group' || !id) throw new Error('Not a group chat');
+      return await groupsApi.getGroup(parseInt(id));
+    },
+    enabled: type === 'group' && !!id && membersDialogOpen, // Only fetch when dialog is open
+    staleTime: 30 * 1000, // 30 seconds
+  });
+  
+  const groupInfo = useMemo(() => groupData?.group || null, [groupData]);
 
   // Initialize from location.state if available (passed from previous page)
   useEffect(() => {
@@ -103,17 +115,30 @@ export default function ChatRoom() {
     }
   }, [conversations, type, id, messages, user?.userId, chatName, conversationsLoaded]);
 
-  // Load messages and mark as read
+  // Track if we've already marked this conversation as read
+  const hasMarkedAsReadRef = useRef<{ type?: string; id?: string }>({});
+
+  // Load messages
   useEffect(() => {
     if (user && type && id) {
       loadMessages();
-      if (type === 'user') {
-        markConversationAsRead({ receiverId: id });
-      } else {
-        markConversationAsRead({ groupId: parseInt(id) });
+    }
+  }, [user, type, id, loadMessages]);
+
+  // Mark conversation as read (only once per conversation)
+  useEffect(() => {
+    if (user && type && id) {
+      // Only mark as read if we haven't already marked this conversation
+      if (hasMarkedAsReadRef.current.type !== type || hasMarkedAsReadRef.current.id !== id) {
+        hasMarkedAsReadRef.current = { type, id };
+        if (type === 'user') {
+          markConversationAsRead({ receiverId: id });
+        } else {
+          markConversationAsRead({ groupId: parseInt(id) });
+        }
       }
     }
-  }, [user, type, id, loadMessages, markConversationAsRead]);
+  }, [user, type, id, markConversationAsRead]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -139,20 +164,10 @@ export default function ChatRoom() {
     }
   };
 
-  const handleOpenMembersDialog = async () => {
+  const handleOpenMembersDialog = () => {
     if (type !== 'group' || !id) return;
-    
     setMembersDialogOpen(true);
-    setLoadingMembers(true);
-    
-    try {
-      const response = await groupsApi.getGroup(parseInt(id));
-      setGroupInfo(response.group);
-    } catch (error) {
-      console.error('[ChatRoom] Failed to load group members:', error);
-    } finally {
-      setLoadingMembers(false);
-    }
+    // Data will be fetched automatically by React Query when dialog opens
   };
 
   const formatMessageTime = (dateString: string) => {

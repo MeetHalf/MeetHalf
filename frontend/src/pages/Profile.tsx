@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -195,10 +196,7 @@ function calculateBadges(stats: UserStats): Badge[] {
 export default function Profile() {
   const navigate = useNavigate();
   const { user, logout, refreshUser } = useAuth();
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [badges, setBadges] = useState<Badge[]>([]);
+  // Stats are now fetched via React Query (see below)
   const [defaultLocation, setDefaultLocation] = useState({
     lat: null as number | null,
     lng: null as number | null,
@@ -233,24 +231,23 @@ export default function Profile() {
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  // Fetch stats
-  useEffect(() => {
-    const fetchStats = async () => {
-      setStatsLoading(true);
-      setStatsError(null);
-      try {
-        const response = await usersApi.getStats();
-        setStats(response.stats);
-        setBadges(calculateBadges(response.stats));
-      } catch (error: any) {
-        console.error('Failed to fetch stats:', error);
-        setStatsError(error?.response?.data?.message || '無法載入統計數據');
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-    fetchStats();
-  }, []);
+  // Use React Query for stats (with cache)
+  const {
+    data: statsData,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useQuery<UserStats>({
+    queryKey: ['userStats', user?.userId],
+    queryFn: async () => {
+      const response = await usersApi.getStats();
+      return response.stats;
+    },
+    enabled: !!user?.userId,
+    staleTime: 60 * 1000, // 1 minute - stats don't change frequently
+  });
+
+  const stats = statsData || null;
+  const badges = useMemo(() => (stats ? calculateBadges(stats) : []), [stats]);
 
   // Check notification status
   useEffect(() => {
@@ -271,28 +268,30 @@ export default function Profile() {
     checkNotificationStatus();
   }, []);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const response = await usersApi.getProfile();
-        if (response.user) {
-          const location = {
-            lat: response.user.defaultLat || null,
-            lng: response.user.defaultLng || null,
-            address: response.user.defaultAddress || '',
-            name: response.user.defaultLocationName || '',
-          };
-          const mode = response.user.defaultTravelMode || 'driving';
-          setDefaultLocation(location);
-          setTravelMode(mode);
-          setOriginalDefaults({ location, travelMode: mode });
-        }
-      } catch (error) {
-        console.error('Failed to fetch profile:', error);
+  // Use React Query for profile (with cache)
+  const { data: profileData } = useQuery({
+    queryKey: ['userProfile', user?.userId],
+    queryFn: async () => {
+      const response = await usersApi.getProfile();
+      return response.user;
+    },
+    enabled: !!user?.userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - profile doesn't change frequently
+    onSuccess: (userData) => {
+      if (userData) {
+        const location = {
+          lat: userData.defaultLat || null,
+          lng: userData.defaultLng || null,
+          address: userData.defaultAddress || '',
+          name: userData.defaultLocationName || '',
+        };
+        const mode = userData.defaultTravelMode || 'driving';
+        setDefaultLocation(location);
+        setTravelMode(mode);
+        setOriginalDefaults({ location, travelMode: mode });
       }
-    };
-    fetchProfile();
-  }, []);
+    },
+  });
 
   useEffect(() => {
     loadGoogleMaps()

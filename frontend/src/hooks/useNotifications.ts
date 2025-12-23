@@ -1,91 +1,122 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notificationsApi } from '../api/notifications';
 import { Notification } from '../types/notification';
 import { usePusher } from './usePusher';
 
 export function useNotifications(userId?: string) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  // Load notifications
-  const loadNotifications = useCallback(async (options?: { read?: boolean; limit?: number }) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const { notifications: data } = await notificationsApi.getNotifications(options);
-      setNotifications(data);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load notifications');
-      console.error('Error loading notifications:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Query for notifications list
+  const {
+    data: notifications = [],
+    isLoading: loading,
+    error,
+    refetch: loadNotifications,
+  } = useQuery<Notification[]>({
+    queryKey: ['notifications', userId],
+    queryFn: async () => {
+      const { notifications: data } = await notificationsApi.getNotifications({ limit: 100 });
+      return data;
+    },
+    enabled: !!userId,
+    staleTime: 10 * 1000, // 10 seconds
+  });
 
-  // Load unread count
-  const loadUnreadCount = useCallback(async () => {
-    try {
+  // Query for unread count
+  const {
+    data: unreadCount = 0,
+    refetch: loadUnreadCount,
+  } = useQuery<number>({
+    queryKey: ['notificationUnreadCount', userId],
+    queryFn: async () => {
       const { count } = await notificationsApi.getUnreadCount();
-      setUnreadCount(count);
-    } catch (err: any) {
-      console.error('Error loading unread count:', err);
-    }
-  }, []);
+      return count;
+    },
+    enabled: !!userId,
+    staleTime: 5 * 1000, // 5 seconds
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds
+  });
 
-  // Mark notification as read
-  const markAsRead = useCallback(async (notificationId: number) => {
-    try {
+  // Mutation for marking notification as read
+  const markAsReadMutation = useMutation({
+    mutationFn: async (notificationId: number) => {
       await notificationsApi.markAsRead(notificationId);
-      
-      // Update local state
-      setNotifications((prev) => {
-        const updatedNotifications = prev.map((n) =>
-          n.id === notificationId ? { ...n, read: true } : n
-        );
-        
-        // Only decrease unread count if it's not a NEW_MESSAGE notification
-        const notification = prev.find((n) => n.id === notificationId);
-        if (notification && !notification.read && notification.type !== 'NEW_MESSAGE') {
-          setUnreadCount((prevCount) => Math.max(0, prevCount - 1));
-        }
-        
-        return updatedNotifications;
+      return notificationId;
+    },
+    onSuccess: (notificationId) => {
+      // Update notification in cache
+      queryClient.setQueryData<Notification[]>(['notifications', userId], (old = []) => {
+        return old.map((n) => (n.id === notificationId ? { ...n, read: true } : n));
       });
-    } catch (err: any) {
-      console.error('Error marking notification as read:', err);
-    }
-  }, []);
+      
+      // Update unread count (only if it wasn't a NEW_MESSAGE notification)
+      queryClient.setQueryData<Notification[]>(['notifications', userId], (old = []) => {
+        const notification = old.find((n) => n.id === notificationId);
+        if (notification && !notification.read && notification.type !== 'NEW_MESSAGE') {
+          queryClient.setQueryData<number>(['notificationUnreadCount', userId], (count = 0) =>
+            Math.max(0, count - 1)
+          );
+        }
+        return old;
+      });
+    },
+  });
 
-  // Mark all as read
-  const markAllAsRead = useCallback(async () => {
-    try {
+  // Mutation for marking all as read
+  const markAllAsReadMutation = useMutation({
+    mutationFn: async () => {
       await notificationsApi.markAllAsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      setUnreadCount(0);
-    } catch (err: any) {
-      console.error('Error marking all notifications as read:', err);
-    }
-  }, []);
+    },
+    onSuccess: () => {
+      // Update all notifications to read
+      queryClient.setQueryData<Notification[]>(['notifications', userId], (old = []) =>
+        old.map((n) => ({ ...n, read: true }))
+      );
+      // Reset unread count
+      queryClient.setQueryData<number>(['notificationUnreadCount', userId], 0);
+    },
+  });
 
-  // Delete notification
-  const deleteNotification = useCallback(async (notificationId: number) => {
-    try {
-      // Find the notification before deleting
-      const notification = notifications.find((n) => n.id === notificationId);
-      
+  // Mutation for deleting notification
+  const deleteNotificationMutation = useMutation({
+    mutationFn: async (notificationId: number) => {
       await notificationsApi.deleteNotification(notificationId);
-      setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+      return notificationId;
+    },
+    onMutate: async (notificationId) => {
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({ queryKey: ['notifications', userId] });
       
-      // Only update unread count if it was unread and not a NEW_MESSAGE
+      // Snapshot previous value
+      const previousNotifications = queryClient.getQueryData<Notification[]>(['notifications', userId]);
+      
+      // Optimistically remove notification
+      queryClient.setQueryData<Notification[]>(['notifications', userId], (old = []) =>
+        old.filter((n) => n.id !== notificationId)
+      );
+      
+      // Update unread count if needed
+      const notification = previousNotifications?.find((n) => n.id === notificationId);
       if (notification && !notification.read && notification.type !== 'NEW_MESSAGE') {
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+        queryClient.setQueryData<number>(['notificationUnreadCount', userId], (count = 0) =>
+          Math.max(0, count - 1)
+        );
       }
-    } catch (err: any) {
-      console.error('Error deleting notification:', err);
-    }
-  }, [notifications]);
+      
+      return { previousNotifications };
+    },
+    onError: (_err, _notificationId, context) => {
+      // Rollback on error
+      if (context?.previousNotifications) {
+        queryClient.setQueryData(['notifications', userId], context.previousNotifications);
+      }
+    },
+    onSuccess: () => {
+      // Invalidate to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+      queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount', userId] });
+    },
+  });
 
   // Set up Pusher for real-time notifications
   usePusher({
@@ -93,10 +124,19 @@ export function useNotifications(userId?: string) {
     eventName: 'new-notification',
     onEvent: (data: Notification) => {
       console.log('[useNotifications] New notification received:', data);
-      setNotifications((prev) => [data, ...prev]);
-      // Only increase unread count if it's not a NEW_MESSAGE notification
+      
+      // Add new notification to cache
+      queryClient.setQueryData<Notification[]>(['notifications', userId], (old = []) => {
+        // Check if already exists
+        if (old.some((n) => n.id === data.id)) {
+          return old;
+        }
+        return [data, ...old];
+      });
+      
+      // Update unread count (only if it's not a NEW_MESSAGE notification)
       if (data.type !== 'NEW_MESSAGE') {
-        setUnreadCount((prev) => prev + 1);
+        queryClient.setQueryData<number>(['notificationUnreadCount', userId], (count = 0) => count + 1);
       }
     },
   });
@@ -108,10 +148,15 @@ export function useNotifications(userId?: string) {
     onEvent: (data: any) => {
       console.log('[useNotifications] Friend request received:', data);
       if (data.notification) {
-        setNotifications((prev) => [data.notification, ...prev]);
-        // Only increase unread count if it's not a NEW_MESSAGE notification
+        queryClient.setQueryData<Notification[]>(['notifications', userId], (old = []) => {
+          if (old.some((n) => n.id === data.notification.id)) {
+            return old;
+          }
+          return [data.notification, ...old];
+        });
+        
         if (data.notification.type !== 'NEW_MESSAGE') {
-          setUnreadCount((prev) => prev + 1);
+          queryClient.setQueryData<number>(['notificationUnreadCount', userId], (count = 0) => count + 1);
         }
       }
     },
@@ -124,33 +169,29 @@ export function useNotifications(userId?: string) {
     onEvent: (data: any) => {
       console.log('[useNotifications] Friend accepted:', data);
       if (data.notification) {
-        setNotifications((prev) => [data.notification, ...prev]);
-        // Only increase unread count if it's not a NEW_MESSAGE notification
+        queryClient.setQueryData<Notification[]>(['notifications', userId], (old = []) => {
+          if (old.some((n) => n.id === data.notification.id)) {
+            return old;
+          }
+          return [data.notification, ...old];
+        });
+        
         if (data.notification.type !== 'NEW_MESSAGE') {
-          setUnreadCount((prev) => prev + 1);
+          queryClient.setQueryData<number>(['notificationUnreadCount', userId], (count = 0) => count + 1);
         }
       }
     },
   });
 
-  // Load initial data
-  useEffect(() => {
-    if (userId) {
-      loadNotifications({ limit: 100 }); // Load all notifications, not just unread
-      loadUnreadCount();
-    }
-  }, [userId, loadNotifications, loadUnreadCount]);
-
   return {
     notifications,
     unreadCount,
     loading,
-    error,
+    error: error as Error | null,
     loadNotifications,
     loadUnreadCount,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
+    markAsRead: markAsReadMutation.mutate,
+    markAllAsRead: markAllAsReadMutation.mutate,
+    deleteNotification: deleteNotificationMutation.mutate,
   };
 }
-

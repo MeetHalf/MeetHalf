@@ -78,12 +78,15 @@ export function triggerChatChannel(
 ): void {
   const channelName = type === 'user' ? `chat-user-${id}` : `group-${id}`;
   
-  console.log('[Pusher] Attempting to trigger chat event:', {
-    channel: channelName,
-    event: eventName,
-    data,
-    timestamp: new Date().toISOString(),
-  });
+  // Only log in development to reduce log noise
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Pusher] Attempting to trigger chat event:', {
+      channel: channelName,
+      event: eventName,
+      data,
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   if (!pusher) {
     console.warn(`[Pusher] Pusher not configured. Skipping event: ${eventName} on channel ${channelName}`);
@@ -92,11 +95,14 @@ export function triggerChatChannel(
 
   pusher.trigger(channelName, eventName, data)
     .then(() => {
-      console.log('[Pusher] ✓ Successfully triggered chat event:', {
-        channel: channelName,
-        event: eventName,
-        timestamp: new Date().toISOString(),
-      });
+      // Only log in development to reduce log noise
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Pusher] ✓ Successfully triggered chat event:', {
+          channel: channelName,
+          event: eventName,
+          timestamp: new Date().toISOString(),
+        });
+      }
     })
     .catch((error) => {
       console.error(`[Pusher] ✗ Error triggering chat event ${eventName} on channel ${channelName}:`, {
