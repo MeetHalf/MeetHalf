@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, useLocation, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -6,7 +6,8 @@ import Events from './pages/Events';
 import EventDetail from './pages/EventDetail';
 import CreateEvent from './pages/CreateEvent';
 import InvitePage from './pages/InvitePage';
-import Social from './pages/Social';
+import Landing from './pages/Landing';
+import FindMeeting from './pages/FindMeeting';
 import MapView from './pages/MapView';
 import Profile from './pages/Profile';
 import Friends from './pages/Friends';
@@ -18,12 +19,6 @@ import { Box, CircularProgress } from '@mui/material';
 // Root layout that wraps all routes
 function RootLayout() {
   return <Outlet />;
-}
-
-// Redirect helper that preserves query parameters
-function RedirectToEvents() {
-  const location = useLocation();
-  return <Navigate to={`/events${location.search}`} replace />;
 }
 
 // Loading Route wrapper
@@ -61,7 +56,11 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '/',
-        element: <RedirectToEvents />,
+        element: <Landing />,
+      },
+      {
+        path: '/find',
+        element: <FindMeeting />,
       },
       {
         path: '/login',

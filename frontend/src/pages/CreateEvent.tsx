@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { eventsApi, calculateTempMidpoint } from '../api/events';
 import { friendsApi } from '../api/friends';
@@ -84,6 +84,8 @@ interface DummyMember {
 
 export default function CreateEvent() {
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const meetingPoint = state?.meetingPoint as { name: string; address: string; lat: number; lng: number } | undefined;
   const { user } = useAuth();
   
   // Form state
@@ -92,14 +94,14 @@ export default function CreateEvent() {
     startTime: new Date(), // 今天
     endTime: new Date(Date.now() + 2 * 60 * 60 * 1000), // 今天 + 2小時
     useMeetHalf: false,
-    meetingPointName: '',
-    meetingPointAddress: '',
-    meetingPointLat: null as number | null,
-    meetingPointLng: null as number | null,
+    meetingPointName: meetingPoint?.name || '',
+    meetingPointAddress: meetingPoint?.address || '',
+    meetingPointLat: meetingPoint?.lat ?? null as number | null,
+    meetingPointLng: meetingPoint?.lng ?? null as number | null,
     // 主辦信息（用於自動加入活動）
     ownerNickname: user?.name || '',
     ownerTravelMode: 'transit' as 'driving' | 'transit' | 'walking' | 'bicycling',
-    ownerShareLocation: true,
+    ownerShareLocation: false,
     // 主辦出發點（可編輯）
     ownerLat: null as number | null,
     ownerLng: null as number | null,
@@ -152,7 +154,7 @@ export default function CreateEvent() {
 
   // Load Google Maps API on mount
   useEffect(() => {
-    loadGoogleMaps()
+    Promise.resolve().then(() => loadGoogleMaps())
       .then(() => {
         setMapsLoaded(true);
       })
