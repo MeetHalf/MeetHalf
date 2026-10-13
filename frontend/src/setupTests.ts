@@ -27,7 +27,7 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock IntersectionObserver
-global.IntersectionObserver = class IntersectionObserver {
+globalThis.IntersectionObserver = class IntersectionObserver {
   constructor() {}
   disconnect() {}
   observe() {}
@@ -38,7 +38,7 @@ global.IntersectionObserver = class IntersectionObserver {
 } as any;
 
 // Mock Google Maps API
-(global as any).google = {
+(globalThis as any).google = {
   maps: {
     Map: vi.fn().mockImplementation(() => ({
       setCenter: vi.fn(),

@@ -1,5 +1,5 @@
 import api from './axios';
-import { EventInvitation, CreateInvitationsRequest, CreateInvitationsResponse } from '../types/eventInvitation';
+import { CreateInvitationsRequest, CreateInvitationsResponse } from '../types/eventInvitation';
 
 export const eventInvitationsApi = {
   // Create invitations for an event

@@ -16,7 +16,6 @@ export default function EventDetail() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [useMeetHalf, setUseMeetHalf] = useState<boolean>(false);
 
   useEffect(() => {
     if (!id) {
@@ -36,8 +35,7 @@ export default function EventDetail() {
           return;
         }
         
-        setUseMeetHalf(response.event.useMeetHalf);
-        setLoading(false);
+          setLoading(false);
       } catch (err: any) {
         console.error('載入聚會失敗:', err);
         setError(err.response?.data?.message || '載入聚會失敗');

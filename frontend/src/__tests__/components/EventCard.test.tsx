@@ -16,7 +16,7 @@ describe('GroupCard', () => {
     
     expect(screen.getByText('測試群組')).toBeInTheDocument();
     expect(screen.getByText('5 位成員')).toBeInTheDocument();
-    expect(screen.getByText('建立於 2025-01-15')).toBeInTheDocument();
+    expect(screen.getByText(/建立於 2025\/01\/15/)).toBeInTheDocument();
   });
 
   it('should call onClick when card is clicked', () => {
@@ -32,7 +32,7 @@ describe('GroupCard', () => {
   it('should display group ID as chip', () => {
     render(<GroupCard {...mockProps} />);
     
-    expect(screen.getByText('群組 #1')).toBeInTheDocument();
+    expect(screen.getByText('活動 #1')).toBeInTheDocument();
   });
 });
 

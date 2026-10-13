@@ -6,7 +6,6 @@ import Events from './pages/Events';
 import EventDetail from './pages/EventDetail';
 import CreateEvent from './pages/CreateEvent';
 import InvitePage from './pages/InvitePage';
-import Social from './pages/Social';
 import MapView from './pages/MapView';
 import Profile from './pages/Profile';
 import Friends from './pages/Friends';

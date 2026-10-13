@@ -41,8 +41,6 @@ import {
   NotificationsOff as NotificationsOffIcon,
   ArrowBack as ArrowBackIcon,
   Close as CloseIcon,
-  Share as ShareIcon,
-  Edit as EditIcon,
 } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -2974,11 +2972,11 @@ export default function EventRoom() {
                         bgcolor: '#f8fafc',
                       },
                     }}
-                    onClick={() => handleToggleFriendSelection(friend.userId)}
+                    onClick={() => friend.userId && handleToggleFriendSelection(friend.userId)}
                   >
                     <Checkbox
-                      checked={selectedFriends.includes(friend.userId)}
-                      onChange={() => handleToggleFriendSelection(friend.userId)}
+                      checked={!!friend.userId && selectedFriends.includes(friend.userId)}
+                      onChange={() => friend.userId && handleToggleFriendSelection(friend.userId)}
                       sx={{
                         color: '#3b82f6',
                         '&.Mui-checked': {

@@ -38,6 +38,21 @@ import { shareTokenService } from '../services/ShareTokenService';
 
 const router = Router();
 
+// Resolve identity only from a verified account or an event-scoped member token.
+async function getEventUserId(req: Request, eventId: number): Promise<string | null> {
+  if (req.user && 'userId' in req.user) {
+    return getUserUserId((req.user as { userId: number }).userId);
+  }
+  if (req.user && 'memberId' in req.user && 'eventId' in req.user) {
+    const guest = req.user as { memberId: number; eventId: number };
+    if (guest.eventId !== eventId) return null;
+    const member = await prisma.member.findFirst({ where: { id: guest.memberId, eventId } });
+    return member?.userId ?? null;
+  }
+  return null;
+}
+
+
 // Cache for midpoint calculations (5 minutes TTL)
 const midpointCache = createCache<any>(5 * 60 * 1000);
 
@@ -658,18 +673,7 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
     const { id } = paramsValidation.data as EventParams;
     const updateData = bodyValidation.data as UpdateEventRequest;
     
-    // Get current user's userId
-    let userUserId: string | null = null;
-    if (req.user && 'userId' in req.user) {
-      const jwtPayload = req.user as { userId: number };
-      userUserId = await getUserUserId(jwtPayload.userId);
-    }
-
-    // For anonymous users, check if ownerId is provided in request body
-    // (This allows guest users to edit events they created)
-    if (!userUserId && req.body.ownerId) {
-      userUserId = req.body.ownerId;
-    }
+    const userUserId = await getEventUserId(req, id);
 
     // Check if event exists
     const event = await prisma.event.findUnique({
@@ -693,6 +697,11 @@ router.patch('/:id', optionalAuthMiddleware, async (req: Request, res: Response)
         code: 'FORBIDDEN',
         message: 'Only event owner can update the event'
       });
+      return;
+    }
+
+    if ((updateData.startTime ?? event.startTime) >= (updateData.endTime ?? event.endTime)) {
+      res.status(400).json({ code: 'VALIDATION_ERROR', message: 'endTime must be after startTime' });
       return;
     }
 
@@ -972,23 +981,9 @@ router.get('/:id/share-token', optionalAuthMiddleware, async (req: Request, res:
 
     const { id } = paramsValidation.data as EventParams;
 
-    // Check authentication
-    if (!req.user || !('userId' in req.user)) {
-      res.status(401).json({
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      });
-      return;
-    }
-
-    const jwtPayload = req.user as { userId: number };
-    const userUserId = await getUserUserId(jwtPayload.userId);
-
+    const userUserId = await getEventUserId(req, id);
     if (!userUserId) {
-      res.status(401).json({
-        code: 'UNAUTHORIZED',
-        message: 'User not found',
-      });
+      res.status(401).json({ code: 'UNAUTHORIZED', message: 'Authentication required for this event' });
       return;
     }
 
@@ -1082,23 +1077,9 @@ router.post('/:id/share-token', optionalAuthMiddleware, async (req: Request, res
 
     const { id } = paramsValidation.data as EventParams;
 
-    // Check authentication
-    if (!req.user || !('userId' in req.user)) {
-      res.status(401).json({
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      });
-      return;
-    }
-
-    const jwtPayload = req.user as { userId: number };
-    const userUserId = await getUserUserId(jwtPayload.userId);
-
+    const userUserId = await getEventUserId(req, id);
     if (!userUserId) {
-      res.status(401).json({
-        code: 'UNAUTHORIZED',
-        message: 'User not found',
-      });
+      res.status(401).json({ code: 'UNAUTHORIZED', message: 'Authentication required for this event' });
       return;
     }
 

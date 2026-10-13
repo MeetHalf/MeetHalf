@@ -14,7 +14,6 @@ import {
   ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import { format, isBefore, isAfter } from 'date-fns';
-import { zhTW } from 'date-fns/locale';
 import MapContainer from '../components/MapContainer';
 import { eventsApi, Event } from '../api/events';
 
@@ -95,7 +94,7 @@ export default function MapView() {
     }
   };
 
-  const { ongoingCount, upcomingCount } = useMemo(() => {
+  const { ongoingCount } = useMemo(() => {
     const ongoing = events.filter((e) => getEventStatus(e) === 'ongoing').length;
     const upcoming = events.filter((e) => getEventStatus(e) === 'upcoming').length;
     return { ongoingCount: ongoing, upcomingCount: upcoming };
