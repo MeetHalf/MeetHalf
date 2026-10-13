@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const travelModes = ['driving', 'transit', 'walking', 'bicycling'] as const;
+const travelModes = ['driving', 'transit', 'walking', 'bicycling', 'motorcycling'] as const;
 
 export const addMemberSchema = z.object({
   username: z.string().min(1, 'Username is required').max(255, 'Username must be less than 255 characters'),

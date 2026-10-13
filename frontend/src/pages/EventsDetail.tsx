@@ -74,7 +74,7 @@
 //   const [actionLoading, setActionLoading] = useState(false);
 //   const [searchLoading, setSearchLoading] = useState(false);
 //   const [locationMethod, setLocationMethod] = useState<'auto' | 'search'>('auto');
-//   const [travelMode, setTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling'>('driving');
+//   const [travelMode, setTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling'>('driving');
   
 //   // Time midpoint states
 //   const [calcObjective, setCalcObjective] = useState<'minimize_total' | 'minimize_max'>('minimize_total');
@@ -93,7 +93,7 @@
 //   const [editingOfflineMember, setEditingOfflineMember] = useState<Member | null>(null);
 //   const [offlineNickname, setOfflineNickname] = useState('');
 //   const [offlineLocation, setOfflineLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
-//   const [offlineTravelMode, setOfflineTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling'>('driving');
+//   const [offlineTravelMode, setOfflineTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling'>('driving');
 //   const [offlineLocationMethod, setOfflineLocationMethod] = useState<'auto' | 'search'>('search');
   
 //   // Snackbar state
@@ -1404,7 +1404,7 @@
 //             <RadioGroup
 //               row
 //               value={travelMode}
-//               onChange={(e) => setTravelMode(e.target.value as 'driving' | 'transit' | 'walking' | 'bicycling')}
+//               onChange={(e) => setTravelMode(e.target.value as 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling')}
 //               sx={{ mt: 1, mb: 3 }}
 //             >
 //               <FormControlLabel value="driving" control={<Radio />} label="🚗 開車" />

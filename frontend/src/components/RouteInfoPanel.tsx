@@ -54,7 +54,7 @@ export default function RouteInfoPanel({
 
   const handleOpenNavigation = (_memberId: number, lat: number, lng: number, travelMode: TravelMode | null) => {
     if (timeMidpoint) {
-      const mode = travelMode || 'driving';
+      const mode = travelMode === 'motorcycling' ? 'driving' : (travelMode || 'driving');
       const url = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lng}&destination=${timeMidpoint.midpoint.lat},${timeMidpoint.midpoint.lng}&travelmode=${mode}`;
       window.open(url, '_blank');
     }

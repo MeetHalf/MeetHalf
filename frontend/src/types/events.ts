@@ -3,7 +3,7 @@
 
 export type EventStatus = 'upcoming' | 'ongoing' | 'ended';
 export type MemberStatus = 'early' | 'ontime' | 'late' | 'absent';
-export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
+export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling';
 
 /**
  * 聚會活動

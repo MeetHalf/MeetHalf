@@ -38,6 +38,11 @@ import { shareTokenService } from '../services/ShareTokenService';
 
 const router = Router();
 
+// Google Directions/Distance Matrix support driving, transit, walking and bicycling.
+// Keep motorcycle as a user-facing choice while routing it through driving.
+const toGoogleTravelMode = (mode?: string | null) =>
+  (mode === 'motorcycling' ? 'driving' : (mode || 'driving')) as 'driving' | 'transit' | 'walking' | 'bicycling';
+
 // Cache for midpoint calculations (5 minutes TTL)
 const midpointCache = createCache<any>(5 * 60 * 1000);
 
@@ -1300,7 +1305,7 @@ router.get('/:id/midpoint', optionalAuthMiddleware, async (req: Request, res: Re
             params: {
               origin: `${member.lat},${member.lng}`,
               destination: `${midpoint.lat},${midpoint.lng}`,
-              mode: member.travelMode || 'driving',
+              mode: toGoogleTravelMode(member.travelMode) as any,
               key: GMAPS_KEY
             }
           });
@@ -1585,7 +1590,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
             params: {
               origins: [`${member.lat},${member.lng}`],
               destinations: [`${currentLat},${currentLng}`],
-              mode: memberMode as any,
+              mode: toGoogleTravelMode(memberMode) as any,
               key: GMAPS_KEY
             }
           });
@@ -1726,7 +1731,7 @@ router.get('/:id/midpoint_by_time', optionalAuthMiddleware, async (req: Request,
           params: {
             origins: [`${member.lat},${member.lng}`],
             destinations,
-            mode: memberMode as any,
+            mode: toGoogleTravelMode(memberMode) as any,
             key: GMAPS_KEY
           }
         });
@@ -2035,7 +2040,7 @@ router.get('/:id/routes_to_midpoint', optionalAuthMiddleware, async (req: Reques
           params: {
             origin: `${member.lat},${member.lng}`,
             destination: `${midpointLat},${midpointLng}`,
-            mode: (member.travelMode || 'driving') as any,
+            mode: toGoogleTravelMode(member.travelMode) as any,
             key: GMAPS_KEY
           }
         });
@@ -3092,7 +3097,7 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
             params: {
               origin: `${location.lat},${location.lng}`,
               destination: `${midpoint.lat},${midpoint.lng}`,
-              mode: location.travelMode as any,
+              mode: toGoogleTravelMode(location.travelMode) as any,
               key: GMAPS_KEY,
             },
           });
@@ -3174,5 +3179,4 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
 
 console.log('[EVENTS_ROUTER] Events router initialized and exported');
 export default router;
-
 

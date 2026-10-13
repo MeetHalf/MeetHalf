@@ -8,7 +8,7 @@ export interface UpdateProfileRequest {
   defaultLng?: number | null;
   defaultAddress?: string | null;
   defaultLocationName?: string | null;
-  defaultTravelMode?: 'driving' | 'transit' | 'walking' | 'bicycling' | null;
+  defaultTravelMode?: 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling' | null;
 }
 
 export interface CheckUserIdRequest {
@@ -21,7 +21,7 @@ export interface CompleteSetupRequest {
   defaultLng?: number | null;
   defaultAddress?: string | null;
   defaultLocationName?: string | null;
-  defaultTravelMode?: 'driving' | 'transit' | 'walking' | 'bicycling' | null;
+  defaultTravelMode?: 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling' | null;
 }
 
 export const usersApi = {
