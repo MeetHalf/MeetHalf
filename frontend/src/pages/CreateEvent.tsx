@@ -62,7 +62,7 @@ interface InvitedFriend extends Friend {
   editableLng: number | null;
   editableAddress: string | null;
   editableLocationName: string | null;
-  editableTravelMode?: 'driving' | 'transit' | 'walking' | 'bicycling';
+  editableTravelMode?: 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling';
   estimatedDuration?: string;
   estimatedDurationValue?: number;
   estimatedDistance?: string;
@@ -76,7 +76,7 @@ interface DummyMember {
   editableLng: number | null;
   editableAddress: string | null;
   editableLocationName: string | null;
-  travelMode: 'driving' | 'transit' | 'walking' | 'bicycling';
+  travelMode: 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling';
   estimatedDuration?: string;
   estimatedDurationValue?: number;
   estimatedDistance?: string;
@@ -98,7 +98,7 @@ export default function CreateEvent() {
     meetingPointLng: null as number | null,
     // 主辦信息（用於自動加入活動）
     ownerNickname: user?.name || '',
-    ownerTravelMode: 'transit' as 'driving' | 'transit' | 'walking' | 'bicycling',
+    ownerTravelMode: 'transit' as 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling',
     ownerShareLocation: true,
     // 主辦出發點（可編輯）
     ownerLat: null as number | null,
@@ -190,7 +190,7 @@ export default function CreateEvent() {
         setFormData(prev => ({
           ...prev,
           ownerNickname: profile.name || prev.ownerNickname,
-          ownerTravelMode: (profile.defaultTravelMode as 'driving' | 'transit' | 'walking' | 'bicycling') || prev.ownerTravelMode,
+          ownerTravelMode: (profile.defaultTravelMode as 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling') || prev.ownerTravelMode,
           ownerLat: profile.defaultLat || null,
           ownerLng: profile.defaultLng || null,
           ownerAddress: profile.defaultAddress || null,
@@ -217,7 +217,7 @@ export default function CreateEvent() {
         editableLng: friend.defaultLng || null,
         editableAddress: friend.defaultAddress || null,
         editableLocationName: friend.defaultLocationName || null,
-        editableTravelMode: (friend.defaultTravelMode as 'driving' | 'transit' | 'walking' | 'bicycling') || 'transit',
+        editableTravelMode: (friend.defaultTravelMode as 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling') || 'transit',
       };
     });
     setInvitedFriends(newInvitedFriends);
@@ -296,6 +296,7 @@ export default function CreateEvent() {
             transit: google.maps.TravelMode.TRANSIT,
             walking: google.maps.TravelMode.WALKING,
             bicycling: google.maps.TravelMode.BICYCLING,
+            motorcycling: google.maps.TravelMode.DRIVING,
           };
           const friendTravelMode = friend.editableTravelMode || 'transit';
           const result = await directionsService.route({
@@ -340,6 +341,7 @@ export default function CreateEvent() {
             transit: google.maps.TravelMode.TRANSIT,
             walking: google.maps.TravelMode.WALKING,
             bicycling: google.maps.TravelMode.BICYCLING,
+            motorcycling: google.maps.TravelMode.DRIVING,
           };
           
           const result = await directionsService.route({
@@ -382,6 +384,7 @@ export default function CreateEvent() {
         transit: google.maps.TravelMode.TRANSIT,
         walking: google.maps.TravelMode.WALKING,
         bicycling: google.maps.TravelMode.BICYCLING,
+        motorcycling: google.maps.TravelMode.DRIVING,
       };
       
       const result = await directionsService.route({
@@ -470,7 +473,7 @@ export default function CreateEvent() {
         ...invitedFriends.map(f => ({
           lat: f.editableLat!,
           lng: f.editableLng!,
-          travelMode: (f.editableTravelMode || 'transit') as 'driving' | 'transit' | 'walking' | 'bicycling',
+          travelMode: (f.editableTravelMode || 'transit') as 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling',
         })),
         ...dummyMembers.map(d => ({
           lat: d.editableLat!,
@@ -1212,6 +1215,7 @@ export default function CreateEvent() {
                                     {friend.editableTravelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                                     {friend.editableTravelMode === 'walking' && <WalkIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                                     {friend.editableTravelMode === 'bicycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    {friend.editableTravelMode === 'motorcycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                                     <FormControl size="small" sx={{ minWidth: 120 }}>
                                       <Select
                                         value={friend.editableTravelMode || 'transit'}
@@ -1236,6 +1240,7 @@ export default function CreateEvent() {
                                         <MenuItem value="transit">🚇 大眾運輸</MenuItem>
                                         <MenuItem value="walking">🚶 步行</MenuItem>
                                         <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
                                       </Select>
                                     </FormControl>
                                   </Box>
@@ -1354,6 +1359,7 @@ export default function CreateEvent() {
                                     {dummy.travelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                                     {dummy.travelMode === 'walking' && <WalkIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                                     {dummy.travelMode === 'bicycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                                    {dummy.travelMode === 'motorcycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                                     <FormControl size="small" sx={{ minWidth: 120 }}>
                                       <Select
                                         value={dummy.travelMode}
@@ -1371,6 +1377,7 @@ export default function CreateEvent() {
                                         <MenuItem value="transit">🚇 大眾運輸</MenuItem>
                                         <MenuItem value="walking">🚶 步行</MenuItem>
                                         <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
                                       </Select>
                                     </FormControl>
                                   </Box>
@@ -1467,6 +1474,7 @@ export default function CreateEvent() {
                         <MenuItem value="transit">🚇 大眾運輸</MenuItem>
                         <MenuItem value="walking">🚶 步行</MenuItem>
                         <MenuItem value="bicycling">🚴 騎車</MenuItem>
+                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
                       </Select>
                     </FormControl>
 
@@ -1657,6 +1665,7 @@ export default function CreateEvent() {
                             {travel.travelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                             {travel.travelMode === 'walking' && <WalkIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                             {travel.travelMode === 'bicycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+                            {travel.travelMode === 'motorcycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                               成員 {idx + 1}: {travel.duration} ({travel.distance})
                             </Typography>

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const travelModes = ['driving', 'transit', 'walking', 'bicycling'] as const;
+const travelModes = ['driving', 'transit', 'walking', 'bicycling', 'motorcycling'] as const;
 
 /**
  * Schema for joining an event as guest
