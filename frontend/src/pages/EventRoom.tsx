@@ -247,7 +247,6 @@ export default function EventRoom() {
         // Initialize Autocomplete
         const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
           types: ['establishment', 'geocode'],
-          componentRestrictions: { country: 'tw' },
           fields: ['name', 'formatted_address', 'geometry', 'place_id'], // 明確指定需要的欄位
         });
 
