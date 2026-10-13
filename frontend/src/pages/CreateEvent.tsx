@@ -557,6 +557,7 @@ export default function CreateEvent() {
       // Initialize Autocomplete
       const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
         types: ['establishment', 'geocode'],
+        componentRestrictions: { country: 'tw' }, // 限制台灣
       });
 
       // Listen for place selection
@@ -603,6 +604,7 @@ export default function CreateEvent() {
     try {
       const autocomplete = new google.maps.places.Autocomplete(ownerAutocompleteInputRef.current, {
         types: ['establishment', 'geocode'],
+        componentRestrictions: { country: 'tw' },
         fields: ['name', 'formatted_address', 'geometry', 'place_id'],
       });
 
@@ -660,6 +662,7 @@ export default function CreateEvent() {
       try {
         const autocomplete = new google.maps.places.Autocomplete(inputElement, {
           types: ['establishment', 'geocode'],
+          componentRestrictions: { country: 'tw' },
           fields: ['name', 'formatted_address', 'geometry', 'place_id'],
         });
 
@@ -723,6 +726,7 @@ export default function CreateEvent() {
       try {
         const autocomplete = new google.maps.places.Autocomplete(inputElement, {
           types: ['establishment', 'geocode'],
+          componentRestrictions: { country: 'tw' },
           fields: ['name', 'formatted_address', 'geometry', 'place_id'],
         });
 
