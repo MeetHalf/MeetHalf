@@ -86,7 +86,6 @@ export default function FirstTimeSetup() {
     ) {
       const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
         types: ['establishment', 'geocode'],
-        componentRestrictions: { country: 'tw' },
       });
 
       autocomplete.addListener('place_changed', () => {
@@ -396,4 +395,3 @@ export default function FirstTimeSetup() {
     </Box>
   );
 }
-
