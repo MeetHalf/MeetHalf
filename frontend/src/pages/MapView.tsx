@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -56,7 +56,27 @@ export default function MapView() {
     });
   }, [allEvents]);
 
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // 優先以使用者目前位置為地圖中心；拒絕權限或瀏覽器不支援時沿用聚會位置 fallback。
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setUserLocation({ lat: coords.latitude, lng: coords.longitude });
+      },
+      (error) => {
+        // 定位是地圖的便利功能，失敗時不阻擋活動地圖顯示。
+        console.warn('[MapView] Unable to get current location:', error.message);
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    );
+  }, []);
+
   const mapCenter = useMemo(() => {
+    if (userLocation) return userLocation;
+
     if (events.length === 0) {
       return { lat: 25.033, lng: 121.5654 };
     }
@@ -70,7 +90,7 @@ export default function MapView() {
     const avgLng = validEvents.reduce((sum, e) => sum + (e.meetingPointLng || 0), 0) / validEvents.length;
 
     return { lat: avgLat, lng: avgLng };
-  }, [events]);
+  }, [events, userLocation]);
 
   const markers = useMemo(() => {
     return events.map((event) => {
