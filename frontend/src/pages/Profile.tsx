@@ -62,7 +62,6 @@ const travelModeOptions = [
   { value: 'transit', label: '大眾運輸', icon: Bus, color: '#10b981' },
   { value: 'walking', label: '步行', icon: PersonStanding, color: '#f59e0b' },
   { value: 'bicycling', label: '騎車', icon: Bike, color: '#8b5cf6' },
-  { value: 'motorcycling', label: '機車', icon: Bike, color: '#ef4444' },
 ];
 
 interface Badge {
@@ -204,11 +203,11 @@ export default function Profile() {
     address: '',
     name: '',
   });
-  const [travelMode, setTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling'>('driving');
+  const [travelMode, setTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling'>('driving');
   const [isEditingDefaults, setIsEditingDefaults] = useState(false);
   const [originalDefaults, setOriginalDefaults] = useState({
     location: { lat: null as number | null, lng: null as number | null, address: '', name: '' },
-    travelMode: 'driving' as 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling',
+    travelMode: 'driving' as 'driving' | 'transit' | 'walking' | 'bicycling',
   });
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [saving, setSaving] = useState(false);

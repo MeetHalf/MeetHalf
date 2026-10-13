@@ -545,7 +545,7 @@ export function generateRandomLocation(): { lat: number; lng: number } {
  */
 export function generateMockMembers(count: number, eventId: string | number): EventMember[] {
   const names = ['小明', '小華', '小美', '小王', '小李', '小陳', '小張', '小林'];
-  const travelModes: Array<'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling'> = [
+  const travelModes: Array<'driving' | 'transit' | 'walking' | 'bicycling'> = [
     'driving',
     'transit',
     'walking',

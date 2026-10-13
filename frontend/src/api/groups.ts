@@ -22,7 +22,7 @@ export interface Group {
   };
 }
 
-export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling';
+export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
 
 export interface Member {
   id: number;

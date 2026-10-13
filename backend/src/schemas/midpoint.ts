@@ -5,7 +5,7 @@ export const calculateMidpointSchema = z.object({
     z.object({
       lat: z.number().min(-90).max(90),
       lng: z.number().min(-180).max(180),
-      travelMode: z.enum(['driving', 'transit', 'walking', 'bicycling', 'motorcycling']).default('transit'),
+      travelMode: z.enum(['driving', 'transit', 'walking', 'bicycling']).default('transit'),
     })
   ).min(2, 'At least 2 locations are required'),
   useMeetHalf: z.boolean().default(true),

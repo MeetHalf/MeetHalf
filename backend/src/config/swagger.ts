@@ -137,7 +137,7 @@ const options: swaggerJsdoc.Options = {
             },
             travelMode: {
               type: 'string',
-              enum: ['driving', 'walking', 'transit', 'bicycling', 'motorcycling'],
+              enum: ['driving', 'walking', 'transit', 'bicycling'],
             },
             nickname: {
               type: 'string',

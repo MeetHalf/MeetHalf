@@ -1871,7 +1871,6 @@ export default function EventRoom() {
                   <MenuItem value="transit">🚇 大眾運輸</MenuItem>
                   <MenuItem value="walking">🚶 步行</MenuItem>
                   <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                  <MenuItem value="motorcycling">🛵 機車</MenuItem>
                   
                 </Select>
               </FormControl>

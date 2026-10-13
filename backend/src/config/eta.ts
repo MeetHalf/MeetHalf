@@ -23,5 +23,5 @@ export const ETA_CONFIG = {
   },
 };
 
-export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling';
+export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
 

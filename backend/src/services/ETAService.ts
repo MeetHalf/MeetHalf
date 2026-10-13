@@ -258,8 +258,7 @@ class ETAService {
         params: {
           origin: `${originLat},${originLng}`,
           destination: `${destLat},${destLng}`,
-          // Google Directions API has no motorcycle mode; driving is the closest supported route.
-          mode: (travelMode === 'motorcycling' ? 'driving' : travelMode) as GoogleTravelMode,
+          mode: travelMode as GoogleTravelMode,
           departure_time: Math.floor(Date.now() / 1000),
           key: GMAPS_KEY,
         },
