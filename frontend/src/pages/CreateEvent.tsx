@@ -1693,7 +1693,6 @@ export default function CreateEvent() {
                 inputRef={autocompleteInputRef}
                 fullWidth
                 required={!formData.useMeetHalf}
-                disabled={formData.useMeetHalf && !!selectedPlaceId}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1900,4 +1899,3 @@ export default function CreateEvent() {
     </LocalizationProvider>
   );
 }
-
