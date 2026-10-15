@@ -24,6 +24,7 @@ const travelModeOptions = [
   { value: 'transit', label: '大眾運輸', icon: Bus, color: '#10b981' },
   { value: 'walking', label: '步行', icon: PersonStanding, color: '#f59e0b' },
   { value: 'bicycling', label: '騎車', icon: Bike, color: '#8b5cf6' },
+  { value: 'motorcycling', label: '機車', icon: Bike, color: '#ef4444' },
 ];
 
 export default function FirstTimeSetup() {
@@ -38,7 +39,7 @@ export default function FirstTimeSetup() {
     address: '',
     name: '',
   });
-  const [travelMode, setTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling'>('driving');
+  const [travelMode, setTravelMode] = useState<'driving' | 'transit' | 'walking' | 'bicycling' | 'motorcycling'>('driving');
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');

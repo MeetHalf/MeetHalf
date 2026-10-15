@@ -7,7 +7,7 @@ export const updateProfileSchema = z.object({
   defaultLng: z.number().min(-180).max(180).optional().nullable(),
   defaultAddress: z.string().max(500).optional().nullable(),
   defaultLocationName: z.string().max(200).optional().nullable(),
-  defaultTravelMode: z.enum(['driving', 'transit', 'walking', 'bicycling']).optional().nullable(),
+  defaultTravelMode: z.enum(['driving', 'transit', 'walking', 'bicycling', 'motorcycling']).optional().nullable(),
 });
 
 export type UpdateProfileRequest = z.infer<typeof updateProfileSchema>;
@@ -30,7 +30,7 @@ export const completeSetupSchema = z.object({
   defaultLng: z.number().min(-180).max(180).nullable().optional(),
   defaultAddress: z.string().max(500).nullable().optional(),
   defaultLocationName: z.string().max(200).nullable().optional(),
-  defaultTravelMode: z.enum(['driving', 'transit', 'walking', 'bicycling']).nullable().optional(),
+  defaultTravelMode: z.enum(['driving', 'transit', 'walking', 'bicycling', 'motorcycling']).nullable().optional(),
 });
 
 export type CompleteSetupRequest = z.infer<typeof completeSetupSchema>;
