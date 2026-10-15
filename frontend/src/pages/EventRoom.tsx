@@ -34,6 +34,7 @@ import {
   LocationOn as LocationIcon,
   People as PeopleIcon,
   Person as PersonIcon,
+  PersonRemove as PersonRemoveIcon,
   Check as CheckIcon,
   TouchApp as PokeIcon,
   EmojiEvents as TrophyIcon,
@@ -111,6 +112,7 @@ export default function EventRoom() {
   
   // 戳人相關狀態
   const [pokingMemberId, setPokingMemberId] = useState<number | null>(null);
+  const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
   
   // 結果彈出視窗
   const [showResultPopup, setShowResultPopup] = useState(false);
@@ -1573,6 +1575,26 @@ export default function EventRoom() {
   };
 
   // 戳人
+  const handleRemoveMember = async (member: Member) => {
+    if (!event || !isOwner || member.id === currentMemberId || !user?.userId) return;
+    if (!window.confirm(`確定要將「${member.nickname || '這位成員'}」移出活動嗎？`)) return;
+
+    setRemovingMemberId(member.id);
+    try {
+      await membersApi.removeMember(member.id);
+      setMembers((current) => current.filter((item) => item.id !== member.id));
+      setEvent((current) => current
+        ? { ...current, members: current.members.filter((item) => item.id !== member.id) }
+        : current);
+      setSnackbar({ open: true, message: `已將 ${member.nickname || '成員'} 移出活動`, severity: 'success' });
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || '移除成員失敗';
+      setSnackbar({ open: true, message, severity: 'error' });
+    } finally {
+      setRemovingMemberId(null);
+    }
+  };
+
   const handlePokeMember = async (targetMemberId: number) => {
     if (!event || !id || !currentMemberId || targetMemberId === currentMemberId) {
       console.log('[EventRoom] Cannot poke:', {
@@ -2618,6 +2640,26 @@ export default function EventRoom() {
                       }
                     </Typography>
                   </Box>
+
+                  {/* 主揪可將其他成員移出活動 */}
+                  {isOwner && !!user?.userId && !isCurrentUser && (
+                    <IconButton
+                      aria-label={`移除${member.nickname || '成員'}`}
+                      onClick={() => handleRemoveMember(member)}
+                      disabled={removingMemberId === member.id}
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 2,
+                        color: '#dc2626',
+                        '&:hover': { bgcolor: '#fee2e2' },
+                      }}
+                    >
+                      {removingMemberId === member.id
+                        ? <CircularProgress size={18} />
+                        : <PersonRemoveIcon sx={{ fontSize: 19 }} />}
+                    </IconButton>
+                  )}
 
                   {/* 戳人按鈕（只有已到達的用戶才能戳未到達且非自己的成員） */}
                   {hasArrived && !member.arrivalTime && !isCurrentUser && (
