@@ -3,7 +3,6 @@ import { Event as EventIcon, People as PeopleIcon, Person as PersonIcon } from '
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
-import { useNotifications } from '../hooks/useNotifications';
 
 export default function TabBar() {
   const navigate = useNavigate();
@@ -11,8 +10,7 @@ export default function TabBar() {
   const { user } = useAuth();
   
   // Get unread counts
-  const { unreadCount: chatUnreadCount } = useChat(user?.userId);
-  const { unreadCount: notificationUnreadCount } = useNotifications(user?.userId);
+  const { unreadCount: chatUnreadCount } = useChat(user?.userId ?? undefined);
 
   // Don't show tab bar if user is not logged in
   if (!user) {
@@ -46,7 +44,7 @@ export default function TabBar() {
     >
       <BottomNavigation
         value={currentTab}
-        onChange={(event, newValue) => {
+        onChange={(_event, newValue) => {
           navigate(newValue);
         }}
         showLabels

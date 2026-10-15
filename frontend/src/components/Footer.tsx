@@ -1,5 +1,4 @@
-import { Box, Typography, Link } from '@mui/material';
-import { GitHub as GitHubIcon } from '@mui/icons-material';
+import { Box, Typography } from '@mui/material';
 
 export default function Footer() {
   return (

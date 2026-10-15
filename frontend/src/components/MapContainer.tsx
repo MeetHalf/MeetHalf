@@ -10,12 +10,14 @@ interface MapMarker {
   draggable?: boolean;
   label?: string;
   avatarUrl?: string;
-  address?: string;
+  address?: string | null;
   status?: 'ongoing' | 'upcoming' | 'ended';
 }
 
 interface MapContainerProps {
   center?: { lat: number; lng: number };
+  zoom?: number;
+  onMarkerClick?: (id: number) => void;
   markers?: Array<MapMarker>;
   routes?: Array<{
     polyline: string;
@@ -83,7 +85,7 @@ function createMeetingPointInfoContent(marker: MapMarker): string {
   `;
 }
 
-function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], showRoutes = false, onMarkerDragEnd, fullscreen = false }: MapContainerProps) {
+function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, markers = [], routes = [], showRoutes = false, onMarkerDragEnd, fullscreen = false }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -105,7 +107,7 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
 
         const mapInstance = new google.maps.Map(mapRef.current, {
           center: center || DEFAULT_CENTER,
-          zoom: 13,
+          zoom,
           // 全屏模式下隱藏所有控制項，避免與自定義 UI 重疊
           mapTypeControl: !fullscreen,
           streetViewControl: false,
@@ -129,6 +131,8 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
     
     map.setCenter(center);
   }, [map, center]);
+
+  useEffect(() => { map?.setZoom(zoom); }, [map, zoom]);
 
   // Add/update markers when map is ready or markers change
   useEffect(() => {
@@ -226,6 +230,10 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
 
         const mapMarker = new google.maps.Marker(markerOptions);
 
+        if (marker.id !== undefined && onMarkerClick) {
+          mapMarker.addListener('click', () => onMarkerClick(marker.id!));
+        }
+
         // Add drag end listener if marker is draggable and callback is provided
         if (marker.draggable && marker.id !== undefined && onMarkerDragEnd) {
           mapMarker.addListener('dragend', (event: google.maps.MapMouseEvent) => {
@@ -284,7 +292,7 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
         }
       }
     });
-  }, [map, markers, onMarkerDragEnd]);
+  }, [map, markers, onMarkerDragEnd, onMarkerClick]);
 
   // 組件卸載時清理所有 InfoWindow
   useEffect(() => {
@@ -345,35 +353,4 @@ function MapContainer({ center = DEFAULT_CENTER, markers = [], routes = [], show
 }
 
 // 使用 memo 優化，避免不必要的重新渲染
-export default memo(MapContainer, (prevProps, nextProps) => {
-  // 比較 center
-  const centerEqual = 
-    prevProps.center?.lat === nextProps.center?.lat &&
-    prevProps.center?.lng === nextProps.center?.lng;
-
-  // 比較 markers（淺比較，處理 undefined）
-  const prevMarkers = prevProps.markers || [];
-  const nextMarkers = nextProps.markers || [];
-  
-  const markersEqual = 
-    prevMarkers.length === nextMarkers.length &&
-    prevMarkers.every((marker, idx) => {
-      const nextMarker = nextMarkers[idx];
-      return (
-        marker.lat === nextMarker.lat &&
-        marker.lng === nextMarker.lng &&
-        marker.title === nextMarker.title &&
-        marker.label === nextMarker.label &&
-        marker.address === nextMarker.address
-      );
-    });
-
-  // 比較其他 props（處理 undefined）
-  const prevRoutes = prevProps.routes || [];
-  const nextRoutes = nextProps.routes || [];
-  const routesEqual = prevRoutes.length === nextRoutes.length;
-  const showRoutesEqual = prevProps.showRoutes === nextProps.showRoutes;
-
-  return centerEqual && markersEqual && routesEqual && showRoutesEqual;
-});
-
+export default memo(MapContainer);

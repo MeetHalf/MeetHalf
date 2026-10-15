@@ -500,14 +500,17 @@ export default function CreateEvent() {
 
   // Select a recommended place as meeting point
   const handleSelectRecommendedPlace = (place: any) => {
-    if (!midpointData?.midpoint) return;
+    if (place.lat == null || place.lng == null) {
+      setSnackbar({ open: true, message: '此地點缺少座標，請選擇其他地點', severity: 'error' });
+      return;
+    }
     
     setFormData(prev => ({
       ...prev,
       meetingPointName: place.name,
       meetingPointAddress: place.address,
-      meetingPointLat: midpointData.midpoint.lat,
-      meetingPointLng: midpointData.midpoint.lng,
+      meetingPointLat: place.lat,
+      meetingPointLng: place.lng,
     }));
     setSelectedPlaceId(place.place_id || null);
     setSnackbar({ open: true, message: `已選擇：${place.name}`, severity: 'success' });
@@ -783,13 +786,13 @@ export default function CreateEvent() {
       return;
     }
     
-    if (formData.startTime >= formData.endTime) {
+    if (!Number.isFinite(formData.startTime?.getTime()) || !Number.isFinite(formData.endTime?.getTime()) || formData.startTime >= formData.endTime) {
       setSnackbar({ open: true, message: '結束時間必須晚於開始時間', severity: 'error' });
       return;
     }
     
     // 如果沒有使用 MeetHalf，則必須選擇地點
-    if (!formData.useMeetHalf && !formData.meetingPointName) {
+    if (!formData.useMeetHalf && (!formData.meetingPointName || formData.meetingPointLat == null || formData.meetingPointLng == null)) {
       setSnackbar({ open: true, message: '請選擇集合地點或使用 MeetHalf', severity: 'error' });
       return;
     }
@@ -809,10 +812,10 @@ export default function CreateEvent() {
         startTime: formData.startTime.toISOString(),
         endTime: formData.endTime.toISOString(),
         useMeetHalf: formData.useMeetHalf,
-        meetingPointName: formData.useMeetHalf ? null : formData.meetingPointName,
-        meetingPointAddress: formData.useMeetHalf ? null : formData.meetingPointAddress,
-        meetingPointLat: formData.useMeetHalf ? null : formData.meetingPointLat,
-        meetingPointLng: formData.useMeetHalf ? null : formData.meetingPointLng,
+        meetingPointName: formData.meetingPointName,
+        meetingPointAddress: formData.meetingPointAddress,
+        meetingPointLat: formData.meetingPointLat,
+        meetingPointLng: formData.meetingPointLng,
         // 主辦信息（用於自動加入活動）
         ownerNickname: formData.ownerNickname.trim(),
         ownerTravelMode: formData.ownerTravelMode,
@@ -1423,7 +1426,7 @@ export default function CreateEvent() {
                       value={formData.ownerNickname}
                       onChange={(e) => setFormData({ ...formData, ownerNickname: e.target.value })}
                       fullWidth
-                      required
+                      required={formData.useMeetHalf}
                       helperText="這個暱稱會顯示在活動成員列表中"
                       sx={{ mb: 2 }}
                     />
@@ -1552,7 +1555,7 @@ export default function CreateEvent() {
                         計算中點：{midpointData.address}
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        基於 {midpointData.member_count || invitedFriends.length + dummyMembers.length + 1} 位成員的出發點
+                        基於 {midpointData.location_count || invitedFriends.length + dummyMembers.length + 1} 位成員的出發點
                       </Typography>
                     </Box>
                   )}
@@ -1646,13 +1649,13 @@ export default function CreateEvent() {
                   )}
 
                   {/* 顯示成員旅程時間 */}
-                  {midpointData?.member_travel_times && midpointData.member_travel_times.length > 0 && (
+                  {midpointData?.travel_times && midpointData.travel_times.length > 0 && (
                     <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1 }}>
-                        預估旅程時間：
+                        到地理中點的預估旅程時間（非到各店家）：
                       </Typography>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {midpointData.member_travel_times.map((travel: any, idx: number) => (
+                        {midpointData.travel_times.map((travel: any, idx: number) => (
                           <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             {travel.travelMode === 'driving' && <CarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                             {travel.travelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
@@ -1669,13 +1672,19 @@ export default function CreateEvent() {
                 </Paper>
               </Collapse>
 
+              {!formData.useMeetHalf && !user && (
+                <TextField label="你的暱稱" value={formData.ownerNickname}
+                  onChange={(e) => setFormData({ ...formData, ownerNickname: e.target.value })}
+                  fullWidth required helperText="這個暱稱會顯示在活動成員列表中" />
+              )}
+
               {/* 集合地點欄位（始終顯示，使用 MeetHalf 時會帶入選擇的推薦地點） */}
               <TextField
                 label="集合地點"
                 placeholder={formData.useMeetHalf ? "從推薦地點中選擇，或手動輸入..." : "搜尋地點或地址..."}
                 value={formData.meetingPointName}
                 onChange={(e) => {
-                  setFormData({ ...formData, meetingPointName: e.target.value });
+                  setFormData({ ...formData, meetingPointName: e.target.value, meetingPointAddress: '', meetingPointLat: null, meetingPointLng: null });
                   // Clear selected place if user manually types
                   if (e.target.value !== formData.meetingPointName) {
                     setSelectedPlaceId(null);
@@ -1684,7 +1693,6 @@ export default function CreateEvent() {
                 inputRef={autocompleteInputRef}
                 fullWidth
                 required={!formData.useMeetHalf}
-                disabled={formData.useMeetHalf && !!selectedPlaceId}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1891,4 +1899,3 @@ export default function CreateEvent() {
     </LocalizationProvider>
   );
 }
-

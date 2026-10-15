@@ -108,7 +108,7 @@ export default function FriendListDialog({ open, onClose }: FriendListDialogProp
                     '& .friend-name': { color: '#2563eb' },
                   },
                 }}
-                onClick={() => handleSendMessage(friend.userId)}
+                onClick={() => friend.userId && handleSendMessage(friend.userId)}
               >
                 <Avatar
                   src={friend.avatar || undefined}
@@ -135,7 +135,7 @@ export default function FriendListDialog({ open, onClose }: FriendListDialogProp
                 <Box
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDeleteFriend(friend.userId, friend.name);
+                    friend.userId && handleDeleteFriend(friend.userId, friend.name);
                   }}
                   sx={{
                     width: 40,

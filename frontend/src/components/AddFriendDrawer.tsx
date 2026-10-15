@@ -194,7 +194,7 @@ export default function AddFriendDrawer({ open, onClose }: AddFriendDrawerProps)
                     <Button
                       variant="contained"
                       startIcon={<UserPlus size={18} />}
-                      onClick={() => handleSendRequest(user.userId, user.name)}
+                      onClick={() => user.userId && handleSendRequest(user.userId, user.name)}
                       sx={{
                         borderRadius: 3,
                         bgcolor: '#2563eb',

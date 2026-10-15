@@ -10,7 +10,6 @@ import {
   Google as GoogleIcon,
   GitHub as GitHubIcon,
 } from '@mui/icons-material';
-import { LogIn } from 'lucide-react';
 import api from '../api/axios';
 
 export default function Login() {

@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import {
   Home,
   Users,
@@ -24,14 +24,14 @@ import {
 } from 'lucide-react';
 
 // 動畫變體
-const iconVariants = {
+const iconVariants: Variants = {
   initial: { scale: 1 },
   hover: { scale: 1.1 },
   tap: { scale: 0.9 },
   active: { scale: 1.05 },
 };
 
-const bounceVariants = {
+const bounceVariants: Variants = {
   initial: { y: 0 },
   animate: {
     y: [-2, 0, -2],
@@ -43,7 +43,7 @@ const bounceVariants = {
   },
 };
 
-const pulseVariants = {
+const pulseVariants: Variants = {
   initial: { scale: 1, opacity: 1 },
   animate: {
     scale: [1, 1.1, 1],
@@ -56,7 +56,7 @@ const pulseVariants = {
   },
 };
 
-const shakeVariants = {
+const shakeVariants: Variants = {
   initial: { rotate: 0 },
   animate: {
     rotate: [0, -10, 10, -10, 10, 0],

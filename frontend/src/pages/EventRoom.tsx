@@ -41,8 +41,6 @@ import {
   NotificationsOff as NotificationsOffIcon,
   ArrowBack as ArrowBackIcon,
   Close as CloseIcon,
-  Share as ShareIcon,
-  Edit as EditIcon,
 } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -76,6 +74,7 @@ export default function EventRoom() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   // 新 UI 相關狀態
   const [isInfoExpanded, setIsInfoExpanded] = useState(false);
   const [isDrawerOpen, setDrawerOpen] = useState(false);
@@ -89,6 +88,22 @@ export default function EventRoom() {
     travelMode: 'transit' as TravelMode,
   });
   const [joining, setJoining] = useState(false);
+
+  // 取得使用者目前位置，讓活動地圖能以使用者所在位置為中心。
+  // 若使用者拒絕定位或瀏覽器不支援，仍沿用集合地點作為 fallback。
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setUserLocation({ lat: coords.latitude, lng: coords.longitude });
+      },
+      (locationError) => {
+        console.warn('[EventRoom] Unable to get current location:', locationError.message);
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    );
+  }, []);
 
   // 「我到了」相關狀態
   const [hasArrived, setHasArrived] = useState(false);
@@ -1628,11 +1643,12 @@ export default function EventRoom() {
 
   // Memoize 地圖中心點，避免重新渲染
   const mapCenter = useMemo(() => {
+    if (userLocation) return userLocation;
     if (event?.meetingPointLat && event?.meetingPointLng) {
       return { lat: event.meetingPointLat, lng: event.meetingPointLng };
     }
     return undefined;
-  }, [event?.meetingPointLat, event?.meetingPointLng]);
+  }, [event?.meetingPointLat, event?.meetingPointLng, userLocation]);
 
   // Memoize 地圖標記，避免重新渲染
   const mapMarkers = useMemo(() => {
@@ -2974,11 +2990,11 @@ export default function EventRoom() {
                         bgcolor: '#f8fafc',
                       },
                     }}
-                    onClick={() => handleToggleFriendSelection(friend.userId)}
+                    onClick={() => friend.userId && handleToggleFriendSelection(friend.userId)}
                   >
                     <Checkbox
-                      checked={selectedFriends.includes(friend.userId)}
-                      onChange={() => handleToggleFriendSelection(friend.userId)}
+                      checked={!!friend.userId && selectedFriends.includes(friend.userId)}
+                      onChange={() => friend.userId && handleToggleFriendSelection(friend.userId)}
                       sx={{
                         color: '#3b82f6',
                         '&.Mui-checked': {
