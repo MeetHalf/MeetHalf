@@ -278,21 +278,21 @@ export default function Profile() {
     },
     enabled: !!user?.userId,
     staleTime: 5 * 60 * 1000, // 5 minutes - profile doesn't change frequently
-    onSuccess: (userData) => {
-      if (userData) {
-        const location = {
-          lat: userData.defaultLat || null,
-          lng: userData.defaultLng || null,
-          address: userData.defaultAddress || '',
-          name: userData.defaultLocationName || '',
-        };
-        const mode = userData.defaultTravelMode || 'driving';
-        setDefaultLocation(location);
-        setTravelMode(mode);
-        setOriginalDefaults({ location, travelMode: mode });
-      }
-    },
   });
+
+  useEffect(() => {
+    if (!profileData) return;
+    const location = {
+      lat: profileData.defaultLat ?? null,
+      lng: profileData.defaultLng ?? null,
+      address: profileData.defaultAddress || '',
+      name: profileData.defaultLocationName || '',
+    };
+    const mode = profileData.defaultTravelMode || 'driving';
+    setDefaultLocation(location);
+    setTravelMode(mode);
+    setOriginalDefaults({ location, travelMode: mode });
+  }, [profileData]);
 
   useEffect(() => {
     loadGoogleMaps()
@@ -311,7 +311,6 @@ export default function Profile() {
     ) {
       const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
         types: ['establishment', 'geocode'],
-        componentRestrictions: { country: 'tw' },
       });
 
       autocomplete.addListener('place_changed', () => {
@@ -643,7 +642,7 @@ export default function Profile() {
             }}
           >
             <Typography sx={{ color: '#ef4444', fontSize: '0.875rem' }}>
-              {statsError}
+              {statsError instanceof Error ? statsError.message : String(statsError)}
             </Typography>
           </Box>
         ) : stats ? (

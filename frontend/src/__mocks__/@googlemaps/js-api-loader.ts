@@ -12,7 +12,7 @@ export class Loader {
    */
   load = vi.fn().mockResolvedValue(
     // Return the global google object (defined in setupTests.ts)
-    (global as any).google
+    (globalThis as any).google
   );
 }
 

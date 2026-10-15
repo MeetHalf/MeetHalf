@@ -146,7 +146,7 @@ export default function CreateGroupDialog({ open, onClose }: CreateGroupDialogPr
             {friends.map((friend) => (
               <Box
                 key={friend.userId}
-                onClick={() => handleToggleFriend(friend.userId)}
+                onClick={() => friend.userId && handleToggleFriend(friend.userId)}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -155,15 +155,15 @@ export default function CreateGroupDialog({ open, onClose }: CreateGroupDialogPr
                   borderRadius: 4,
                   cursor: 'pointer',
                   mb: 1,
-                  bgcolor: selectedFriends.includes(friend.userId) ? '#dbeafe' : 'transparent',
+                  bgcolor: !!friend.userId && selectedFriends.includes(friend.userId) ? '#dbeafe' : 'transparent',
                   transition: 'all 0.2s ease',
                   '&:hover': {
-                    bgcolor: selectedFriends.includes(friend.userId) ? '#dbeafe' : '#f1f5f9',
+                    bgcolor: !!friend.userId && selectedFriends.includes(friend.userId) ? '#dbeafe' : '#f1f5f9',
                   },
                 }}
               >
                 <Checkbox
-                  checked={selectedFriends.includes(friend.userId)}
+                  checked={!!friend.userId && selectedFriends.includes(friend.userId)}
                   sx={{
                     p: 0,
                     color: '#2563eb',

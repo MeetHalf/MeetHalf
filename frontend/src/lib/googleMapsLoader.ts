@@ -23,7 +23,10 @@ export function getGoogleMapsLoader(): Loader {
 
 export function loadGoogleMaps(): Promise<typeof google> {
   if (!loadPromise) {
-    loadPromise = getGoogleMapsLoader().load();
+    loadPromise = Promise.resolve().then(() => getGoogleMapsLoader().load()).catch(error => {
+      loadPromise = null;
+      throw error;
+    });
   }
   return loadPromise;
 }

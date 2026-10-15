@@ -6,7 +6,6 @@ import {
   TextField,
   Button,
   FormControl,
-  FormLabel,
   RadioGroup,
   FormControlLabel,
   Radio,
@@ -32,7 +31,6 @@ export default function FirstTimeSetup() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const [userId, setUserId] = useState('');
-  const [suggestedUserId, setSuggestedUserId] = useState('');
   const [userIdError, setUserIdError] = useState('');
   const [checkingUserId, setCheckingUserId] = useState(false);
   const [location, setLocation] = useState({
@@ -59,7 +57,6 @@ export default function FirstTimeSetup() {
         suffix += chars.charAt(Math.floor(Math.random() * chars.length));
       }
       const suggested = `${emailPrefix}_${suffix}`;
-      setSuggestedUserId(suggested);
       setUserId(suggested);
     }
   }, [user?.email]);
@@ -90,7 +87,6 @@ export default function FirstTimeSetup() {
     ) {
       const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
         types: ['establishment', 'geocode'],
-        componentRestrictions: { country: 'tw' },
       });
 
       autocomplete.addListener('place_changed', () => {
@@ -146,7 +142,6 @@ export default function FirstTimeSetup() {
         suffix += chars.charAt(Math.floor(Math.random() * chars.length));
       }
       const suggested = `${emailPrefix}_${suffix}`;
-      setSuggestedUserId(suggested);
       setUserId(suggested);
       handleUserIdChange(suggested);
     }
@@ -401,4 +396,3 @@ export default function FirstTimeSetup() {
     </Box>
   );
 }
-

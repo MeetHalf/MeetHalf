@@ -6,6 +6,8 @@ export interface User {
   email: string;
   name: string;
   avatar: string | null;
+  defaultLat?: number | null;
+  defaultLng?: number | null;
 }
 
 export interface Group {
@@ -198,18 +200,18 @@ export const membersApi = {
 // Utility functions
 export const groupUtils = {
   // Check if user is group owner
-  isOwner: (group: Group, userId: number): boolean => {
+  isOwner: (group: Group, userId: string): boolean => {
     return group.ownerId === userId;
   },
 
   // Get current user's membership in group
-  getCurrentUserMember: (group: Group, userId: number): Member | undefined => {
+  getCurrentUserMember: (group: Group, userId: string): User | undefined => {
     return group.members.find(member => member.userId === userId);
   },
 
   // Count members with locations set
-  getMembersWithLocations: (group: Group): Member[] => {
-    return group.members.filter(member => member.lat !== null && member.lng !== null);
+  getMembersWithLocations: (group: Group): User[] => {
+    return group.members.filter(member => member.defaultLat != null && member.defaultLng != null);
   },
 
   // Check if midpoint can be calculated (at least 2 members with locations)

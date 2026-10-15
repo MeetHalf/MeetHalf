@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../../hooks/useAuth';
 import api from '../../api/axios';
 
@@ -44,7 +44,7 @@ describe('useAuth', () => {
     expect(result.current.user).toEqual(mockUser);
   });
 
-  it('should handle login successfully', async () => {
+  it('should refresh user after OAuth login', async () => {
     const mockUser = {
       id: 1,
       email: 'test@example.com',
@@ -63,11 +63,11 @@ describe('useAuth', () => {
     });
 
     // Mock login call
-    vi.mocked(api.post).mockResolvedValueOnce({
+    vi.mocked(api.get).mockResolvedValueOnce({
       data: { user: mockUser },
     });
 
-    await result.current.login('test@example.com', 'password123');
+    await act(async () => { await result.current.refreshMe(); });
 
     expect(result.current.user).toEqual(mockUser);
   });
@@ -95,7 +95,7 @@ describe('useAuth', () => {
     // Mock logout
     vi.mocked(api.post).mockResolvedValueOnce({ data: {} });
 
-    await result.current.logout();
+    await act(async () => { await result.current.logout(); });
 
     expect(result.current.user).toBe(null);
   });

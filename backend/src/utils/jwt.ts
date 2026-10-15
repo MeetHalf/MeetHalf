@@ -40,7 +40,10 @@ export function verifyToken(token: string): JWTPayload {
   }
   
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload & { type?: string };
+    if (!Number.isInteger(decoded.userId) || decoded.userId <= 0 || decoded.type) {
+      throw new Error('Invalid account token format');
+    }
     return decoded;
   } catch (error) {
     throw new Error('Invalid or expired token');
