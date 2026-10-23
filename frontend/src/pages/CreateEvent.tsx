@@ -867,6 +867,8 @@ export default function CreateEvent() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (submitting) return;
     
     if (!formData.name.trim()) {
       setSnackbar({ open: true, message: '請輸入聚會名稱', severity: 'error' });
@@ -977,6 +979,18 @@ export default function CreateEvent() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Prevent Enter in a text field from implicitly creating the event. Keep
+  // Enter available when Google Places has an open suggestion list so users
+  // can still select a place from autocomplete with the keyboard.
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    const placesMenu = document.querySelector('.pac-container');
+    const hasPlaceSuggestions = placesMenu instanceof HTMLElement
+      && placesMenu.offsetParent !== null
+      && placesMenu.querySelector('.pac-item');
+    if (!hasPlaceSuggestions) e.preventDefault();
   };
 
   // Copy link to clipboard
@@ -1098,6 +1112,7 @@ export default function CreateEvent() {
           <Paper
             component="form"
             onSubmit={handleSubmit}
+            onKeyDown={handleFormKeyDown}
             elevation={0}
             sx={{
               p: { xs: 2, md: 3 },
