@@ -303,6 +303,7 @@ export default function Profile() {
   useEffect(() => {
     if (
       mapsLoaded &&
+      isEditingDefaults &&
       autocompleteInputRef.current &&
       !autocompleteRef.current &&
       typeof google !== 'undefined' &&
@@ -327,7 +328,7 @@ export default function Profile() {
 
       autocompleteRef.current = autocomplete;
     }
-  }, [mapsLoaded]);
+  }, [mapsLoaded, isEditingDefaults]);
 
   const handleStartEditDefaults = () => {
     setOriginalDefaults({
@@ -353,7 +354,7 @@ export default function Profile() {
   };
 
   const handleSaveDefaultLocation = async () => {
-    if (!defaultLocation.lat || !defaultLocation.lng) {
+    if (defaultLocation.lat == null || defaultLocation.lng == null) {
       setSnackbar({ open: true, message: '請選擇一個地點', severity: 'error' });
       return;
     }
@@ -934,7 +935,13 @@ export default function Profile() {
                     placeholder="搜尋地點..."
                     value={defaultLocation.name || defaultLocation.address}
                     onChange={(e) =>
-                      setDefaultLocation((prev) => ({ ...prev, name: e.target.value }))
+                      setDefaultLocation((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                        lat: null,
+                        lng: null,
+                        address: '',
+                      }))
                     }
                     size="small"
                     sx={{
