@@ -19,10 +19,25 @@ export const createCache = <T extends {} = any>(ttl: number = 5 * 60 * 1000) => 
  * @returns Cache key in format "prefix:hash"
  */
 export const makeCacheKey = (prefix: string, params: object): string => {
-  // Normalize parameters by sorting keys
-  const normalized = JSON.stringify(params, Object.keys(params).sort());
+  // Normalize parameters recursively. Using Object.keys(params) as the
+  // JSON.stringify replacer only includes top-level keys and turns nested
+  // location objects into `{}`, causing unrelated midpoint requests to share
+  // one cached result.
+  const sortKeys = (value: any): any => {
+    if (Array.isArray(value)) return value.map(sortKeys);
+    if (value && typeof value === 'object') {
+      return Object.keys(value)
+        .sort()
+        .reduce((result, key) => {
+          result[key] = sortKeys(value[key]);
+          return result;
+        }, {} as Record<string, any>);
+    }
+    return value;
+  };
+
+  const normalized = JSON.stringify(sortKeys(params));
   const hash = crypto.createHash('md5').update(normalized).digest('hex');
   return `${prefix}:${hash}`;
 };
-
 

@@ -33,7 +33,7 @@ interface MapContainerProps {
 const DEFAULT_CENTER = { lat: 25.033, lng: 121.565 }; // 台北
 
 // 生成圓形頭像 SVG marker
-function createCircleMarkerIcon(label: string, color: string = '#2196f3'): string {
+function createCircleMarkerIcon(label: string, color: string = '#1769e8'): string {
   const svg = `
     <svg width="48" height="48" xmlns="http://www.w3.org/2000/svg">
       <circle cx="24" cy="24" r="20" fill="${color}" stroke="white" stroke-width="3"/>
@@ -185,14 +185,14 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
           };
         } else if (marker.label) {
           // 根據 label 和 status 決定顏色和樣式
-          let color = '#2196f3'; // 默認藍色
+            let color = '#1769e8'; // MeetHalf blue
           if (marker.label === '📍') {
             // 集合地點用更醒目的 pin 圖標
             // 如果是 ongoing，使用紅色並放大
             const isOngoing = marker.status === 'ongoing';
             markerOptions.icon = {
               path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-              fillColor: isOngoing ? '#ef4444' : '#3b82f6', // 紅色（ongoing）或藍色（upcoming）
+              fillColor: isOngoing ? '#f28a25' : '#1769e8', // 橘色（ongoing）或藍色（upcoming）
               fillOpacity: 1,
               strokeColor: '#ffffff',
               strokeWeight: isOngoing ? 3 : 2, // ongoing 用更粗的邊框
@@ -211,7 +211,7 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
             // Ongoing 活動用紅色脈衝標記
             markerOptions.icon = {
               path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-              fillColor: '#ef4444',
+              fillColor: '#f28a25',
               fillOpacity: 1,
               strokeColor: '#ffffff',
               strokeWeight: 3,
@@ -246,7 +246,10 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
         }
 
         // 為集合點添加點擊事件和 InfoWindow
-        if (marker.label === '📍') {
+        // MapView renders its own accessible bottom sheet. Keep the legacy
+        // Google InfoWindow for standalone map usages only so two overlays do
+        // not compete for the same marker click.
+        if (marker.label === '📍' && !onMarkerClick) {
           const infoWindow = new google.maps.InfoWindow({
             content: createMeetingPointInfoContent(marker),
           });

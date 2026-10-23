@@ -3037,7 +3037,8 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
     }
 
     // Create cache key
-    const cacheKey = makeCacheKey('temp_midpoint', { locations, useMeetHalf });
+    // v2 bypasses entries created with the old shallow cache key.
+    const cacheKey = makeCacheKey('temp_midpoint_v2', { locations, useMeetHalf });
     const cached = midpointCache.get(cacheKey);
     if (cached) {
       res.json({ ...cached, cached: true });
@@ -3070,24 +3071,34 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
         address = reverseResult.data.results[0].formatted_address;
       }
 
-      // Calculate travel times for each location to the midpoint
+      // Calculate travel times for each location to the midpoint.
+      // Transit can legitimately return ZERO_RESULTS in rural areas, so fall
+      // back to driving and walking before reporting that no route exists.
       const travelTimePromises = locations.map(async (location, index) => {
         try {
-          const directionsResult = await gmapsClient.directions({
-            params: {
-              origin: `${location.lat},${location.lng}`,
-              destination: `${midpoint.lat},${midpoint.lng}`,
-              mode: toGoogleTravelMode(location.travelMode) as any,
-              key: GMAPS_KEY,
-            },
-          });
+          const requestedMode = toGoogleTravelMode(location.travelMode);
+          const modesToTry = [requestedMode, ...(requestedMode === 'driving' ? [] : ['driving', 'walking'])];
 
-          if (directionsResult.data.status === 'OK' && directionsResult.data.routes.length > 0) {
+          for (const mode of modesToTry) {
+            const directionsResult = await gmapsClient.directions({
+              params: {
+                origin: `${location.lat},${location.lng}`,
+                destination: `${midpoint.lat},${midpoint.lng}`,
+                mode: mode as any,
+                key: GMAPS_KEY,
+              },
+            });
+
+            if (directionsResult.data.status !== 'OK' || directionsResult.data.routes.length === 0) {
+              continue;
+            }
+
             const route = directionsResult.data.routes[0];
             const leg = route.legs[0];
             return {
               locationIndex: index,
               travelMode: location.travelMode,
+              routeMode: mode,
               duration: leg.duration?.text || 'N/A',
               durationValue: leg.duration?.value || null,
               distance: leg.distance?.text || 'N/A',
@@ -3100,36 +3111,51 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
         return {
           locationIndex: index,
           travelMode: location.travelMode,
-          duration: 'N/A',
+          duration: '無可用路線',
           durationValue: null,
-          distance: 'N/A',
+          distance: '-',
           distanceValue: null,
         };
       });
 
       travelTimes = await Promise.all(travelTimePromises);
 
-      // Find nearby places
-      const nearbyResult = await gmapsClient.placesNearby({
-        params: {
-          location: `${midpoint.lat},${midpoint.lng}`,
-          radius: 1000, // 1km radius
-          type: 'restaurant|cafe|bar',
-          key: GMAPS_KEY,
-        },
-      });
+      // Find nearby places. Google accepts one place type per request; asking
+      // for `restaurant|cafe|bar` returns INVALID_REQUEST and silently leaves
+      // the UI with no recommendations. Query the useful types separately and
+      // merge the results by place_id.
+      const placeTypes = ['restaurant', 'cafe', 'bar'];
+      const nearbyResults = await Promise.all(placeTypes.map((type) =>
+        gmapsClient.placesNearby({
+          params: {
+            location: `${midpoint.lat},${midpoint.lng}`,
+            radius: 1000,
+            type,
+            key: GMAPS_KEY,
+          },
+        }).catch((error) => {
+          console.error(`Error finding nearby ${type}s:`, error);
+          return null;
+        })
+      ));
 
-      if (nearbyResult.data.status === 'OK') {
-        suggestedPlaces = nearbyResult.data.results.slice(0, 5).map((place) => ({
-          name: place.name,
-          address: place.vicinity,
-          rating: place.rating,
-          types: place.types,
-          place_id: place.place_id,
-          lat: place.geometry?.location.lat,
-          lng: place.geometry?.location.lng,
-        }));
-      }
+      const placesById = new Map<string, any>();
+      nearbyResults.forEach((nearbyResult) => {
+        if (nearbyResult?.data.status !== 'OK') return;
+        nearbyResult.data.results.forEach((place) => {
+          if (!place.place_id || placesById.has(place.place_id)) return;
+          placesById.set(place.place_id, {
+            name: place.name,
+            address: place.vicinity,
+            rating: place.rating,
+            types: place.types,
+            place_id: place.place_id,
+            lat: place.geometry?.location.lat,
+            lng: place.geometry?.location.lng,
+          });
+        });
+      });
+      suggestedPlaces = Array.from(placesById.values()).slice(0, 5);
     } catch (error) {
       console.error('Error calling Google Maps API:', error);
       // Continue with basic midpoint data even if Maps API fails
@@ -3159,4 +3185,3 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
 
 console.log('[EVENTS_ROUTER] Events router initialized and exported');
 export default router;
-
