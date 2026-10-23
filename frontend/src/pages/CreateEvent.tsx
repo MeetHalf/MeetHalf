@@ -411,23 +411,32 @@ export default function CreateEvent() {
         const key = place.place_id || String(index);
         if (place.lat == null || place.lng == null) return [key, []] as const;
         const times = await Promise.all(locations.map(async (location) => {
-          try {
-            const result = await new google.maps.DirectionsService().route({
-              origin: { lat: location.lat, lng: location.lng },
-              destination: { lat: place.lat, lng: place.lng },
-              travelMode: travelModeMap[location.travelMode] || google.maps.TravelMode.TRANSIT,
-            });
-            const leg = result.routes[0]?.legs[0];
-            if (leg) {
-              return {
-                duration: leg.duration?.text || '無法計算',
-                distance: leg.distance?.text || '—',
-                travelMode: location.travelMode,
-              };
+          const requestedMode = travelModeMap[location.travelMode] || google.maps.TravelMode.TRANSIT;
+          const modesToTry = requestedMode === google.maps.TravelMode.DRIVING
+            ? [requestedMode]
+            : [requestedMode, google.maps.TravelMode.DRIVING, google.maps.TravelMode.WALKING];
+
+          for (const mode of modesToTry) {
+            try {
+              const result = await new google.maps.DirectionsService().route({
+                origin: { lat: location.lat, lng: location.lng },
+                destination: { lat: place.lat, lng: place.lng },
+                travelMode: mode,
+              });
+              const leg = result.routes[0]?.legs[0];
+              if (leg) {
+                return {
+                  duration: leg.duration?.text || '無法計算',
+                  distance: leg.distance?.text || '—',
+                  travelMode: location.travelMode,
+                  routeMode: mode,
+                };
+              }
+            } catch {
+              // Transit may have no route; try the next practical mode.
             }
-          } catch {
-            // A rural area or a transit-only route may have no result.
           }
+
           return { duration: '無法計算', distance: '—', travelMode: location.travelMode };
         }));
         return [key, times] as const;
@@ -1693,6 +1702,7 @@ export default function CreateEvent() {
                       <MapContainer
                         center={midpointData.midpoint}
                         zoom={13}
+                        showInfoWindows={false}
                         onMarkerClick={(markerId) => {
                           if (markerId <= 0) return;
                           const place = recommendedPlaces[markerId - 1];
@@ -1775,6 +1785,7 @@ export default function CreateEvent() {
                                         <TimeIcon sx={{ fontSize: 14, color: '#1769E8' }} />
                                         <Typography variant="caption" sx={{ color: '#142B52' }}>
                                           成員 {timeIndex + 1} · {time.duration} · {time.distance}
+                                          {time.routeMode && time.routeMode.toLowerCase() !== time.travelMode ? ` · 改用${time.routeMode.toLowerCase() === 'driving' ? '開車' : '步行'}估算` : ''}
                                         </Typography>
                                       </Box>
                                     ))}

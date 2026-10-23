@@ -26,6 +26,8 @@ interface MapContainerProps {
   }>;
   showRoutes?: boolean;
   onMarkerDragEnd?: (id: number, lat: number, lng: number) => void;
+  /** 是否顯示 Google Maps 原生 InfoWindow */
+  showInfoWindows?: boolean;
   /** 是否全屏顯示（隱藏地圖控制項） */
   fullscreen?: boolean;
 }
@@ -85,7 +87,7 @@ function createMeetingPointInfoContent(marker: MapMarker): string {
   `;
 }
 
-function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, markers = [], routes = [], showRoutes = false, onMarkerDragEnd, fullscreen = false }: MapContainerProps) {
+function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, markers = [], routes = [], showRoutes = false, onMarkerDragEnd, fullscreen = false, showInfoWindows = true }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -249,7 +251,7 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
         // MapView renders its own accessible bottom sheet. Keep the legacy
         // Google InfoWindow for standalone map usages only so two overlays do
         // not compete for the same marker click.
-        if (marker.label === '📍' && !onMarkerClick) {
+        if (marker.label === '📍' && showInfoWindows) {
           const infoWindow = new google.maps.InfoWindow({
             content: createMeetingPointInfoContent(marker),
           });
