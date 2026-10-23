@@ -131,9 +131,9 @@ export default function Events() {
   }
 
   return (
-    <Box sx={{ bgcolor: '#f8fafc', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
+    <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 140px)', pb: 12 }}>
       {/* Main Content */}
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: { xs: 2.25, md: 4 }, maxWidth: 880, mx: 'auto' }}>
         {error && (
           <Alert severity="error" sx={{ mb: 3, borderRadius: 4 }}>
             {error}
@@ -143,7 +143,10 @@ export default function Events() {
         {/* Active Events Section */}
         <Box sx={{ mb: 4 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontWeight: 700, color: '#1e293b' }}>Active</Typography>
+            <Box>
+              <Typography sx={{ fontWeight: 850, color: '#142B52', fontSize: '1.45rem', letterSpacing: '-0.04em' }}>你的聚會</Typography>
+              <Typography sx={{ color: '#71839A', fontSize: '0.78rem', mt: 0.35 }}>看大家到哪裡了，或開始一場新的聚會</Typography>
+            </Box>
             
             {/* 快速操作按鈕 */}
             <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
@@ -151,21 +154,21 @@ export default function Events() {
               <Box
                 onClick={() => navigate('/events/new')}
                 sx={{
-                  bgcolor: '#2563eb',
+                  bgcolor: '#1769E8',
                   color: 'white',
                   px: { xs: 1.5, sm: 2 },
                   py: 1,
-                  borderRadius: 3,
+                  borderRadius: 2,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 0.5,
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 4px 12px -2px rgba(37, 99, 235, 0.3)',
+                  boxShadow: '0 8px 20px -4px rgba(23, 105, 232, 0.32)',
                   '&:active': { transform: 'scale(0.95)' },
                   '&:hover': {
                     boxShadow: '0 6px 16px -2px rgba(37, 99, 235, 0.4)',
-                    bgcolor: '#1d4ed8',
+                    bgcolor: '#0F4FB7',
                   },
                 }}
               >
@@ -191,7 +194,7 @@ export default function Events() {
                   color: '#0f172a',
                   px: { xs: 1.5, sm: 2 },
                   py: 1,
-                  borderRadius: 3,
+                  borderRadius: 2,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 0.5,
@@ -233,11 +236,11 @@ export default function Events() {
                   <Box
                     key={event.id}
                     sx={{
-                      bgcolor: 'white',
+                  bgcolor: '#FFFFFF',
                       p: 2.5,
-                      borderRadius: '2rem',
-                      border: '1px solid #f1f5f9',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      borderRadius: 2.5,
+                      border: '1px solid #E0E7F0',
+                      boxShadow: '0 8px 26px rgba(23, 50, 83, 0.07)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -350,7 +353,7 @@ export default function Events() {
                           )}
                           <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
                           <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                            {memberCount} friends
+                            {memberCount} 位成員
                           </Typography>
                         </Box>
                         {(event.meetingPointName || event.meetingPointAddress) && (
@@ -411,16 +414,16 @@ export default function Events() {
               sx={{
                 bgcolor: 'white',
                 p: 4,
-                borderRadius: '2rem',
+                borderRadius: 2,
                 border: '1px solid #f1f5f9',
                 textAlign: 'center',
               }}
             >
               <Typography sx={{ fontWeight: 700, color: '#64748b', fontSize: '1rem', mb: 1 }}>
-                No active gatherings
+                目前還沒有聚會
               </Typography>
               <Typography sx={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                Tap "New Meet" to create one
+                點擊「建立聚會」開始安排
               </Typography>
             </Box>
           )}
@@ -429,7 +432,7 @@ export default function Events() {
         {/* Upcoming Events Section */}
         {upcomingEvents.length > 0 && (
           <Box sx={{ mb: 4 }}>
-            <Typography sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>Upcoming</Typography>
+            <Typography sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>即將開始</Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {upcomingEvents.map((event) => {
                 const memberCount = event._count?.members || event.members?.length || 0;
@@ -442,7 +445,7 @@ export default function Events() {
                     sx={{
                       bgcolor: 'white',
                       p: 2.5,
-                      borderRadius: '2rem',
+                      borderRadius: 2,
                       border: '1px solid #f1f5f9',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                       display: 'flex',
@@ -493,7 +496,7 @@ export default function Events() {
                           </Typography>
                           <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
                           <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                            {memberCount} friends
+                            {memberCount} 位成員
                           </Typography>
                         </Box>
                         {(event.meetingPointName || event.meetingPointAddress) && (
@@ -526,7 +529,7 @@ export default function Events() {
         {/* Past Events Section */}
         {pastEvents.length > 0 && (
           <Box>
-            <Typography sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>History</Typography>
+            <Typography sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>過往聚會</Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {pastEvents.slice(0, 5).map((event) => {
                 const startTime = new Date(event.startTime);

@@ -612,11 +612,6 @@ export default function CreateEvent() {
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace();
 
-        if (!place || place.place_id === undefined) {
-          setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'info' });
-          return;
-        }
-
         if (!place.geometry || !place.geometry.location) {
           setSnackbar({ open: true, message: '找不到該地點的位置資訊', severity: 'error' });
           return;
@@ -668,11 +663,6 @@ export default function CreateEvent() {
 
         autocomplete.addListener('place_changed', () => {
           const place = autocomplete.getPlace();
-
-          if (!place || place.place_id === undefined) {
-            setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'info' });
-            return;
-          }
 
           if (!place.geometry || !place.geometry.location) {
             setSnackbar({ open: true, message: '找不到該地點的位置資訊', severity: 'error' });
@@ -732,28 +722,22 @@ export default function CreateEvent() {
         autocomplete.addListener('place_changed', () => {
           const place = autocomplete.getPlace();
 
-          if (!place || place.place_id === undefined) {
-            setSnackbar({ open: true, message: '請從建議列表中選擇地點', severity: 'info' });
-            return;
-          }
-
           if (!place.geometry || !place.geometry.location) {
             setSnackbar({ open: true, message: '找不到該地點的位置資訊', severity: 'error' });
             return;
           }
 
-          const updatedFriends = invitedFriends.map(f =>
+          setInvitedFriends(prev => prev.map(f =>
             f.userId === friend.userId
               ? {
                   ...f,
                   editableLocationName: place.name || place.formatted_address || '',
                   editableAddress: place.formatted_address || '',
-                  editableLat: place.geometry?.location?.lat() || null,
-                  editableLng: place.geometry?.location?.lng() || null,
+                  editableLat: place.geometry!.location!.lat(),
+                  editableLng: place.geometry!.location!.lng(),
                 }
               : f
-          );
-          setInvitedFriends(updatedFriends);
+          ));
 
           setSnackbar({ open: true, message: '地點已選擇', severity: 'success' });
         });
@@ -861,7 +845,7 @@ export default function CreateEvent() {
         setShareUrl(createdShareUrl);
         setShareToken(tokenResponse.token);
         setShareDialogOpen(true);
-        setSnackbar({ open: true, message: '聚會創建成功！', severity: 'success' });
+        setSnackbar({ open: true, message: '聚會建立成功！', severity: 'success' });
       } catch (tokenError: any) {
         console.error('Failed to get share token:', tokenError);
         // Fallback to old format if token retrieval fails
@@ -872,15 +856,15 @@ export default function CreateEvent() {
         setShareDialogOpen(true);
         setSnackbar({ 
           open: true, 
-          message: '聚會創建成功，但無法生成分享連結，請稍後重試', 
+          message: '聚會建立成功，但無法生成分享連結，請稍後重試', 
           severity: 'warning' 
         });
       }
     } catch (err: any) {
-      console.error('創建聚會失敗:', err);
+      console.error('建立聚會失敗:', err);
       console.error('錯誤詳情:', err.response?.data);
       
-      const errorMessage = err.response?.data?.message || err.message || '創建失敗，請稍後再試';
+      const errorMessage = err.response?.data?.message || err.message || '建立失敗，請稍後再試';
       setSnackbar({ 
         open: true, 
         message: errorMessage, 
@@ -955,23 +939,56 @@ export default function CreateEvent() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={zhTW}>
-      <Box sx={{ bgcolor: '#fafafa', minHeight: 'calc(100vh - 64px)', py: 4 }}>
-        <Container maxWidth="sm">
+      <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 64px)', py: { xs: 3, md: 5 } }}>
+        <Container maxWidth="md">
           {/* 頁面標題 */}
-          <Typography
-            variant="h4"
+          <Box
             sx={{
-              fontWeight: 600,
-              mb: 1,
-              color: '#1a1a1a',
-              letterSpacing: '-0.02em',
+              position: 'relative',
+              overflow: 'hidden',
+              p: { xs: 2.5, md: 3.25 },
+              mb: 2.5,
+              borderRadius: 3,
+              bgcolor: '#142B52',
+              boxShadow: '0 18px 36px rgba(20,43,82,.16)',
+              '&:after': {
+                content: '""',
+                position: 'absolute',
+                width: 180,
+                height: 180,
+                right: -75,
+                top: -90,
+                borderRadius: '50%',
+                border: '1px solid rgba(242,138,37,.4)',
+                boxShadow: '0 0 0 18px rgba(242,138,37,.05), 0 0 0 36px rgba(242,138,37,.04)',
+              },
             }}
           >
-            創建聚會
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 4 }}>
-            建立一個新的聚會，邀請朋友一起參加
-          </Typography>
+            <Typography
+              variant="h4"
+              sx={{
+                position: 'relative',
+                zIndex: 1,
+                fontWeight: 850,
+                mb: 0.75,
+                color: '#FFFFFF',
+                letterSpacing: '-0.045em',
+                fontSize: { xs: '2rem', md: '2.35rem' },
+              }}
+            >
+              建立新聚會
+            </Typography>
+            <Typography variant="body2" sx={{ position: 'relative', zIndex: 1, color: '#B9C9DF', mb: 2.5 }}>
+              先設定時間，再讓 MeetHalf 幫你找到大家都方便的地方。
+            </Typography>
+
+            <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 1, color: '#D9E5F5', fontSize: '0.72rem', fontWeight: 700 }}>
+              <Box sx={{ width: 8, height: 8, bgcolor: '#F28A25', borderRadius: '50%', boxShadow: '0 0 0 4px rgba(242,138,37,.18)' }} />
+              聚會設定
+              <Box sx={{ flex: 1, height: 1, bgcolor: '#36517A', ml: 1 }} />
+              <Box sx={{ color: '#FFB15C' }}>1 / 3</Box>
+            </Box>
+          </Box>
 
           {/* 表單 */}
           <Paper
@@ -979,14 +996,46 @@ export default function CreateEvent() {
             onSubmit={handleSubmit}
             elevation={0}
             sx={{
-              p: 4,
+              p: { xs: 2, md: 3 },
+              mt: 1,
               borderRadius: 3,
-              bgcolor: 'white',
-              border: '1px solid',
-              borderColor: 'divider',
+              bgcolor: '#FFFFFF',
+              border: '1px solid #E4EAF2',
+              boxShadow: '0 16px 40px rgba(20, 43, 82, 0.07)',
+              '& .MuiTextField-root': { mb: 0 },
+              '& .MuiOutlinedInput-root': {
+                bgcolor: '#FBFCFE',
+                '& fieldset': { borderColor: '#D9E2EE' },
+                '&:hover fieldset': { borderColor: '#AFC3DD' },
+                '&.Mui-focused fieldset': { borderColor: '#1769E8', borderWidth: 1.5 },
+              },
+              '& .MuiInputLabel-root': { color: '#71839A' },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#1769E8' },
+              '& .MuiFormHelperText-root': {
+                mt: 0.75,
+                mb: 0.25,
+                lineHeight: 1.45,
+                color: '#71839A',
+              },
+              '& .MuiFormControlLabel-root': {
+                alignItems: 'flex-start',
+                ml: 0,
+                mr: 0,
+                my: 0.75,
+              },
+              '& .MuiFormControlLabel-label': { pt: 0.25, lineHeight: 1.45 },
+              '& .MuiDivider-root': { display: 'none' },
+              '& .MuiCard-root': {
+                borderRadius: 1.5,
+                border: '1px solid #E4EAF2',
+                bgcolor: '#F8FAFC',
+                boxShadow: 'none',
+              },
+              '& .MuiCardContent-root': { p: 2, '&:last-child': { pb: 2 } },
+              '& .MuiFormControl-root .MuiOutlinedInput-root': { bgcolor: '#FBFCFE' },
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               {/* 聚會名稱 */}
               <TextField
                 label="聚會名稱"
@@ -1035,7 +1084,6 @@ export default function CreateEvent() {
               {/* 邀請好友區塊 (只對已登入用戶顯示) */}
               {user && (
                 <>
-                  <Divider sx={{ my: 2 }} />
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
                       <PersonAddIcon fontSize="small" />
@@ -1095,24 +1143,28 @@ export default function CreateEvent() {
                     />
 
                   </Box>
-                  <Divider sx={{ my: 2 }} />
                 </>
               )}
 
               {/* 使用 MeetHalf 選項 */}
               <Box
                 sx={{
-                  p: 2,
+                  p: { xs: 2, md: 2.25 },
                   borderRadius: 2,
-                  bgcolor: formData.useMeetHalf ? '#e3f2fd' : '#f5f5f5',
+                  bgcolor: formData.useMeetHalf ? '#142B52' : '#FFFFFF',
                   border: '1px solid',
-                  borderColor: formData.useMeetHalf ? '#2196f3' : '#e0e0e0',
+                  borderColor: formData.useMeetHalf ? '#142B52' : '#E0E7F0',
+                  boxShadow: formData.useMeetHalf ? '0 12px 28px rgba(20,43,82,.18)' : 'none',
                 }}
               >
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={formData.useMeetHalf}
+                      sx={{
+                        color: formData.useMeetHalf ? '#F28A25' : '#9BA9BA',
+                        '&.Mui-checked': { color: '#F28A25' },
+                      }}
                       onChange={(e) => {
                         const checked = e.target.checked;
                         setFormData({
@@ -1138,11 +1190,11 @@ export default function CreateEvent() {
                   }
                   label={
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: formData.useMeetHalf ? '#FFFFFF' : '#142B52' }}>
                         使用 MeetHalf 計算中間點
                       </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        讓系統根據所有人的位置自動計算最佳集合地點
+                      <Typography variant="caption" sx={{ color: formData.useMeetHalf ? '#B9C9DF' : '#61738D' }}>
+                        根據每個人的位置與交通方式，找出更公平的集合點
                       </Typography>
                     </Box>
                   }
@@ -1417,8 +1469,8 @@ export default function CreateEvent() {
                   </Box>
 
                   {/* 你的參與資訊 */}
-                  <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: 'text.secondary' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0, color: '#142B52' }}>
                       你的參與資訊
                     </Typography>
 
@@ -1431,7 +1483,7 @@ export default function CreateEvent() {
                       fullWidth
                       required={formData.useMeetHalf}
                       helperText="這個暱稱會顯示在活動成員列表中"
-                      sx={{ mb: 2 }}
+                      sx={{ mb: 0 }}
                     />
 
                     {/* 出發點編輯 */}
@@ -1459,11 +1511,11 @@ export default function CreateEvent() {
                       }}
                       fullWidth
                       // helperText={formData.ownerLocationName || formData.ownerAddress ? `✓ ${formData.ownerLocationName || formData.ownerAddress}` : '開始輸入以搜尋地點'}
-                      sx={{ mb: 2 }}
+                      sx={{ mb: 0 }}
                     />
 
                     {/* 交通方式 */}
-                    <FormControl fullWidth sx={{ mb: 2 }}>
+                    <FormControl fullWidth sx={{ mb: 0 }}>
                       <InputLabel>交通方式</InputLabel>
                       <Select
                         value={formData.ownerTravelMode}
@@ -1480,7 +1532,7 @@ export default function CreateEvent() {
 
                     {/* 預計交通時間 (如果已選擇集合地點) */}
                     {formData.meetingPointLat && formData.meetingPointLng && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0 }}>
                         <TimeIcon sx={{ fontSize: 14, color: 'primary.main' }} />
                         <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
                           預計 {ownerEstimatedDuration || '計算中...'}
@@ -1648,7 +1700,7 @@ export default function CreateEvent() {
                     </Box>
                   ) : (
                     <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 2 }}>
-                      附近沒有找到推薦地點
+                      {midpointData ? '中點附近目前找不到餐廳或咖啡店，仍可直接使用中點地址' : '附近沒有找到推薦地點'}
                     </Typography>
                   )}
 
@@ -1668,6 +1720,7 @@ export default function CreateEvent() {
                             {travel.travelMode === 'motorcycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                               成員 {idx + 1}: {travel.duration} ({travel.distance})
+                              {travel.routeMode && travel.routeMode !== travel.travelMode ? ` · 改用${travel.routeMode === 'driving' ? '開車' : '步行'}估算` : ''}
                             </Typography>
                           </Box>
                         ))}
@@ -1731,7 +1784,7 @@ export default function CreateEvent() {
                   mt: 2,
                 }}
               >
-                {submitting ? <CircularProgress size={24} /> : '創建聚會'}
+                {submitting ? <CircularProgress size={24} /> : '建立聚會'}
               </Button>
 
               {/* 取消按鈕 */}
@@ -1759,7 +1812,7 @@ export default function CreateEvent() {
           >
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                🎉 聚會創建成功！
+                🎉 聚會建立成功！
               </Typography>
               <IconButton onClick={handleCloseDialog} size="small">
                 <CloseIcon />

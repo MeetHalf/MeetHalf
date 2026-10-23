@@ -66,7 +66,7 @@ export default function Login() {
                 mb: 3,
               }}
             >
-              Where's the squad?
+              找到大家都到得了的地方
             </Typography>
           </Box>
 
@@ -156,4 +156,3 @@ export default function Login() {
     </Box>
   );
 }
-

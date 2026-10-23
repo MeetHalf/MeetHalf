@@ -4,16 +4,16 @@ import { createTheme } from '@mui/material/styles';
 export const theme = createTheme({
   palette: {
     primary: {
-      main: '#3B82F6', // Blue
-      light: '#60A5FA',
-      dark: '#2563EB',
+      main: '#1769E8', // MeetHalf blue
+      light: '#5C9BFF',
+      dark: '#0F4FB7',
       contrastText: '#FFFFFF',
     },
     secondary: {
-      main: '#10B981', // Green
-      light: '#34D399',
-      dark: '#059669',
-      contrastText: '#FFFFFF',
+      main: '#F28A25', // Signal orange
+      light: '#FFB15C',
+      dark: '#C9650D',
+      contrastText: '#16375F',
     },
     error: {
       main: '#EF4444',
@@ -21,9 +21,9 @@ export const theme = createTheme({
       dark: '#DC2626',
     },
     warning: {
-      main: '#F59E0B',
-      light: '#FBBF24',
-      dark: '#D97706',
+      main: '#F28A25',
+      light: '#FFB15C',
+      dark: '#C9650D',
     },
     info: {
       main: '#3B82F6',
@@ -31,24 +31,25 @@ export const theme = createTheme({
       dark: '#2563EB',
     },
     success: {
-      main: '#10B981',
-      light: '#34D399',
-      dark: '#059669',
+      main: '#1769E8',
+      light: '#5C9BFF',
+      dark: '#0F4FB7',
     },
     background: {
-      default: '#F9FAFB',
+      default: '#F5F7FA',
       paper: '#FFFFFF',
     },
     text: {
-      primary: '#111827',
-      secondary: '#6B7280',
-      disabled: '#9CA3AF',
+      primary: '#142B52',
+      secondary: '#61738D',
+      disabled: '#9BA9BA',
     },
     divider: '#E5E7EB',
   },
   typography: {
     fontFamily: [
-      'Inter',
+      'Avenir Next',
+      'SF Pro Display',
       '-apple-system',
       'BlinkMacSystemFont',
       '"Segoe UI"',
@@ -59,7 +60,7 @@ export const theme = createTheme({
     ].join(','),
     h1: {
       fontSize: '2.5rem',
-      fontWeight: 700,
+      fontWeight: 750,
       lineHeight: 1.2,
       color: '#111827',
     },
@@ -109,7 +110,7 @@ export const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 10,
   },
   shadows: [
     'none',
@@ -142,14 +143,12 @@ export const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
-          padding: '10px 20px',
+          borderRadius: 9,
+          padding: '10px 18px',
           fontSize: '0.875rem',
           fontWeight: 500,
           boxShadow: 'none',
-          '&:hover': {
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-          },
+          '&:hover': { boxShadow: '0 6px 16px rgba(23, 105, 232, 0.18)' },
         },
         contained: {
           '&:hover': {
@@ -167,9 +166,9 @@ export const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
-          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-          border: '1px solid #E5E7EB',
+          borderRadius: 10,
+          boxShadow: '0 8px 26px rgba(23, 50, 83, 0.07)',
+          border: '1px solid #E0E7F0',
         },
       },
     },
@@ -177,7 +176,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
+            borderRadius: 9,
           },
         },
       },
@@ -199,5 +198,3 @@ export const theme = createTheme({
     },
   },
 });
-
-

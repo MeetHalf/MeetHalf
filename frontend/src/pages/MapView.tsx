@@ -161,38 +161,38 @@ export default function MapView() {
         position: 'relative',
         height: '100%',
         width: '100%',
-        bgcolor: '#f1f5f9',
+        bgcolor: '#dce8e1',
         overflow: 'hidden',
       }}
     >
-      {/* Floating Header */}
+      {/* Premium map chrome: the map stays dominant and controls remain quiet. */}
       <Box
         sx={{
           position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
+          top: { xs: 14, md: 18 },
+          left: { xs: 14, md: 24 },
+          right: { xs: 14, md: 24 },
           zIndex: 20,
-          p: 2,
           display: 'flex',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-start',
           alignItems: 'center',
+          gap: 1,
         }}
       >
         <Box
           onClick={() => navigate(-1)}
           sx={{
-            width: 48,
-            height: 48,
-            bgcolor: 'rgba(255, 255, 255, 0.8)',
-            backdropFilter: 'blur(12px)',
-            borderRadius: 4,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.4)',
+            width: 42,
+            height: 42,
+            bgcolor: 'rgba(250, 252, 255, 0.92)',
+            backdropFilter: 'blur(18px)',
+            borderRadius: '50%',
+            boxShadow: '0 8px 22px rgba(23, 50, 83, 0.14)',
+            border: '1px solid rgba(255, 255, 255, 0.8)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#475569',
+            color: '#16375f',
             cursor: 'pointer',
             '&:active': { transform: 'scale(0.9)' },
           }}
@@ -202,41 +202,28 @@ export default function MapView() {
 
         <Box
           sx={{
-            bgcolor: 'rgba(255, 255, 255, 0.8)',
-            backdropFilter: 'blur(12px)',
-            borderRadius: 10,
-            px: 3,
-            py: 1.5,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.4)',
+            bgcolor: 'rgba(250, 252, 255, 0.92)',
+            backdropFilter: 'blur(18px)',
+            borderRadius: 3,
+            px: 2,
+            py: 1,
+            boxShadow: '0 8px 22px rgba(23, 50, 83, 0.14)',
+            border: '1px solid rgba(255, 255, 255, 0.8)',
             display: 'flex',
             alignItems: 'center',
-            gap: 2,
+            gap: 1.25,
           }}
         >
-          <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '0.875rem' }}>
-            {events.length} {events.length === 1 ? 'Event' : 'Events'}
+          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#f28a25', boxShadow: '0 0 0 4px rgba(242, 138, 37, 0.14)' }} />
+          <Typography sx={{ fontWeight: 800, color: '#16375f', fontSize: '0.8rem', letterSpacing: '-0.01em' }}>
+            附近的聚會
           </Typography>
           {ongoingCount > 0 && (
-            <Box
-              sx={{
-                bgcolor: '#dcfce7',
-                color: '#15803d',
-                fontSize: '0.625rem',
-                fontWeight: 900,
-                px: 1,
-                py: 0.25,
-                borderRadius: 10,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              {ongoingCount} Live
-            </Box>
+            <Typography sx={{ color: '#f28a25', fontSize: '0.68rem', fontWeight: 800 }}>
+              {ongoingCount} 個進行中
+            </Typography>
           )}
         </Box>
-
-        <Box sx={{ width: 48 }} /> {/* Spacer */}
       </Box>
 
       {/* Map */}
@@ -276,52 +263,49 @@ export default function MapView() {
         <Box
           sx={{
             position: 'absolute',
-            bottom: 100,
-            left: 16,
-            right: 16,
+            bottom: { xs: 18, md: 26 },
+            left: { xs: 14, md: '50%' },
+            right: { xs: 14, md: 'auto' },
+            width: { xs: 'auto', md: 420 },
+            transform: { xs: 'none', md: 'translateX(-50%)' },
             zIndex: 20,
           }}
         >
           <Box
             sx={{
-              bgcolor: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: '2rem',
-              p: 3,
-              boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
-              border: '1px solid rgba(255, 255, 255, 0.5)',
+              bgcolor: 'rgba(250, 252, 255, 0.96)',
+              backdropFilter: 'blur(22px)',
+              borderRadius: 4,
+              px: 2.25,
+              py: 2,
+              boxShadow: '0 18px 50px rgba(23, 50, 83, 0.22)',
+              border: '1px solid rgba(255, 255, 255, 0.85)',
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box sx={{ flex: 1 }}>
                 <Box
                   sx={{
-                    display: 'inline-block',
-                    bgcolor: getEventStatus(selectedEvent) === 'ongoing' ? '#dcfce7' : '#dbeafe',
-                    color: getEventStatus(selectedEvent) === 'ongoing' ? '#15803d' : '#2563eb',
-                    fontSize: '0.625rem',
-                    fontWeight: 900,
-                    px: 1,
-                    py: 0.25,
-                    borderRadius: 10,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    mb: 1,
+                    color: '#f28a25',
+                    fontSize: '0.68rem',
+                    fontWeight: 850,
+                    letterSpacing: '0.02em',
+                    mb: 0.75,
                   }}
                 >
-                  {getEventStatus(selectedEvent) === 'ongoing' ? 'Happening Now' : 'Upcoming'}
+                  {getEventStatus(selectedEvent) === 'ongoing' ? '正在進行' : '即將開始'}
                 </Box>
-                <Typography sx={{ fontWeight: 900, color: '#0f172a', fontSize: '1.125rem', mb: 1 }}>
+                <Typography sx={{ fontWeight: 850, color: '#16375f', fontSize: '1.2rem', letterSpacing: '-0.035em', mb: 0.7 }}>
                   {selectedEvent.name}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#64748b' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, color: '#62748e' }}>
                   <TimeIcon sx={{ fontSize: 14 }} />
-                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                  <Typography sx={{ fontSize: '0.73rem', fontWeight: 650 }}>
                     {format(new Date(selectedEvent.startTime), 'h:mm a')}
                   </Typography>
-                  <Typography sx={{ fontSize: '0.75rem' }}>•</Typography>
-                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
-                    {selectedEvent._count?.members || selectedEvent.members?.length || 0} friends
+                  <Typography sx={{ fontSize: '0.73rem' }}>·</Typography>
+                  <Typography sx={{ fontSize: '0.73rem', fontWeight: 650 }}>
+                    {selectedEvent._count?.members || selectedEvent.members?.length || 0} 位成員
                   </Typography>
                 </Box>
               </Box>
@@ -331,12 +315,12 @@ export default function MapView() {
                   sx={{
                     width: 32,
                     height: 32,
-                    borderRadius: 10,
-                    bgcolor: '#f1f5f9',
+                    borderRadius: '50%',
+                    bgcolor: '#edf3f9',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#94a3b8',
+                    color: '#71839a',
                     cursor: 'pointer',
                     '&:active': { transform: 'scale(0.9)' },
                   }}
@@ -348,14 +332,14 @@ export default function MapView() {
                   sx={{
                     width: 40,
                     height: 40,
-                    borderRadius: 3,
-                    bgcolor: '#2563eb',
+                    borderRadius: '50%',
+                    bgcolor: '#f28a25',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'white',
+                    color: '#16375f',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                    boxShadow: '0 8px 18px rgba(242, 138, 37, 0.32)',
                     '&:active': { transform: 'scale(0.9)' },
                   }}
                 >

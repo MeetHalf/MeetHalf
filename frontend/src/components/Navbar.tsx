@@ -15,14 +15,14 @@ export default function Navbar() {
         position: 'sticky',
         top: 0,
         zIndex: 1000,
-        bgcolor: 'white',
+        bgcolor: '#F8FAFC',
         borderBottom: '1px solid',
-        borderColor: '#f1f5f9',
+        borderColor: '#E4EAF2',
         px: 3,
-        pt: 5,
-        pb: 3,
-        backdropFilter: 'blur(8px)',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        pt: { xs: 2.5, md: 3 },
+        pb: { xs: 2, md: 2.25 },
+        backdropFilter: 'blur(18px)',
+        backgroundColor: 'rgba(248, 250, 252, 0.94)',
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -39,22 +39,24 @@ export default function Navbar() {
         >
           <Typography
             sx={{
-              fontSize: '1.5rem',
-              fontWeight: 900,
-              color: '#0f172a',
-              letterSpacing: '-0.025em',
+              fontSize: '1.35rem',
+              fontWeight: 850,
+              color: '#142B52',
+              letterSpacing: '-0.045em',
+              '&::after': { content: '""', display: 'inline-block', width: 7, height: 7, ml: 0.6, mb: 0.15, borderRadius: '50%', bgcolor: '#F28A25' },
             }}
           >
             MeetHalf
           </Typography>
           <Typography
             sx={{
-              color: '#94a3b8',
-              fontSize: '0.875rem',
-              fontWeight: 500,
+              color: '#71839A',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              letterSpacing: '0.01em',
             }}
           >
-            Where's the squad?
+            找到大家都到得了的地方
           </Typography>
         </Box>
 
@@ -101,12 +103,12 @@ export default function Navbar() {
                   sx={{
                     width: 40,
                     height: 40,
-                    bgcolor: '#dbeafe',
+                    bgcolor: '#DCE9FF',
                     border: '2px solid white',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                     fontSize: '0.875rem',
                     fontWeight: 700,
-                    color: '#3b82f6',
+                    color: '#1769E8',
                   }}
                 >
                   {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '👤'}
@@ -119,17 +121,17 @@ export default function Navbar() {
               startIcon={<LogIn size={18} />}
               onClick={() => navigate('/login')}
               sx={{
-                bgcolor: '#2563eb',
+                bgcolor: '#1769E8',
                 color: 'white',
                 px: 2,
                 py: 1,
-                borderRadius: 3,
+                borderRadius: 2,
                 fontWeight: 700,
                 fontSize: '0.875rem',
                 textTransform: 'none',
-                boxShadow: '0 4px 12px -2px rgba(37, 99, 235, 0.3)',
+                boxShadow: '0 8px 20px -4px rgba(23, 105, 232, 0.32)',
                 '&:hover': {
-                  bgcolor: '#1d4ed8',
+                  bgcolor: '#0F4FB7',
                   boxShadow: '0 6px 16px -2px rgba(37, 99, 235, 0.4)',
                 },
                 transition: 'all 0.2s ease',
