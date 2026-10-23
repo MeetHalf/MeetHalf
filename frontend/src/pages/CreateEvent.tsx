@@ -425,7 +425,9 @@ export default function CreateEvent() {
           const requestedMode = travelModeMap[location.travelMode] || google.maps.TravelMode.TRANSIT;
           const modesToTry = requestedMode === google.maps.TravelMode.DRIVING
             ? [requestedMode]
-            : [requestedMode, google.maps.TravelMode.DRIVING, google.maps.TravelMode.WALKING];
+            : requestedMode === google.maps.TravelMode.TRANSIT
+              ? [requestedMode]
+              : [requestedMode, google.maps.TravelMode.WALKING];
 
           for (const mode of modesToTry) {
             try {
@@ -453,7 +455,11 @@ export default function CreateEvent() {
             }
           }
 
-          return { duration: '無法計算', distance: '—', travelMode: location.travelMode };
+          return {
+            duration: location.travelMode === 'transit' ? '此時段無可用班次' : '無法計算',
+            distance: '—',
+            travelMode: location.travelMode,
+          };
         }));
         return [key, times] as const;
       }));
