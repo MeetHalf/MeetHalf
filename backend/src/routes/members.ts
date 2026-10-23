@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { getUserName, getUserUserId, getAnonymousUserId } from '../lib/userUtils';
+import { triggerEventChannel } from '../lib/pusher';
+import { sendPushNotificationToInterests } from '../lib/pusherBeams';
 import { 
   addMemberSchema, 
   updateMemberLocationSchema, 
@@ -475,6 +477,33 @@ router.delete('/:id', optionalAuthMiddleware, async (req: Request, res: Response
     await prisma.member.delete({
       where: { id }
     });
+
+    const remainingMembers = await prisma.member.findMany({
+      where: { eventId: member.eventId },
+      select: { id: true },
+    });
+
+    const memberLeftData = {
+      memberId: member.id,
+      eventId: member.eventId,
+      userId: member.userId,
+      nickname: member.nickname,
+      timestamp: new Date().toISOString(),
+    };
+
+    triggerEventChannel(member.eventId, 'member-left', memberLeftData);
+
+    await sendPushNotificationToInterests(
+      remainingMembers.map((remainingMember) => `event-${member.eventId}-member-${remainingMember.id}`),
+      '成員已離開活動',
+      `${member.nickname || '一位成員'} 已離開活動`,
+      {
+        eventId: member.eventId,
+        url: `/events/${member.eventId}`,
+        type: 'member-left',
+        memberId: member.id,
+      },
+    );
 
     res.json({
       message: 'Member removed successfully'

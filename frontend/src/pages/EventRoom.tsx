@@ -634,6 +634,31 @@ export default function EventRoom() {
     debug: true,
   });
 
+  // 整合 Pusher - 監聽 member-left 事件（成員退出或被移除）
+  usePusher({
+    channelName: event ? `event-${event.id}` : null,
+    eventName: 'member-left',
+    onEvent: (data: { memberId: number; nickname?: string }) => {
+      setMembers((prevMembers) => prevMembers.filter((member) => member.id !== data.memberId));
+      setEvent((prevEvent) => {
+        if (!prevEvent) return null;
+        return {
+          ...prevEvent,
+          members: (prevEvent.members || []).filter((member) => member.id !== data.memberId),
+        };
+      });
+
+      if (currentMemberId !== data.memberId) {
+        setSnackbar({
+          open: true,
+          message: `👋 ${data.nickname || '一位成員'} 離開了聚會`,
+          severity: 'info',
+        });
+      }
+    },
+    debug: true,
+  });
+
   // 整合 Pusher - 監聽 member-arrived 事件（成員到達）
   usePusher({
     channelName: event ? `event-${event.id}` : null,
