@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { eventsApi, calculateTempMidpoint } from '../api/events';
@@ -85,6 +85,7 @@ interface DummyMember {
 
 interface PlaceTravelTime {
   duration: string;
+  durationValue?: number;
   distance: string;
   travelMode: string;
   routeMode?: string;
@@ -425,9 +426,10 @@ export default function CreateEvent() {
               });
               const leg = result.routes[0]?.legs[0];
               if (leg) {
-                return {
-                  duration: leg.duration?.text || '無法計算',
-                  distance: leg.distance?.text || '—',
+              return {
+                duration: leg.duration?.text || '無法計算',
+                durationValue: leg.duration?.value,
+                distance: leg.distance?.text || '—',
                   travelMode: location.travelMode,
                   routeMode: mode,
                 };
@@ -448,6 +450,28 @@ export default function CreateEvent() {
     loadPlaceTimes();
     return () => { cancelled = true; };
   }, [mapsLoaded, recommendedPlaces, formData.ownerLat, formData.ownerLng, formData.ownerTravelMode, invitedFriends, dummyMembers]);
+
+  // Rank places by travel-time fairness: minimize the gap between the fastest
+  // and slowest member, then use total travel time as the tie breaker.
+  const rankedRecommendedPlaces = useMemo(() => {
+    const score = (place: any) => {
+      const times = placeTravelTimes[place.place_id] || [];
+      const values = times
+        .map((time) => time.durationValue)
+        .filter((value): value is number => typeof value === 'number');
+      if (values.length < 2) return { spread: Number.POSITIVE_INFINITY, total: Number.POSITIVE_INFINITY };
+      return {
+        spread: Math.max(...values) - Math.min(...values),
+        total: values.reduce((sum, value) => sum + value, 0),
+      };
+    };
+
+    return [...recommendedPlaces].sort((a, b) => {
+      const scoreA = score(a);
+      const scoreB = score(b);
+      return scoreA.spread - scoreB.spread || scoreA.total - scoreB.total;
+    });
+  }, [recommendedPlaces, placeTravelTimes]);
 
   const calculateOwnerTravelTime = async () => {
     if (!formData.meetingPointLat || !formData.meetingPointLng || !formData.ownerLat || !formData.ownerLng || !window.google?.maps) {
@@ -1705,12 +1729,12 @@ export default function CreateEvent() {
                         showInfoWindows={false}
                         onMarkerClick={(markerId) => {
                           if (markerId <= 0) return;
-                          const place = recommendedPlaces[markerId - 1];
+                          const place = rankedRecommendedPlaces[markerId - 1];
                           if (place) handleSelectRecommendedPlace(place);
                         }}
                         markers={[
                           { id: 0, lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, title: '公平中點', label: '●' },
-                          ...recommendedPlaces
+                          ...rankedRecommendedPlaces
                             .filter((place) => place.lat != null && place.lng != null)
                             .map((place, index) => ({
                               id: index + 1,
@@ -1728,11 +1752,15 @@ export default function CreateEvent() {
                     </Box>
                   )}
 
-                  {recommendedPlaces.length > 0 ? (
+                  {rankedRecommendedPlaces.length > 0 ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      {recommendedPlaces.map((place, index) => {
+                      {rankedRecommendedPlaces.map((place, index) => {
                         const isSelected = selectedPlaceId === (place.place_id || null);
                         const placeTimes = placeTravelTimes[place.place_id || String(index)] || [];
+                        const durationValues = placeTimes.map((time) => time.durationValue).filter((value): value is number => typeof value === 'number');
+                        const timeGap = durationValues.length > 1
+                          ? Math.round((Math.max(...durationValues) - Math.min(...durationValues)) / 60)
+                          : null;
                         return (
                           <Card
                             key={`${place.place_id || index}-${midpointData?.midpoint?.lat}-${midpointData?.midpoint?.lng}`}
@@ -1777,8 +1805,9 @@ export default function CreateEvent() {
                                 )}
                                 {placeTimes.length > 0 && (
                                   <Box sx={{ mt: 1, p: 1, borderRadius: 1.5, bgcolor: '#F1F5FA', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                    <Typography variant="caption" sx={{ color: '#61738D', fontWeight: 700 }}>
-                                      到這家店的預估時間
+                                    <Typography variant="caption" sx={{ color: '#61738D', fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>到這家店的預估時間</span>
+                                      {timeGap != null && <span style={{ color: timeGap <= 10 ? '#1769E8' : '#C9650D' }}>成員差距 {timeGap} 分鐘</span>}
                                     </Typography>
                                     {placeTimes.map((time, timeIndex) => (
                                       <Box key={timeIndex} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -1833,9 +1862,9 @@ export default function CreateEvent() {
                     </Typography>
                   )}
 
-                  {recommendedPlaces.length > 0 && (
+                  {rankedRecommendedPlaces.length > 0 && (
                     <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: '#71839A' }}>
-                      以上時間是各成員到每家推薦店家的估算，方便比較哪個集合點更公平。
+                      已依成員到店時間差距排序，差距最小的店家會優先顯示。
                     </Typography>
                   )}
                 </Paper>
