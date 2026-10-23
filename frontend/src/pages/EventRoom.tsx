@@ -2553,7 +2553,7 @@ export default function EventRoom() {
           ) : (
             members.map((member) => {
               const isCurrentUser = member.id === currentMemberId;
-              const isOwner = event && member.userId === event.ownerId;
+              const memberIsOwner = event && member.userId === event.ownerId;
               const etaState = membersETA.get(member.id);
               const eta = etaState?.eta;
               const movementStarted = etaState?.movementStarted ?? true; // 預設顯示「前往中」
@@ -2596,7 +2596,7 @@ export default function EventRoom() {
                       <Typography sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9375rem' }}>
                         {member.nickname}
                       </Typography>
-                      {isOwner && (
+                      {memberIsOwner && (
                         <Chip
                           label="主揪"
                           size="small"
