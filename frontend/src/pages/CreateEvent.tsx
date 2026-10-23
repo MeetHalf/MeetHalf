@@ -309,11 +309,16 @@ export default function CreateEvent() {
             motorcycling: google.maps.TravelMode.DRIVING,
           };
           const friendTravelMode = friend.editableTravelMode || 'transit';
-          const result = await directionsService.route({
+          const requestedMode = travelModeMap[friendTravelMode] || google.maps.TravelMode.TRANSIT;
+          const request: google.maps.DirectionsRequest = {
             origin: { lat: friend.editableLat, lng: friend.editableLng },
             destination: { lat: formData.meetingPointLat!, lng: formData.meetingPointLng! },
-            travelMode: travelModeMap[friendTravelMode] || google.maps.TravelMode.TRANSIT,
-          });
+            travelMode: requestedMode,
+          };
+          if (requestedMode === google.maps.TravelMode.TRANSIT) {
+            request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+          }
+          const result = await directionsService.route(request);
 
           if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
             const leg = result.routes[0].legs[0];
@@ -354,11 +359,16 @@ export default function CreateEvent() {
             motorcycling: google.maps.TravelMode.DRIVING,
           };
           
-          const result = await directionsService.route({
+          const requestedMode = travelModeMap[dummy.travelMode] || google.maps.TravelMode.TRANSIT;
+          const request: google.maps.DirectionsRequest = {
             origin: { lat: dummy.editableLat, lng: dummy.editableLng },
             destination: { lat: formData.meetingPointLat!, lng: formData.meetingPointLng! },
-            travelMode: travelModeMap[dummy.travelMode] || google.maps.TravelMode.TRANSIT,
-          });
+            travelMode: requestedMode,
+          };
+          if (requestedMode === google.maps.TravelMode.TRANSIT) {
+            request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+          }
+          const result = await directionsService.route(request);
 
           if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
             const leg = result.routes[0].legs[0];
@@ -419,11 +429,15 @@ export default function CreateEvent() {
 
           for (const mode of modesToTry) {
             try {
-              const result = await new google.maps.DirectionsService().route({
+              const request: google.maps.DirectionsRequest = {
                 origin: { lat: location.lat, lng: location.lng },
                 destination: { lat: place.lat, lng: place.lng },
                 travelMode: mode,
-              });
+              };
+              if (mode === google.maps.TravelMode.TRANSIT) {
+                request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+              }
+              const result = await new google.maps.DirectionsService().route(request);
               const leg = result.routes[0]?.legs[0];
               if (leg) {
               return {
@@ -490,11 +504,16 @@ export default function CreateEvent() {
         motorcycling: google.maps.TravelMode.DRIVING,
       };
       
-      const result = await directionsService.route({
+      const requestedMode = travelModeMap[formData.ownerTravelMode] || google.maps.TravelMode.TRANSIT;
+      const request: google.maps.DirectionsRequest = {
         origin: { lat: formData.ownerLat, lng: formData.ownerLng },
         destination: { lat: formData.meetingPointLat, lng: formData.meetingPointLng },
-        travelMode: travelModeMap[formData.ownerTravelMode] || google.maps.TravelMode.TRANSIT,
-      });
+        travelMode: requestedMode,
+      };
+      if (requestedMode === google.maps.TravelMode.TRANSIT) {
+        request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+      }
+      const result = await directionsService.route(request);
 
       if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
         const leg = result.routes[0].legs[0];

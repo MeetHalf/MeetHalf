@@ -3085,6 +3085,7 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
                 origin: `${location.lat},${location.lng}`,
                 destination: `${midpoint.lat},${midpoint.lng}`,
                 mode: mode as any,
+                ...(mode === 'transit' ? { departure_time: Math.floor(Date.now() / 1000) } : {}),
                 key: GMAPS_KEY,
               },
             });
