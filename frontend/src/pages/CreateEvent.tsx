@@ -1693,6 +1693,11 @@ export default function CreateEvent() {
                       <MapContainer
                         center={midpointData.midpoint}
                         zoom={13}
+                        onMarkerClick={(markerId) => {
+                          if (markerId <= 0) return;
+                          const place = recommendedPlaces[markerId - 1];
+                          if (place) handleSelectRecommendedPlace(place);
+                        }}
                         markers={[
                           { id: 0, lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, title: '公平中點', label: '●' },
                           ...recommendedPlaces
