@@ -55,6 +55,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { zhTW } from 'date-fns/locale';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
+import MapContainer from '../components/MapContainer';
 
 // Interface for invited friend with editable departure point
 interface InvitedFriend extends Friend {
@@ -80,6 +81,13 @@ interface DummyMember {
   estimatedDuration?: string;
   estimatedDurationValue?: number;
   estimatedDistance?: string;
+}
+
+interface PlaceTravelTime {
+  duration: string;
+  distance: string;
+  travelMode: string;
+  routeMode?: string;
 }
 
 export default function CreateEvent() {
@@ -142,6 +150,7 @@ export default function CreateEvent() {
   const [recommendedPlaces, setRecommendedPlaces] = useState<any[]>([]);
   const [midpointData, setMidpointData] = useState<any>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [placeTravelTimes, setPlaceTravelTimes] = useState<Record<string, PlaceTravelTime[]>>({});
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -370,6 +379,67 @@ export default function CreateEvent() {
     setDummyMembers(updatedDummies);
   };
 
+  // Estimate travel time to each recommended place, not only to the geometric midpoint.
+  useEffect(() => {
+    if (!mapsLoaded || recommendedPlaces.length === 0 || !window.google?.maps) return;
+
+    const locations = [
+      ...(formData.ownerLat != null && formData.ownerLng != null
+        ? [{ lat: formData.ownerLat, lng: formData.ownerLng, travelMode: formData.ownerTravelMode }]
+        : []),
+      ...invitedFriends
+        .filter((friend) => friend.editableLat != null && friend.editableLng != null)
+        .map((friend) => ({ lat: friend.editableLat!, lng: friend.editableLng!, travelMode: friend.editableTravelMode || 'transit' })),
+      ...dummyMembers
+        .filter((dummy) => dummy.editableLat != null && dummy.editableLng != null)
+        .map((dummy) => ({ lat: dummy.editableLat!, lng: dummy.editableLng!, travelMode: dummy.travelMode })),
+    ];
+
+    if (locations.length === 0) return;
+
+    let cancelled = false;
+    const travelModeMap: Record<string, google.maps.TravelMode> = {
+      driving: google.maps.TravelMode.DRIVING,
+      transit: google.maps.TravelMode.TRANSIT,
+      walking: google.maps.TravelMode.WALKING,
+      bicycling: google.maps.TravelMode.BICYCLING,
+      motorcycling: google.maps.TravelMode.DRIVING,
+    };
+
+    const loadPlaceTimes = async () => {
+      const entries = await Promise.all(recommendedPlaces.map(async (place, index) => {
+        const key = place.place_id || String(index);
+        if (place.lat == null || place.lng == null) return [key, []] as const;
+        const times = await Promise.all(locations.map(async (location) => {
+          try {
+            const result = await new google.maps.DirectionsService().route({
+              origin: { lat: location.lat, lng: location.lng },
+              destination: { lat: place.lat, lng: place.lng },
+              travelMode: travelModeMap[location.travelMode] || google.maps.TravelMode.TRANSIT,
+            });
+            const leg = result.routes[0]?.legs[0];
+            if (leg) {
+              return {
+                duration: leg.duration?.text || '無法計算',
+                distance: leg.distance?.text || '—',
+                travelMode: location.travelMode,
+              };
+            }
+          } catch {
+            // A rural area or a transit-only route may have no result.
+          }
+          return { duration: '無法計算', distance: '—', travelMode: location.travelMode };
+        }));
+        return [key, times] as const;
+      }));
+
+      if (!cancelled) setPlaceTravelTimes(Object.fromEntries(entries));
+    };
+
+    loadPlaceTimes();
+    return () => { cancelled = true; };
+  }, [mapsLoaded, recommendedPlaces, formData.ownerLat, formData.ownerLng, formData.ownerTravelMode, invitedFriends, dummyMembers]);
+
   const calculateOwnerTravelTime = async () => {
     if (!formData.meetingPointLat || !formData.meetingPointLng || !formData.ownerLat || !formData.ownerLng || !window.google?.maps) {
       setOwnerEstimatedDuration('');
@@ -448,6 +518,7 @@ export default function CreateEvent() {
     // Clear previous results to force recalculation
     setMidpointData(null);
     setRecommendedPlaces([]);
+    setPlaceTravelTimes({});
     setSelectedPlaceId(null);
     setShowRecommendations(false);
     
@@ -1288,11 +1359,11 @@ export default function CreateEvent() {
                                           },
                                         }}
                                       >
-                                        <MenuItem value="driving">🚗 開車</MenuItem>
-                                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                                        <MenuItem value="walking">🚶 步行</MenuItem>
-                                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                                        <MenuItem value="driving">開車</MenuItem>
+                                        <MenuItem value="transit">大眾運輸</MenuItem>
+                                        <MenuItem value="walking">步行</MenuItem>
+                                        <MenuItem value="bicycling">騎車</MenuItem>
+                                        <MenuItem value="motorcycling">機車</MenuItem>
                                       </Select>
                                     </FormControl>
                                   </Box>
@@ -1425,11 +1496,11 @@ export default function CreateEvent() {
                                           },
                                         }}
                                       >
-                                        <MenuItem value="driving">🚗 開車</MenuItem>
-                                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                                        <MenuItem value="walking">🚶 步行</MenuItem>
-                                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                                        <MenuItem value="driving">開車</MenuItem>
+                                        <MenuItem value="transit">大眾運輸</MenuItem>
+                                        <MenuItem value="walking">步行</MenuItem>
+                                        <MenuItem value="bicycling">騎車</MenuItem>
+                                        <MenuItem value="motorcycling">機車</MenuItem>
                                       </Select>
                                     </FormControl>
                                   </Box>
@@ -1522,11 +1593,11 @@ export default function CreateEvent() {
                         onChange={(e) => setFormData({ ...formData, ownerTravelMode: e.target.value as any })}
                         label="交通方式"
                       >
-                        <MenuItem value="driving">🚗 開車</MenuItem>
-                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                        <MenuItem value="walking">🚶 步行</MenuItem>
-                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                        <MenuItem value="driving">開車</MenuItem>
+                        <MenuItem value="transit">大眾運輸</MenuItem>
+                        <MenuItem value="walking">步行</MenuItem>
+                        <MenuItem value="bicycling">騎車</MenuItem>
+                        <MenuItem value="motorcycling">機車</MenuItem>
                       </Select>
                     </FormControl>
 
@@ -1601,8 +1672,9 @@ export default function CreateEvent() {
                     bgcolor: '#f9fafb',
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'primary.main' }}>
-                    🎯 推薦集合地點
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5, color: '#142B52', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <LocationIcon sx={{ fontSize: 18, color: '#F28A25' }} />
+                    推薦集合地點
                   </Typography>
 
                   {midpointData && (
@@ -1616,10 +1688,36 @@ export default function CreateEvent() {
                     </Box>
                   )}
 
+                  {midpointData?.midpoint && (
+                    <Box sx={{ mb: 2, overflow: 'hidden', borderRadius: 2, border: '1px solid #D9E2EE', bgcolor: '#F8FAFC' }}>
+                      <MapContainer
+                        center={midpointData.midpoint}
+                        zoom={13}
+                        markers={[
+                          { id: 0, lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, title: '公平中點', label: '●' },
+                          ...recommendedPlaces
+                            .filter((place) => place.lat != null && place.lng != null)
+                            .map((place, index) => ({
+                              id: index + 1,
+                              lat: place.lat,
+                              lng: place.lng,
+                              title: place.name,
+                              label: '📍',
+                            })),
+                        ]}
+                      />
+                      <Box sx={{ px: 1.5, py: 1, display: 'flex', alignItems: 'center', gap: 1.5, color: '#71839A', fontSize: '0.7rem' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1769E8' }} />公平中點</Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F28A25' }} />推薦店家</Box>
+                      </Box>
+                    </Box>
+                  )}
+
                   {recommendedPlaces.length > 0 ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                       {recommendedPlaces.map((place, index) => {
                         const isSelected = selectedPlaceId === (place.place_id || null);
+                        const placeTimes = placeTravelTimes[place.place_id || String(index)] || [];
                         return (
                           <Card
                             key={`${place.place_id || index}-${midpointData?.midpoint?.lat}-${midpointData?.midpoint?.lng}`}
@@ -1653,13 +1751,28 @@ export default function CreateEvent() {
                                 {place.rating && (
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                                     <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600 }}>
-                                      ⭐ {place.rating}
+                                      評分 {place.rating}
                                     </Typography>
                                     {place.types && place.types.length > 0 && (
                                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                         • {place.types[0].replace(/_/g, ' ')}
                                       </Typography>
                                     )}
+                                  </Box>
+                                )}
+                                {placeTimes.length > 0 && (
+                                  <Box sx={{ mt: 1, p: 1, borderRadius: 1.5, bgcolor: '#F1F5FA', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                    <Typography variant="caption" sx={{ color: '#61738D', fontWeight: 700 }}>
+                                      到這家店的預估時間
+                                    </Typography>
+                                    {placeTimes.map((time, timeIndex) => (
+                                      <Box key={timeIndex} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                        <TimeIcon sx={{ fontSize: 14, color: '#1769E8' }} />
+                                        <Typography variant="caption" sx={{ color: '#142B52' }}>
+                                          成員 {timeIndex + 1} · {time.duration} · {time.distance}
+                                        </Typography>
+                                      </Box>
+                                    ))}
                                   </Box>
                                 )}
                                 <Button
@@ -1704,28 +1817,10 @@ export default function CreateEvent() {
                     </Typography>
                   )}
 
-                  {/* 顯示成員旅程時間 */}
-                  {midpointData?.travel_times && midpointData.travel_times.length > 0 && (
-                    <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1 }}>
-                        到地理中點的預估旅程時間（非到各店家）：
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {midpointData.travel_times.map((travel: any, idx: number) => (
-                          <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {travel.travelMode === 'driving' && <CarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'walking' && <WalkIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'bicycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'motorcycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              成員 {idx + 1}: {travel.duration} ({travel.distance})
-                              {travel.routeMode && travel.routeMode !== travel.travelMode ? ` · 改用${travel.routeMode === 'driving' ? '開車' : '步行'}估算` : ''}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
+                  {recommendedPlaces.length > 0 && (
+                    <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: '#71839A' }}>
+                      以上時間是各成員到每家推薦店家的估算，方便比較哪個集合點更公平。
+                    </Typography>
                   )}
                 </Paper>
               </Collapse>
