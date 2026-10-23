@@ -75,8 +75,6 @@ export default function MapView() {
   }, []);
 
   const mapCenter = useMemo(() => {
-    if (userLocation) return userLocation;
-
     if (events.length === 0) {
       return { lat: 25.033, lng: 121.5654 };
     }
@@ -86,10 +84,26 @@ export default function MapView() {
       return { lat: 25.033, lng: 121.5654 };
     }
 
-    const avgLat = validEvents.reduce((sum, e) => sum + (e.meetingPointLat || 0), 0) / validEvents.length;
-    const avgLng = validEvents.reduce((sum, e) => sum + (e.meetingPointLng || 0), 0) / validEvents.length;
+    // Keep the initial viewport useful: center on the closest gathering to
+    // the user instead of averaging two distant places into an empty middle.
+    if (userLocation) {
+      const nearestEvent = validEvents.reduce((closest, event) => {
+        const distance = Math.hypot(
+          (event.meetingPointLat || 0) - userLocation.lat,
+          (event.meetingPointLng || 0) - userLocation.lng,
+        );
+        const closestDistance = Math.hypot(
+          (closest.meetingPointLat || 0) - userLocation.lat,
+          (closest.meetingPointLng || 0) - userLocation.lng,
+        );
+        return distance < closestDistance ? event : closest;
+      });
+      return { lat: nearestEvent.meetingPointLat!, lng: nearestEvent.meetingPointLng! };
+    }
 
-    return { lat: avgLat, lng: avgLng };
+    // Without permission, use the first active event rather than an average
+    // point that may not be a meaningful place.
+    return { lat: validEvents[0].meetingPointLat!, lng: validEvents[0].meetingPointLng! };
   }, [events, userLocation]);
 
   const markers = useMemo(() => {
@@ -262,8 +276,8 @@ export default function MapView() {
       {selectedEvent && (
         <Box
           sx={{
-            position: 'absolute',
-            bottom: { xs: 18, md: 26 },
+          position: 'absolute',
+            bottom: { xs: 'calc(84px + env(safe-area-inset-bottom))', md: 26 },
             left: { xs: 14, md: '50%' },
             right: { xs: 14, md: 'auto' },
             width: { xs: 'auto', md: 420 },
@@ -279,9 +293,12 @@ export default function MapView() {
               px: 2.25,
               py: 2,
               boxShadow: '0 18px 50px rgba(23, 50, 83, 0.22)',
-              border: '1px solid rgba(255, 255, 255, 0.85)',
-            }}
-          >
+            border: '1px solid rgba(255, 255, 255, 0.85)',
+            cursor: 'pointer',
+            '&:active': { transform: 'scale(0.99)' },
+          }}
+          onClick={() => navigate(`/events/${selectedEvent.id}`)}
+        >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box sx={{ flex: 1 }}>
                 <Box
@@ -311,7 +328,10 @@ export default function MapView() {
               </Box>
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                 <Box
-                  onClick={() => setSelectedEvent(null)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedEvent(null);
+                  }}
                   sx={{
                     width: 32,
                     height: 32,

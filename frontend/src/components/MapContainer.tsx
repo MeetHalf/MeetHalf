@@ -246,7 +246,10 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
         }
 
         // 為集合點添加點擊事件和 InfoWindow
-        if (marker.label === '📍') {
+        // MapView renders its own accessible bottom sheet. Keep the legacy
+        // Google InfoWindow for standalone map usages only so two overlays do
+        // not compete for the same marker click.
+        if (marker.label === '📍' && !onMarkerClick) {
           const infoWindow = new google.maps.InfoWindow({
             content: createMeetingPointInfoContent(marker),
           });
