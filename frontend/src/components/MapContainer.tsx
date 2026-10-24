@@ -251,7 +251,7 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
         // MapView renders its own accessible bottom sheet. Keep the legacy
         // Google InfoWindow for standalone map usages only so two overlays do
         // not compete for the same marker click.
-        if (marker.label === '📍' && showInfoWindows) {
+        if (marker.label === '📍' && showInfoWindows && !onMarkerClick) {
           const infoWindow = new google.maps.InfoWindow({
             content: createMeetingPointInfoContent(marker),
           });
