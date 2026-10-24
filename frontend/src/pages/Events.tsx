@@ -14,7 +14,7 @@ import {
   CircularProgress,
   Snackbar,
 } from '@mui/material';
-import { LogIn, Plus, ChevronRight, Trophy, Clock, MessageCircle, MapPin } from 'lucide-react';
+import { LogIn, Plus, ChevronRight, Trophy, Clock, MessageCircle, MapPin, CircleDot } from 'lucide-react';
 import { format, isAfter, isBefore, isToday } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { eventsApi, Event, inviteApi } from '../api/events';
@@ -260,15 +260,16 @@ export default function Events() {
                         sx={{
                           width: 48,
                           height: 48,
-                          bgcolor: status === 'ongoing' ? '#fee2e2' : '#dbeafe',
-                          borderRadius: 4,
+                          bgcolor: status === 'ongoing' ? '#FFF1E8' : '#E8F0FF',
+                          color: status === 'ongoing' ? '#F28A25' : '#1769E8',
+                          borderRadius: 2,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontSize: '1.5rem',
                         }}
                       >
-                        {status === 'ongoing' ? '🔴' : '📍'}
+                        {status === 'ongoing' ? <CircleDot size={22} strokeWidth={2.5} /> : <MapPin size={22} strokeWidth={2.5} />}
                       </Box>
                       <Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
@@ -285,8 +286,8 @@ export default function Events() {
                           {isLive && (
                             <Box
                               sx={{
-                                bgcolor: '#dcfce7',
-                                color: '#15803d',
+                                bgcolor: '#FFF1E8',
+                                color: '#C9650D',
                                 fontSize: '0.625rem',
                                 fontWeight: 900,
                                 px: 1,
@@ -296,7 +297,7 @@ export default function Events() {
                                 letterSpacing: '0.05em',
                               }}
                             >
-                              Live
+                              進行中
                             </Box>
                           )}
                         </Box>
@@ -465,14 +466,15 @@ export default function Events() {
                           width: 48,
                           height: 48,
                           bgcolor: '#dbeafe',
-                          borderRadius: 4,
+                          borderRadius: 2,
+                          color: '#1769E8',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontSize: '1.5rem',
                         }}
                       >
-                        📍
+                        <MapPin size={22} strokeWidth={2.5} />
                       </Box>
                       <Box>
                         <Typography
@@ -552,7 +554,9 @@ export default function Events() {
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Typography sx={{ fontSize: '1.25rem', filter: 'grayscale(100%)' }}>🕒</Typography>
+                      <Box sx={{ width: 34, height: 34, borderRadius: 1.5, bgcolor: '#E8EDF4', color: '#71839A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Clock size={16} />
+                      </Box>
                       <Box>
                         <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: '#475569' }}>
                           {event.name}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { eventsApi, calculateTempMidpoint } from '../api/events';
@@ -55,6 +55,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { zhTW } from 'date-fns/locale';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
+import MapContainer from '../components/MapContainer';
 
 // Interface for invited friend with editable departure point
 interface InvitedFriend extends Friend {
@@ -80,6 +81,14 @@ interface DummyMember {
   estimatedDuration?: string;
   estimatedDurationValue?: number;
   estimatedDistance?: string;
+}
+
+interface PlaceTravelTime {
+  duration: string;
+  durationValue?: number;
+  distance: string;
+  travelMode: string;
+  routeMode?: string;
 }
 
 export default function CreateEvent() {
@@ -142,6 +151,7 @@ export default function CreateEvent() {
   const [recommendedPlaces, setRecommendedPlaces] = useState<any[]>([]);
   const [midpointData, setMidpointData] = useState<any>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [placeTravelTimes, setPlaceTravelTimes] = useState<Record<string, PlaceTravelTime[]>>({});
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -299,11 +309,16 @@ export default function CreateEvent() {
             motorcycling: google.maps.TravelMode.DRIVING,
           };
           const friendTravelMode = friend.editableTravelMode || 'transit';
-          const result = await directionsService.route({
+          const requestedMode = travelModeMap[friendTravelMode] || google.maps.TravelMode.TRANSIT;
+          const request: google.maps.DirectionsRequest = {
             origin: { lat: friend.editableLat, lng: friend.editableLng },
             destination: { lat: formData.meetingPointLat!, lng: formData.meetingPointLng! },
-            travelMode: travelModeMap[friendTravelMode] || google.maps.TravelMode.TRANSIT,
-          });
+            travelMode: requestedMode,
+          };
+          if (requestedMode === google.maps.TravelMode.TRANSIT) {
+            request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+          }
+          const result = await directionsService.route(request);
 
           if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
             const leg = result.routes[0].legs[0];
@@ -344,11 +359,16 @@ export default function CreateEvent() {
             motorcycling: google.maps.TravelMode.DRIVING,
           };
           
-          const result = await directionsService.route({
+          const requestedMode = travelModeMap[dummy.travelMode] || google.maps.TravelMode.TRANSIT;
+          const request: google.maps.DirectionsRequest = {
             origin: { lat: dummy.editableLat, lng: dummy.editableLng },
             destination: { lat: formData.meetingPointLat!, lng: formData.meetingPointLng! },
-            travelMode: travelModeMap[dummy.travelMode] || google.maps.TravelMode.TRANSIT,
-          });
+            travelMode: requestedMode,
+          };
+          if (requestedMode === google.maps.TravelMode.TRANSIT) {
+            request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+          }
+          const result = await directionsService.route(request);
 
           if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
             const leg = result.routes[0].legs[0];
@@ -370,6 +390,109 @@ export default function CreateEvent() {
     setDummyMembers(updatedDummies);
   };
 
+  // Estimate travel time to each recommended place, not only to the geometric midpoint.
+  useEffect(() => {
+    if (!mapsLoaded || recommendedPlaces.length === 0 || !window.google?.maps) return;
+
+    const locations = [
+      ...(formData.ownerLat != null && formData.ownerLng != null
+        ? [{ lat: formData.ownerLat, lng: formData.ownerLng, travelMode: formData.ownerTravelMode }]
+        : []),
+      ...invitedFriends
+        .filter((friend) => friend.editableLat != null && friend.editableLng != null)
+        .map((friend) => ({ lat: friend.editableLat!, lng: friend.editableLng!, travelMode: friend.editableTravelMode || 'transit' })),
+      ...dummyMembers
+        .filter((dummy) => dummy.editableLat != null && dummy.editableLng != null)
+        .map((dummy) => ({ lat: dummy.editableLat!, lng: dummy.editableLng!, travelMode: dummy.travelMode })),
+    ];
+
+    if (locations.length === 0) return;
+
+    let cancelled = false;
+    const travelModeMap: Record<string, google.maps.TravelMode> = {
+      driving: google.maps.TravelMode.DRIVING,
+      transit: google.maps.TravelMode.TRANSIT,
+      walking: google.maps.TravelMode.WALKING,
+      bicycling: google.maps.TravelMode.BICYCLING,
+      motorcycling: google.maps.TravelMode.DRIVING,
+    };
+
+    const loadPlaceTimes = async () => {
+      const entries = await Promise.all(recommendedPlaces.map(async (place, index) => {
+        const key = place.place_id || String(index);
+        if (place.lat == null || place.lng == null) return [key, []] as const;
+        const times = await Promise.all(locations.map(async (location) => {
+          const requestedMode = travelModeMap[location.travelMode] || google.maps.TravelMode.TRANSIT;
+          const modesToTry = requestedMode === google.maps.TravelMode.DRIVING
+            ? [requestedMode]
+            : requestedMode === google.maps.TravelMode.TRANSIT
+              ? [requestedMode]
+              : [requestedMode, google.maps.TravelMode.WALKING];
+
+          for (const mode of modesToTry) {
+            try {
+              const request: google.maps.DirectionsRequest = {
+                origin: { lat: location.lat, lng: location.lng },
+                destination: { lat: place.lat, lng: place.lng },
+                travelMode: mode,
+              };
+              if (mode === google.maps.TravelMode.TRANSIT) {
+                request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+              }
+              const result = await new google.maps.DirectionsService().route(request);
+              const leg = result.routes[0]?.legs[0];
+              if (leg) {
+              return {
+                duration: leg.duration?.text || '無法計算',
+                durationValue: leg.duration?.value,
+                distance: leg.distance?.text || '—',
+                  travelMode: location.travelMode,
+                  routeMode: mode,
+                };
+              }
+            } catch {
+              // Transit may have no route; try the next practical mode.
+            }
+          }
+
+          return {
+            duration: location.travelMode === 'transit' ? '此時段無可用班次' : '無法計算',
+            distance: '—',
+            travelMode: location.travelMode,
+          };
+        }));
+        return [key, times] as const;
+      }));
+
+      if (!cancelled) setPlaceTravelTimes(Object.fromEntries(entries));
+    };
+
+    loadPlaceTimes();
+    return () => { cancelled = true; };
+  }, [mapsLoaded, recommendedPlaces, formData.ownerLat, formData.ownerLng, formData.ownerTravelMode, invitedFriends, dummyMembers]);
+
+  // Rank places by travel-time fairness: minimize the gap between the fastest
+  // and slowest member, then use total travel time as the tie breaker.
+  const rankedRecommendedPlaces = useMemo(() => {
+    const score = (place: any) => {
+      const times = placeTravelTimes[place.place_id] || [];
+      const values = times
+        .map((time) => time.durationValue)
+        .filter((value): value is number => typeof value === 'number');
+      if (values.length < 2) return { spread: Number.POSITIVE_INFINITY, total: Number.POSITIVE_INFINITY };
+      return {
+        spread: Math.max(...values) - Math.min(...values),
+        total: values.reduce((sum, value) => sum + value, 0),
+      };
+    };
+
+    return [...recommendedPlaces].sort((a, b) => {
+      const scoreA = score(a);
+      const scoreB = score(b);
+      return scoreA.spread - scoreB.spread || scoreA.total - scoreB.total;
+    });
+  }, [recommendedPlaces, placeTravelTimes]);
+
   const calculateOwnerTravelTime = async () => {
     if (!formData.meetingPointLat || !formData.meetingPointLng || !formData.ownerLat || !formData.ownerLng || !window.google?.maps) {
       setOwnerEstimatedDuration('');
@@ -387,11 +510,16 @@ export default function CreateEvent() {
         motorcycling: google.maps.TravelMode.DRIVING,
       };
       
-      const result = await directionsService.route({
+      const requestedMode = travelModeMap[formData.ownerTravelMode] || google.maps.TravelMode.TRANSIT;
+      const request: google.maps.DirectionsRequest = {
         origin: { lat: formData.ownerLat, lng: formData.ownerLng },
         destination: { lat: formData.meetingPointLat, lng: formData.meetingPointLng },
-        travelMode: travelModeMap[formData.ownerTravelMode] || google.maps.TravelMode.TRANSIT,
-      });
+        travelMode: requestedMode,
+      };
+      if (requestedMode === google.maps.TravelMode.TRANSIT) {
+        request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+      }
+      const result = await directionsService.route(request);
 
       if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
         const leg = result.routes[0].legs[0];
@@ -448,6 +576,7 @@ export default function CreateEvent() {
     // Clear previous results to force recalculation
     setMidpointData(null);
     setRecommendedPlaces([]);
+    setPlaceTravelTimes({});
     setSelectedPlaceId(null);
     setShowRecommendations(false);
     
@@ -763,6 +892,8 @@ export default function CreateEvent() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (submitting) return;
     
     if (!formData.name.trim()) {
       setSnackbar({ open: true, message: '請輸入聚會名稱', severity: 'error' });
@@ -873,6 +1004,18 @@ export default function CreateEvent() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Prevent Enter in a text field from implicitly creating the event. Keep
+  // Enter available when Google Places has an open suggestion list so users
+  // can still select a place from autocomplete with the keyboard.
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    const placesMenu = document.querySelector('.pac-container');
+    const hasPlaceSuggestions = placesMenu instanceof HTMLElement
+      && placesMenu.offsetParent !== null
+      && placesMenu.querySelector('.pac-item');
+    if (!hasPlaceSuggestions) e.preventDefault();
   };
 
   // Copy link to clipboard
@@ -994,6 +1137,7 @@ export default function CreateEvent() {
           <Paper
             component="form"
             onSubmit={handleSubmit}
+            onKeyDown={handleFormKeyDown}
             elevation={0}
             sx={{
               p: { xs: 2, md: 3 },
@@ -1288,11 +1432,11 @@ export default function CreateEvent() {
                                           },
                                         }}
                                       >
-                                        <MenuItem value="driving">🚗 開車</MenuItem>
-                                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                                        <MenuItem value="walking">🚶 步行</MenuItem>
-                                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                                        <MenuItem value="driving">開車</MenuItem>
+                                        <MenuItem value="transit">大眾運輸</MenuItem>
+                                        <MenuItem value="walking">步行</MenuItem>
+                                        <MenuItem value="bicycling">騎車</MenuItem>
+                                        <MenuItem value="motorcycling">機車</MenuItem>
                                       </Select>
                                     </FormControl>
                                   </Box>
@@ -1425,11 +1569,11 @@ export default function CreateEvent() {
                                           },
                                         }}
                                       >
-                                        <MenuItem value="driving">🚗 開車</MenuItem>
-                                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                                        <MenuItem value="walking">🚶 步行</MenuItem>
-                                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                                        <MenuItem value="driving">開車</MenuItem>
+                                        <MenuItem value="transit">大眾運輸</MenuItem>
+                                        <MenuItem value="walking">步行</MenuItem>
+                                        <MenuItem value="bicycling">騎車</MenuItem>
+                                        <MenuItem value="motorcycling">機車</MenuItem>
                                       </Select>
                                     </FormControl>
                                   </Box>
@@ -1522,11 +1666,11 @@ export default function CreateEvent() {
                         onChange={(e) => setFormData({ ...formData, ownerTravelMode: e.target.value as any })}
                         label="交通方式"
                       >
-                        <MenuItem value="driving">🚗 開車</MenuItem>
-                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                        <MenuItem value="walking">🚶 步行</MenuItem>
-                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                        <MenuItem value="driving">開車</MenuItem>
+                        <MenuItem value="transit">大眾運輸</MenuItem>
+                        <MenuItem value="walking">步行</MenuItem>
+                        <MenuItem value="bicycling">騎車</MenuItem>
+                        <MenuItem value="motorcycling">機車</MenuItem>
                       </Select>
                     </FormControl>
 
@@ -1601,8 +1745,9 @@ export default function CreateEvent() {
                     bgcolor: '#f9fafb',
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'primary.main' }}>
-                    🎯 推薦集合地點
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5, color: '#142B52', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <LocationIcon sx={{ fontSize: 18, color: '#F28A25' }} />
+                    推薦集合地點
                   </Typography>
 
                   {midpointData && (
@@ -1616,10 +1761,46 @@ export default function CreateEvent() {
                     </Box>
                   )}
 
-                  {recommendedPlaces.length > 0 ? (
+                  {midpointData?.midpoint && (
+                    <Box sx={{ mb: 2, overflow: 'hidden', borderRadius: 2, border: '1px solid #D9E2EE', bgcolor: '#F8FAFC' }}>
+                      <MapContainer
+                        center={midpointData.midpoint}
+                        zoom={13}
+                        showInfoWindows={false}
+                        onMarkerClick={(markerId) => {
+                          if (markerId <= 0) return;
+                          const place = rankedRecommendedPlaces[markerId - 1];
+                          if (place) handleSelectRecommendedPlace(place);
+                        }}
+                        markers={[
+                          { id: 0, lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, title: '公平中點', label: '●' },
+                          ...rankedRecommendedPlaces
+                            .filter((place) => place.lat != null && place.lng != null)
+                            .map((place, index) => ({
+                              id: index + 1,
+                              lat: place.lat,
+                              lng: place.lng,
+                              title: place.name,
+                              label: '📍',
+                            })),
+                        ]}
+                      />
+                      <Box sx={{ px: 1.5, py: 1, display: 'flex', alignItems: 'center', gap: 1.5, color: '#71839A', fontSize: '0.7rem' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1769E8' }} />公平中點</Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F28A25' }} />推薦店家</Box>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {rankedRecommendedPlaces.length > 0 ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      {recommendedPlaces.map((place, index) => {
+                      {rankedRecommendedPlaces.map((place, index) => {
                         const isSelected = selectedPlaceId === (place.place_id || null);
+                        const placeTimes = placeTravelTimes[place.place_id || String(index)] || [];
+                        const durationValues = placeTimes.map((time) => time.durationValue).filter((value): value is number => typeof value === 'number');
+                        const timeGap = durationValues.length > 1
+                          ? Math.round((Math.max(...durationValues) - Math.min(...durationValues)) / 60)
+                          : null;
                         return (
                           <Card
                             key={`${place.place_id || index}-${midpointData?.midpoint?.lat}-${midpointData?.midpoint?.lng}`}
@@ -1653,13 +1834,30 @@ export default function CreateEvent() {
                                 {place.rating && (
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                                     <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600 }}>
-                                      ⭐ {place.rating}
+                                      評分 {place.rating}
                                     </Typography>
                                     {place.types && place.types.length > 0 && (
                                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                         • {place.types[0].replace(/_/g, ' ')}
                                       </Typography>
                                     )}
+                                  </Box>
+                                )}
+                                {placeTimes.length > 0 && (
+                                  <Box sx={{ mt: 1, p: 1, borderRadius: 1.5, bgcolor: '#F1F5FA', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                    <Typography variant="caption" sx={{ color: '#61738D', fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>到這家店的預估時間</span>
+                                      {timeGap != null && <span style={{ color: timeGap <= 10 ? '#1769E8' : '#C9650D' }}>成員差距 {timeGap} 分鐘</span>}
+                                    </Typography>
+                                    {placeTimes.map((time, timeIndex) => (
+                                      <Box key={timeIndex} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                        <TimeIcon sx={{ fontSize: 14, color: '#1769E8' }} />
+                                        <Typography variant="caption" sx={{ color: '#142B52' }}>
+                                          成員 {timeIndex + 1} · {time.duration} · {time.distance}
+                                          {time.routeMode && time.routeMode.toLowerCase() !== time.travelMode ? ` · 改用${time.routeMode.toLowerCase() === 'driving' ? '開車' : '步行'}估算` : ''}
+                                        </Typography>
+                                      </Box>
+                                    ))}
                                   </Box>
                                 )}
                                 <Button
@@ -1704,28 +1902,10 @@ export default function CreateEvent() {
                     </Typography>
                   )}
 
-                  {/* 顯示成員旅程時間 */}
-                  {midpointData?.travel_times && midpointData.travel_times.length > 0 && (
-                    <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1 }}>
-                        到地理中點的預估旅程時間（非到各店家）：
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {midpointData.travel_times.map((travel: any, idx: number) => (
-                          <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {travel.travelMode === 'driving' && <CarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'walking' && <WalkIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'bicycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'motorcycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              成員 {idx + 1}: {travel.duration} ({travel.distance})
-                              {travel.routeMode && travel.routeMode !== travel.travelMode ? ` · 改用${travel.routeMode === 'driving' ? '開車' : '步行'}估算` : ''}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
+                  {rankedRecommendedPlaces.length > 0 && (
+                    <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: '#71839A' }}>
+                      已依成員到店時間差距排序，差距最小的店家會優先顯示。
+                    </Typography>
                   )}
                 </Paper>
               </Collapse>
