@@ -121,6 +121,7 @@ export default function CreateEvent() {
   const [eventId, setEventId] = useState<number | null>(null);
   const [shareToken, setShareToken] = useState('');
   const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [mapsLoadFailed, setMapsLoadFailed] = useState(false);
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   
@@ -152,7 +153,7 @@ export default function CreateEvent() {
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [flowStep, setFlowStep] = useState<1 | 2 | 3>(1);
   const [placeTravelTimes, setPlaceTravelTimes] = useState<Record<string, PlaceTravelTime[]>>({});
-  
+
   // Snackbar
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -168,9 +169,25 @@ export default function CreateEvent() {
       })
       .catch((err) => {
         console.error('Failed to load Google Maps:', err);
+        setMapsLoadFailed(true);
         setSnackbar({ open: true, message: 'Google Maps 載入失敗', severity: 'error' });
       });
   }, []);
+
+  // The Maps loader can resolve even when the key is rejected by HTTP referrer
+  // restrictions. In that case Google decorates inputs with gm-err-autocomplete
+  // and disables them; switch the form to its manual-input fallback instead.
+  useEffect(() => {
+    if (!mapsLoaded || mapsLoadFailed) return;
+    const checkForMapsError = () => {
+      if (document.querySelector('.gm-err-autocomplete')) {
+        setMapsLoadFailed(true);
+      }
+    };
+    const timer = window.setInterval(checkForMapsError, 250);
+    checkForMapsError();
+    return () => window.clearInterval(timer);
+  }, [mapsLoaded, mapsLoadFailed]);
 
   // Load friends list and current user profile on mount (only for authenticated users)
   useEffect(() => {
@@ -493,6 +510,30 @@ export default function CreateEvent() {
     });
   }, [recommendedPlaces, placeTravelTimes]);
 
+  const selectedRecommendedPlace = useMemo(
+    () => rankedRecommendedPlaces.find((place) => place.place_id === selectedPlaceId) || null,
+    [rankedRecommendedPlaces, selectedPlaceId],
+  );
+
+  const candidateRadius = useMemo(() => {
+    if (!midpointData?.midpoint || rankedRecommendedPlaces.length === 0) return 850;
+    const toRadians = (value: number) => (value * Math.PI) / 180;
+    const distanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+      const earthRadius = 6371000;
+      const dLat = toRadians(lat2 - lat1);
+      const dLng = toRadians(lng2 - lng1);
+      const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+      return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+    const furthest = Math.max(...rankedRecommendedPlaces.map((place) => (
+      place.lat == null || place.lng == null
+        ? 0
+        : distanceMeters(midpointData.midpoint.lat, midpointData.midpoint.lng, place.lat, place.lng)
+    )));
+    return Math.max(650, Math.min(1800, furthest + 280));
+  }, [midpointData, rankedRecommendedPlaces]);
+
   const calculateOwnerTravelTime = async () => {
     if (!formData.meetingPointLat || !formData.meetingPointLng || !formData.ownerLat || !formData.ownerLng || !window.google?.maps) {
       setOwnerEstimatedDuration('');
@@ -680,6 +721,7 @@ export default function CreateEvent() {
     // 4. Autocomplete not already initialized
     if (
       !formData.useMeetHalf &&
+      !mapsLoadFailed &&
       mapsLoaded &&
       autocompleteInputRef.current &&
       !autocompleteRef.current &&
@@ -721,11 +763,11 @@ export default function CreateEvent() {
       google.maps.event.clearInstanceListeners(autocompleteRef.current);
       autocompleteRef.current = null;
     }
-  }, [formData.useMeetHalf, mapsLoaded]);
+  }, [formData.useMeetHalf, mapsLoaded, mapsLoadFailed]);
 
   // Initialize Google Places Autocomplete for owner departure point
   useEffect(() => {
-    if (!mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+    if (!mapsLoaded || mapsLoadFailed || typeof google === 'undefined' || !google.maps || !google.maps.places) {
       return;
     }
 
@@ -769,11 +811,11 @@ export default function CreateEvent() {
         ownerAutocompleteRef.current = null;
       }
     };
-  }, [mapsLoaded, flowStep]);
+  }, [mapsLoaded, mapsLoadFailed, flowStep]);
 
   // Initialize Google Places Autocomplete for dummy members
   useEffect(() => {
-    if (!formData.useMeetHalf || !mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+    if (!formData.useMeetHalf || !mapsLoaded || mapsLoadFailed || typeof google === 'undefined' || !google.maps || !google.maps.places) {
       return;
     }
 
@@ -825,11 +867,11 @@ export default function CreateEvent() {
         dummyAutocompleteRefs.current.delete(id);
       }
     });
-  }, [formData.useMeetHalf, mapsLoaded, dummyMembers, flowStep]);
+  }, [formData.useMeetHalf, mapsLoaded, mapsLoadFailed, dummyMembers, flowStep]);
 
   // Initialize Google Places Autocomplete for invited friends
   useEffect(() => {
-    if (!mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+    if (!mapsLoaded || mapsLoadFailed || typeof google === 'undefined' || !google.maps || !google.maps.places) {
       return;
     }
 
@@ -888,7 +930,7 @@ export default function CreateEvent() {
         friendAutocompleteRefs.current.delete(userId);
       }
     });
-  }, [mapsLoaded, invitedFriends, flowStep]);
+  }, [mapsLoaded, mapsLoadFailed, invitedFriends, flowStep]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1083,7 +1125,7 @@ export default function CreateEvent() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={zhTW}>
-      <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 64px)', maxHeight: { xs: 'calc(100vh - 64px)', md: 'none' }, py: { xs: 3, md: 5 }, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 64px)', py: { xs: 3, md: 5 }, pb: { xs: 20, md: 5 }, overflow: 'visible' }}>
         <Container maxWidth="md">
           {/* 頁面標題 */}
           <Box
@@ -1336,8 +1378,6 @@ export default function CreateEvent() {
                 />
               </Box>
 
-              </Box>
-
               {flowStep === 1 && (
                 <Button
                   type="button"
@@ -1355,6 +1395,8 @@ export default function CreateEvent() {
                   {formData.useMeetHalf ? '下一步：設定出發資訊' : '下一步：選擇集合地點'}
                 </Button>
               )}
+
+              </Box>
 
               {/* MeetHalf 相關區塊（好友出發點/交通方式、假人、你的參與資訊）- 使用 Collapse */}
               <Collapse in={formData.useMeetHalf && flowStep === 2} timeout="auto">
@@ -1643,8 +1685,9 @@ export default function CreateEvent() {
 
                     {/* 出發點編輯 */}
                     <TextField
+                      key={mapsLoadFailed ? 'owner-location-manual' : 'owner-location-autocomplete'}
                       label="你的出發點"
-                      placeholder="搜尋地點或地址..."
+                      placeholder={mapsLoadFailed ? '輸入地址或地標（可手動輸入）' : '搜尋地點或地址...'}
                       value={formData.ownerLocationName || formData.ownerAddress || ''}
                       onChange={(e) => {
                         // Update the input value when user types manually
@@ -1656,7 +1699,7 @@ export default function CreateEvent() {
                           ownerLng: null,
                         }));
                       }}
-                      inputRef={ownerAutocompleteInputRef}
+                      inputRef={mapsLoadFailed ? undefined : ownerAutocompleteInputRef}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -1764,38 +1807,59 @@ export default function CreateEvent() {
                   )}
 
                   {midpointData?.midpoint && (
-                    <Box sx={{ mb: 2, overflow: 'hidden', borderRadius: 2, border: '1px solid #D9E2EE', bgcolor: '#F8FAFC' }}>
+                    <Box sx={{ mb: 2, position: { xs: 'relative', md: 'sticky' }, top: { md: 16 }, alignSelf: 'flex-start', zIndex: 2, overflow: 'hidden', borderRadius: 2, border: '1px solid #D9E2EE', bgcolor: '#F8FAFC' }}>
                       <MapContainer
-                        center={midpointData.midpoint}
+                        center={selectedRecommendedPlace?.lat != null && selectedRecommendedPlace?.lng != null
+                          ? { lat: selectedRecommendedPlace.lat, lng: selectedRecommendedPlace.lng }
+                          : midpointData.midpoint}
                         zoom={13}
-                        showInfoWindows={false}
-                        onMarkerClick={(markerId) => {
-                          if (markerId <= 0) return;
-                          const place = rankedRecommendedPlaces[markerId - 1];
-                          if (place) handleSelectRecommendedPlace(place);
-                        }}
+                        mapHeight="340px"
+                        showInfoWindows
+                        openMarkerId={selectedRecommendedPlace?.place_id ? `candidate-${selectedRecommendedPlace.place_id}` : null}
+                        highlights={[{ lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, radius: candidateRadius, color: '#F28A25' }]}
                         markers={[
-                          { id: 0, lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, title: '公平中點', label: '●' },
-                          ...rankedRecommendedPlaces
-                            .filter((place) => place.lat != null && place.lng != null)
-                            .map((place, index) => ({
-                              id: index + 1,
-                              lat: place.lat,
-                              lng: place.lng,
-                              title: place.name,
-                              label: '📍',
-                            })),
+                          { id: 0, lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, title: '公平中點', variant: 'midpoint' as const },
+                          ...(selectedRecommendedPlace?.lat != null && selectedRecommendedPlace?.lng != null && selectedRecommendedPlace.place_id
+                            ? [{
+                                id: `candidate-${selectedRecommendedPlace.place_id}`,
+                                lat: selectedRecommendedPlace.lat,
+                                lng: selectedRecommendedPlace.lng,
+                                title: selectedRecommendedPlace.name,
+                                address: selectedRecommendedPlace.address,
+                                rating: selectedRecommendedPlace.rating,
+                                placeId: selectedRecommendedPlace.place_id,
+                                variant: 'place' as const,
+                              }]
+                            : []),
                         ]}
                       />
-                      <Box sx={{ px: 1.5, py: 1, display: 'flex', alignItems: 'center', gap: 1.5, color: '#71839A', fontSize: '0.7rem' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1769E8' }} />公平中點</Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F28A25' }} />推薦店家</Box>
+                      <Box sx={{ px: 1.5, py: 1, color: '#71839A', fontSize: '0.7rem' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1769E8' }} />公平中點
+                          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F28A25' }} />候選範圍
+                        </Box>
+                        <Typography sx={{ mt: 0.5, color: '#8A99AA', fontSize: '0.68rem' }}>
+                          點選下方店家卡片，地圖會聚焦並顯示店家資訊
+                        </Typography>
                       </Box>
                     </Box>
                   )}
 
                   {rankedRecommendedPlaces.length > 0 ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box sx={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 1.25,
+                      overflowX: 'auto',
+                      flexWrap: 'nowrap',
+                      pb: 1,
+                      mx: -0.5,
+                      px: 0.5,
+                      scrollSnapType: 'x mandatory',
+                      WebkitOverflowScrolling: 'touch',
+                      '&::-webkit-scrollbar': { height: 5 },
+                      '&::-webkit-scrollbar-thumb': { bgcolor: '#C9D5E5', borderRadius: 10 },
+                    }}>
                       {rankedRecommendedPlaces.map((place, index) => {
                         const isSelected = selectedPlaceId === (place.place_id || null);
                         const placeTimes = placeTravelTimes[place.place_id || String(index)] || [];
@@ -1809,6 +1873,10 @@ export default function CreateEvent() {
                             variant="outlined"
                             sx={{
                               borderRadius: 2,
+                              minWidth: { xs: '82vw', sm: 285, md: 320 },
+                              maxWidth: { xs: '82vw', sm: 320, md: 360 },
+                              flex: '0 0 auto',
+                              scrollSnapAlign: 'start',
                               cursor: 'pointer',
                               transition: 'all 0.2s',
                               border: isSelected ? '2px solid' : '1px solid',
@@ -1823,14 +1891,16 @@ export default function CreateEvent() {
                             }}
                             onClick={() => handleSelectRecommendedPlace(place)}
                           >
-                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                              <LocationIcon sx={{ color: 'primary.main', mt: 0.5 }} />
+                            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                              <Box sx={{ width: 26, height: 26, flexShrink: 0, borderRadius: '50%', bgcolor: '#F28A25', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '0.78rem' }}>
+                                {index + 1}
+                              </Box>
                               <Box sx={{ flex: 1 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.35, lineHeight: 1.35 }}>
                                   {place.name}
                                 </Typography>
-                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {place.address}
                                 </Typography>
                                 {place.rating && (
@@ -1948,7 +2018,6 @@ export default function CreateEvent() {
                     : '開始輸入以搜尋地點（使用 Google Places）'
                 }
               />
-
 
               {/* 提交按鈕 */}
               <Button
