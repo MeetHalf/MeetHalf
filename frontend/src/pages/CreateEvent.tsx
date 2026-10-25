@@ -41,7 +41,6 @@ import {
   Close as CloseIcon,
   LocationOn as LocationIcon,
   PersonAdd as PersonAddIcon,
-  Calculate as CalculateIcon,
   DirectionsCar as CarIcon,
   DirectionsTransit as TransitIcon,
   DirectionsWalk as WalkIcon,
@@ -151,6 +150,7 @@ export default function CreateEvent() {
   const [recommendedPlaces, setRecommendedPlaces] = useState<any[]>([]);
   const [midpointData, setMidpointData] = useState<any>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [flowStep, setFlowStep] = useState<1 | 2 | 3>(1);
   const [placeTravelTimes, setPlaceTravelTimes] = useState<Record<string, PlaceTravelTime[]>>({});
   
   // Snackbar
@@ -621,6 +621,7 @@ export default function CreateEvent() {
       setMidpointData(response);
       setRecommendedPlaces(response.suggested_places || []);
       setShowRecommendations(true);
+      setFlowStep(3);
       setSnackbar({ open: true, message: '已計算推薦地點！', severity: 'success' });
     } catch (error) {
       console.error('Failed to calculate midpoint:', error);
@@ -768,7 +769,7 @@ export default function CreateEvent() {
         ownerAutocompleteRef.current = null;
       }
     };
-  }, [mapsLoaded]);
+  }, [mapsLoaded, flowStep]);
 
   // Initialize Google Places Autocomplete for dummy members
   useEffect(() => {
@@ -824,7 +825,7 @@ export default function CreateEvent() {
         dummyAutocompleteRefs.current.delete(id);
       }
     });
-  }, [formData.useMeetHalf, mapsLoaded, dummyMembers]);
+  }, [formData.useMeetHalf, mapsLoaded, dummyMembers, flowStep]);
 
   // Initialize Google Places Autocomplete for invited friends
   useEffect(() => {
@@ -887,7 +888,7 @@ export default function CreateEvent() {
         friendAutocompleteRefs.current.delete(userId);
       }
     });
-  }, [mapsLoaded, invitedFriends]);
+  }, [mapsLoaded, invitedFriends, flowStep]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1082,7 +1083,7 @@ export default function CreateEvent() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={zhTW}>
-      <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 64px)', py: { xs: 3, md: 5 } }}>
+      <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 64px)', maxHeight: { xs: 'calc(100vh - 64px)', md: 'none' }, py: { xs: 3, md: 5 }, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <Container maxWidth="md">
           {/* 頁面標題 */}
           <Box
@@ -1122,14 +1123,16 @@ export default function CreateEvent() {
               建立新聚會
             </Typography>
             <Typography variant="body2" sx={{ position: 'relative', zIndex: 1, color: '#B9C9DF', mb: 2.5 }}>
-              先設定時間，再讓 MeetHalf 幫你找到大家都方便的地方。
+              {flowStep === 1 && '先設定聚會，再邀請一起出發的人。'}
+              {flowStep === 2 && '告訴 MeetHalf 每個人從哪裡出發。'}
+              {flowStep === 3 && '看看哪個地方讓大家都不用繞遠路。'}
             </Typography>
 
             <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 1, color: '#D9E5F5', fontSize: '0.72rem', fontWeight: 700 }}>
               <Box sx={{ width: 8, height: 8, bgcolor: '#F28A25', borderRadius: '50%', boxShadow: '0 0 0 4px rgba(242,138,37,.18)' }} />
-              聚會設定
+              {flowStep === 1 ? '聚會設定' : flowStep === 2 ? '出發資訊' : '選擇集合地點'}
               <Box sx={{ flex: 1, height: 1, bgcolor: '#36517A', ml: 1 }} />
-              <Box sx={{ color: '#FFB15C' }}>1 / 3</Box>
+              <Box sx={{ color: '#FFB15C' }}>{flowStep} / 3</Box>
             </Box>
           </Box>
 
@@ -1180,6 +1183,7 @@ export default function CreateEvent() {
             }}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <Box sx={{ display: flowStep === 1 ? 'flex' : 'none', flexDirection: 'column', gap: 2.5 }}>
               {/* 聚會名稱 */}
               <TextField
                 label="聚會名稱"
@@ -1208,22 +1212,9 @@ export default function CreateEvent() {
                 }}
               />
 
-              {/* 結束時間 */}
-              <DateTimePicker
-                label="結束時間"
-                value={formData.endTime}
-                onChange={(newValue) => {
-                  if (newValue) {
-                    setFormData({ ...formData, endTime: newValue });
-                  }
-                }}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    required: true,
-                  },
-                }}
-              />
+              <Typography variant="caption" sx={{ mt: -1.5, color: '#71839A' }}>
+                結束時間會預設為開始後 2 小時。
+              </Typography>
 
               {/* 邀請好友區塊 (只對已登入用戶顯示) */}
               {user && (
@@ -1345,8 +1336,28 @@ export default function CreateEvent() {
                 />
               </Box>
 
+              </Box>
+
+              {flowStep === 1 && (
+                <Button
+                  type="button"
+                  variant="contained"
+                  fullWidth
+                  onClick={() => {
+                    if (!formData.name.trim()) {
+                      setSnackbar({ open: true, message: '先幫這場聚會取個名字', severity: 'error' });
+                      return;
+                    }
+                    setFlowStep(formData.useMeetHalf ? 2 : 3);
+                  }}
+                  sx={{ py: 1.35, borderRadius: 2.5, textTransform: 'none', fontWeight: 800, bgcolor: '#1769E8', '&:hover': { bgcolor: '#1256C4' } }}
+                >
+                  {formData.useMeetHalf ? '下一步：設定出發資訊' : '下一步：選擇集合地點'}
+                </Button>
+              )}
+
               {/* MeetHalf 相關區塊（好友出發點/交通方式、假人、你的參與資訊）- 使用 Collapse */}
-              <Collapse in={formData.useMeetHalf} timeout="auto">
+              <Collapse in={formData.useMeetHalf && flowStep === 2} timeout="auto">
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {/* 已邀請好友的出發點和交通方式 */}
                   {user && invitedFriends.length > 0 && (
@@ -1710,31 +1721,22 @@ export default function CreateEvent() {
                     />
                   </Box>
 
-                  {/* 計算推薦地點按鈕 */}
-                  {user && (invitedFriends.length > 0 || dummyMembers.length > 0) && (
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      startIcon={calculatingMidpoint ? <CircularProgress size={16} color="inherit" /> : <CalculateIcon />}
-                      onClick={handleCalculateMidpoint}
-                      disabled={calculatingMidpoint}
-                      sx={{
-                        borderRadius: 2,
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        bgcolor: '#2196f3',
-                        '&:hover': { bgcolor: '#1976d2' },
-                      }}
-                    >
-                      {calculatingMidpoint ? '計算中...' : '計算推薦集合地點'}
-                    </Button>
-                  )}
                 </Box>
               </Collapse>
 
+              {formData.useMeetHalf && flowStep === 2 && (
+                <Box sx={{ display: 'flex', gap: 1.25 }}>
+                  <Button type="button" variant="outlined" fullWidth onClick={() => setFlowStep(1)} sx={{ py: 1.25, borderRadius: 2.5, textTransform: 'none', fontWeight: 700 }}>返回</Button>
+                  <Button type="button" variant="contained" fullWidth onClick={handleCalculateMidpoint} disabled={calculatingMidpoint} sx={{ py: 1.25, borderRadius: 2.5, textTransform: 'none', fontWeight: 800, bgcolor: '#F28A25', '&:hover': { bgcolor: '#D96F0F' } }}>
+                    {calculatingMidpoint ? '正在找適合大家的地方…' : '找出大家都方便的地方'}
+                  </Button>
+                </Box>
+              )}
+
 
               {/* 推薦地點展開列表 */}
-              <Collapse in={showRecommendations} timeout="auto">
+              <Box sx={{ display: flowStep === 3 ? 'flex' : 'none', flexDirection: 'column', gap: 2.5 }}>
+              <Collapse in={showRecommendations && flowStep === 3} timeout="auto">
                 <Paper
                   elevation={0}
                   sx={{
@@ -1980,6 +1982,7 @@ export default function CreateEvent() {
               >
                 取消
               </Button>
+              </Box>
             </Box>
           </Paper>
 
