@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Avatar, Badge, Button } from '@mui/material';
 import { Bell, LogIn } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import CuteAvatar from './CuteAvatar';
 import { useNotifications } from '../hooks/useNotifications';
 
 export default function Navbar() {
@@ -99,7 +100,8 @@ export default function Navbar() {
                   },
                 }}
               >
-                <Avatar
+                {user?.avatar ? <Avatar
+                  src={user.avatar}
                   sx={{
                     width: 40,
                     height: 40,
@@ -110,9 +112,7 @@ export default function Navbar() {
                     fontWeight: 700,
                     color: '#2F5D8A',
                   }}
-                >
-                  {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '👤'}
-                </Avatar>
+                /> : <CuteAvatar size={40} />}
               </Box>
             </>
           ) : (

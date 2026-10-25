@@ -46,6 +46,7 @@ import {
   BellOff,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import CuteAvatar, { CUTE_AVATARS, getCuteAvatarDataUrl } from '../components/CuteAvatar';
 import { usersApi } from '../api/users';
 import { UserStats } from '../types/events';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
@@ -577,8 +578,8 @@ export default function Profile() {
 
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
           <Box sx={{ position: 'relative' }}>
-            <Avatar
-              src={user?.avatar || undefined}
+            {user?.avatar ? <Avatar
+              src={user.avatar}
               sx={{
                 width: 100,
                 height: 100,
@@ -588,9 +589,7 @@ export default function Profile() {
                 border: '4px solid white',
                 boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.3)',
               }}
-            >
-              {user?.name?.[0]?.toUpperCase() || '👤'}
-            </Avatar>
+            /> : <CuteAvatar size={100} sx={{ mb: 2, border: '4px solid white', boxShadow: '0 10px 25px -5px rgba(201,101,13,.22)' }} />}
             <IconButton
               onClick={handleOpenEditProfile}
               sx={{
@@ -1228,8 +1227,8 @@ export default function Profile() {
               }}
             />
             <TextField
-              label="頭像 URL（選填）"
-              value={editAvatar}
+              label="圖片網址（選填）"
+              value={editAvatar.startsWith('data:image/svg+xml') ? '' : editAvatar}
               onChange={(e) => setEditAvatar(e.target.value)}
               fullWidth
               size="small"
@@ -1240,6 +1239,45 @@ export default function Profile() {
                 },
               }}
             />
+            <Box>
+              <Typography sx={{ fontSize: '0.9rem', fontWeight: 800, color: '#142B52', mb: 1 }}>
+                或選一個 MeetHalf 頭像
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'space-between' }}>
+                {CUTE_AVATARS.map((option) => {
+                  const avatarUrl = getCuteAvatarDataUrl(option.id);
+                  const selected = editAvatar === avatarUrl;
+                  return (
+                    <Box
+                      key={option.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`選擇${option.name}頭像`}
+                      onClick={() => setEditAvatar(avatarUrl)}
+                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setEditAvatar(avatarUrl); }}
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        py: 1,
+                        borderRadius: 2.5,
+                        cursor: 'pointer',
+                        bgcolor: selected ? '#FFF4EA' : '#F8FAFC',
+                        border: selected ? '2px solid #C9650D' : '2px solid transparent',
+                        transition: 'all 0.18s ease',
+                        '&:hover': { bgcolor: '#FFF4EA', transform: 'translateY(-2px)' },
+                      }}
+                    >
+                      <CuteAvatar size={46} variant={option.id} sx={{ border: selected ? '2px solid #C9650D' : '2px solid white' }} />
+                      <Typography sx={{ fontSize: '0.68rem', color: '#52627A', fontWeight: 700 }}>{option.name}</Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 2 }}>
