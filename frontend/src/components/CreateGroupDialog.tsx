@@ -155,10 +155,10 @@ export default function CreateGroupDialog({ open, onClose }: CreateGroupDialogPr
                   borderRadius: 4,
                   cursor: 'pointer',
                   mb: 1,
-                  bgcolor: !!friend.userId && selectedFriends.includes(friend.userId) ? '#dbeafe' : 'transparent',
+                  bgcolor: !!friend.userId && selectedFriends.includes(friend.userId) ? '#EAF1F7' : 'transparent',
                   transition: 'all 0.2s ease',
                   '&:hover': {
-                    bgcolor: !!friend.userId && selectedFriends.includes(friend.userId) ? '#dbeafe' : '#f1f5f9',
+                    bgcolor: !!friend.userId && selectedFriends.includes(friend.userId) ? '#EAF1F7' : '#f1f5f9',
                   },
                 }}
               >
@@ -166,9 +166,9 @@ export default function CreateGroupDialog({ open, onClose }: CreateGroupDialogPr
                   checked={!!friend.userId && selectedFriends.includes(friend.userId)}
                   sx={{
                     p: 0,
-                    color: '#2563eb',
+                    color: '#2F5D8A',
                     '&.Mui-checked': {
-                      color: '#2563eb',
+                      color: '#2F5D8A',
                     },
                   }}
                 />
@@ -177,10 +177,10 @@ export default function CreateGroupDialog({ open, onClose }: CreateGroupDialogPr
                   sx={{
                     width: 40,
                     height: 40,
-                    bgcolor: '#dbeafe',
+                    bgcolor: '#EAF1F7',
                     fontSize: '1rem',
                     borderRadius: 4,
-                    color: '#2563eb',
+                    color: '#2F5D8A',
                     fontWeight: 700,
                   }}
                 >
@@ -231,7 +231,7 @@ export default function CreateGroupDialog({ open, onClose }: CreateGroupDialogPr
             fontWeight: 700,
             fontSize: '0.875rem',
             textTransform: 'none',
-            bgcolor: '#2563eb',
+            bgcolor: '#2F5D8A',
             '&:hover': { bgcolor: '#1d4ed8' },
             '&:disabled': {
               bgcolor: '#e2e8f0',

@@ -192,7 +192,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
               justifyContent: 'center',
             }}
           >
-            <TrophyIcon sx={{ fontSize: 24, color: '#f59e0b' }} />
+            <TrophyIcon sx={{ fontSize: 24, color: '#C9650D' }} />
           </Box>
           <Typography
             sx={{
@@ -367,7 +367,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                     sx={{
                       fontSize: '1.5rem',
                       fontWeight: 900,
-                      color: '#2563eb',
+                      color: '#2F5D8A',
                       lineHeight: 1.2,
                     }}
                   >
@@ -407,7 +407,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       justifyContent: 'center',
                     }}
                   >
-                    <TrophyIcon sx={{ fontSize: 18, color: '#f59e0b' }} />
+                    <TrophyIcon sx={{ fontSize: 18, color: '#C9650D' }} />
                   </Box>
                   <Typography
                     sx={{
@@ -456,8 +456,8 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                               sx={{
                                 width: 56,
                                 height: 56,
-                                bgcolor: '#dbeafe',
-                                color: '#2563eb',
+                                bgcolor: '#EAF1F7',
+                                color: '#2F5D8A',
                                 fontSize: '1.25rem',
                                 fontWeight: 700,
                                 borderRadius: 3,
@@ -574,7 +574,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                       justifyContent: 'center',
                     }}
                   >
-                    <ScheduleIcon sx={{ fontSize: 18, color: '#f59e0b' }} />
+                    <ScheduleIcon sx={{ fontSize: 18, color: '#C9650D' }} />
                   </Box>
                   <Typography
                     sx={{
@@ -608,7 +608,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                           width: 44,
                           height: 44,
                           bgcolor: '#fef3c7',
-                          color: '#f59e0b',
+                          color: '#C9650D',
                           fontSize: '1rem',
                           fontWeight: 700,
                           borderRadius: 3,
@@ -649,7 +649,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                             fontSize: '0.75rem',
                             fontWeight: 600,
                             bgcolor: '#fef3c7',
-                            color: '#f59e0b',
+                            color: '#C9650D',
                             borderRadius: 2,
                           }}
                         />
@@ -780,13 +780,13 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                         width: 32,
                         height: 32,
                         borderRadius: 2,
-                        bgcolor: '#dbeafe',
+                        bgcolor: '#EAF1F7',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
                     >
-                      <PokeIcon sx={{ fontSize: 18, color: '#2563eb' }} />
+                      <PokeIcon sx={{ fontSize: 18, color: '#2F5D8A' }} />
                     </Box>
                     <Typography
                       sx={{
@@ -835,8 +835,8 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                             height: 24,
                             fontSize: '0.75rem',
                             fontWeight: 700,
-                            bgcolor: '#dbeafe',
-                            color: '#2563eb',
+                            bgcolor: '#EAF1F7',
+                            color: '#2F5D8A',
                             borderRadius: 2,
                           }}
                         />
@@ -878,8 +878,8 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
                             height: 24,
                             fontSize: '0.75rem',
                             fontWeight: 700,
-                            bgcolor: '#dbeafe',
-                            color: '#2563eb',
+                            bgcolor: '#EAF1F7',
+                            color: '#2F5D8A',
                             borderRadius: 2,
                           }}
                         />
@@ -912,7 +912,7 @@ export default function EventResultPopup({ open, onClose, eventId }: EventResult
             fontWeight: 700,
             fontSize: '1rem',
             py: 1.5,
-            bgcolor: '#2563eb',
+            bgcolor: '#2F5D8A',
             '&:hover': { bgcolor: '#1d4ed8' },
           }}
         >

@@ -20,9 +20,9 @@ import { usersApi } from '../api/users';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
 
 const travelModeOptions = [
-  { value: 'driving', label: '開車', icon: Car, color: '#2563eb' },
+  { value: 'driving', label: '開車', icon: Car, color: '#2F5D8A' },
   { value: 'transit', label: '大眾運輸', icon: Bus, color: '#10b981' },
-  { value: 'walking', label: '步行', icon: PersonStanding, color: '#f59e0b' },
+  { value: 'walking', label: '步行', icon: PersonStanding, color: '#C9650D' },
   { value: 'bicycling', label: '騎車', icon: Bike, color: '#8b5cf6' },
   { value: 'motorcycling', label: '機車', icon: Bike, color: '#ef4444' },
 ];
@@ -277,7 +277,7 @@ export default function FirstTimeSetup() {
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <MapPin size={20} style={{ color: '#2563eb' }} />
+            <MapPin size={20} style={{ color: '#2F5D8A' }} />
             <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>
               預設出發點（選填）
             </Typography>
@@ -373,7 +373,7 @@ export default function FirstTimeSetup() {
             textTransform: 'none',
             fontWeight: 700,
             fontSize: '1rem',
-            bgcolor: '#2563eb',
+            bgcolor: '#2F5D8A',
             '&:hover': {
               bgcolor: '#1d4ed8',
             },

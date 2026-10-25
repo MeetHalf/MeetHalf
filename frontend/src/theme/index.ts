@@ -4,7 +4,7 @@ import { createTheme } from '@mui/material/styles';
 export const theme = createTheme({
   palette: {
     primary: {
-      main: '#1769E8', // MeetHalf blue
+      main: '#2F5D8A', // MeetHalf blue
       light: '#5C9BFF',
       dark: '#0F4FB7',
       contrastText: '#FFFFFF',
@@ -31,7 +31,7 @@ export const theme = createTheme({
       dark: '#2563EB',
     },
     success: {
-      main: '#1769E8',
+      main: '#2F5D8A',
       light: '#5C9BFF',
       dark: '#0F4FB7',
     },

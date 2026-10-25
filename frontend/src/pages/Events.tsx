@@ -154,7 +154,7 @@ export default function Events() {
               <Box
                 onClick={() => navigate('/events/new')}
                 sx={{
-                  bgcolor: '#1769E8',
+                  bgcolor: '#2F5D8A',
                   color: 'white',
                   px: { xs: 1.5, sm: 2 },
                   py: 1,
@@ -168,7 +168,7 @@ export default function Events() {
                   '&:active': { transform: 'scale(0.95)' },
                   '&:hover': {
                     boxShadow: '0 6px 16px -2px rgba(37, 99, 235, 0.4)',
-                    bgcolor: '#0F4FB7',
+                    bgcolor: '#244A70',
                   },
                 }}
               >
@@ -203,7 +203,7 @@ export default function Events() {
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                   '&:active': { transform: 'scale(0.95)' },
                   '&:hover': {
-                    borderColor: '#2563eb',
+                    borderColor: '#2F5D8A',
                     bgcolor: '#f8fafc',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                   },
@@ -248,7 +248,7 @@ export default function Events() {
                       transition: 'all 0.2s ease',
                       '&:active': { transform: 'scale(0.98)' },
                       '&:hover': {
-                        '& .event-title': { color: '#2563eb' },
+                        '& .event-title': { color: '#2F5D8A' },
                       },
                     }}
                   >
@@ -260,8 +260,8 @@ export default function Events() {
                         sx={{
                           width: 48,
                           height: 48,
-                          bgcolor: status === 'ongoing' ? '#FFF1E8' : '#E8F0FF',
-                          color: status === 'ongoing' ? '#F28A25' : '#1769E8',
+                          bgcolor: status === 'ongoing' ? '#FFF4EA' : '#EAF1F7',
+                          color: status === 'ongoing' ? '#C9650D' : '#2F5D8A',
                           borderRadius: 2,
                           display: 'flex',
                           alignItems: 'center',
@@ -286,7 +286,7 @@ export default function Events() {
                           {isLive && (
                             <Box
                               sx={{
-                                bgcolor: '#FFF1E8',
+                                bgcolor: '#FFF4EA',
                                 color: '#C9650D',
                                 fontSize: '0.625rem',
                                 fontWeight: 900,
@@ -324,7 +324,7 @@ export default function Events() {
                                 // 如果少於 1 分鐘，顯示「即將開始」
                                 if (totalMinutes < 1) {
                                   return (
-                                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#C9650D' }}>
                                       即將開始
                                     </Typography>
                                   );
@@ -332,7 +332,7 @@ export default function Events() {
                                 
                                 // 顯示倒數計時
                                 return (
-                                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#C9650D' }}>
                                     還有 {totalMinutes} 分鐘
                                   </Typography>
                                 );
@@ -391,10 +391,10 @@ export default function Events() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: '#2563eb',
+                            color: '#2F5D8A',
                             transition: 'all 0.2s ease',
                             '&:hover': {
-                              bgcolor: '#dbeafe',
+                              bgcolor: '#EAF1F7',
                             },
                             '&:active': {
                               transform: 'scale(0.9)',
@@ -456,7 +456,7 @@ export default function Events() {
                       transition: 'all 0.2s ease',
                       '&:active': { transform: 'scale(0.98)' },
                       '&:hover': {
-                        '& .event-title': { color: '#2563eb' },
+                        '& .event-title': { color: '#2F5D8A' },
                       },
                     }}
                   >
@@ -465,9 +465,9 @@ export default function Events() {
                         sx={{
                           width: 48,
                           height: 48,
-                          bgcolor: '#dbeafe',
+                          bgcolor: '#EAF1F7',
                           borderRadius: 2,
-                          color: '#1769E8',
+                          color: '#2F5D8A',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',

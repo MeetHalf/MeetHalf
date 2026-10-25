@@ -112,7 +112,7 @@ export default function BottomNav() {
               height: 44,
               borderRadius: 2,
               bgcolor: 'transparent',
-              color: active ? '#1769E8' : '#71839A',
+              color: active ? '#2F5D8A' : '#71839A',
               boxShadow: 'none',
               border: 'none',
               display: 'flex',

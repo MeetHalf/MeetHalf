@@ -234,10 +234,10 @@ export default function ChatRoom() {
           sx={{
             width: 40,
             height: 40,
-            bgcolor: type === 'group' ? '#dcfce7' : '#dbeafe',
+            bgcolor: type === 'group' ? '#dcfce7' : '#EAF1F7',
             fontSize: '1rem',
             borderRadius: 4,
-            color: type === 'group' ? '#15803d' : '#2563eb',
+            color: type === 'group' ? '#15803d' : '#2F5D8A',
             fontWeight: 700,
           }}
         >
@@ -302,10 +302,10 @@ export default function ChatRoom() {
                     sx={{
                       width: 32,
                       height: 32,
-                      bgcolor: '#dbeafe',
+                      bgcolor: '#EAF1F7',
                       fontSize: '0.75rem',
                       borderRadius: 3,
-                      color: '#2563eb',
+                      color: '#2F5D8A',
                       fontWeight: 700,
                     }}
                   >
@@ -336,7 +336,7 @@ export default function ChatRoom() {
                   <Box
                     sx={{
                       p: 1.5,
-                      bgcolor: isOwn ? '#2563eb' : '#f1f5f9',
+                      bgcolor: isOwn ? '#2F5D8A' : '#f1f5f9',
                       color: isOwn ? 'white' : '#0f172a',
                       borderRadius: isOwn ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
                       wordBreak: 'break-word',
@@ -416,7 +416,7 @@ export default function ChatRoom() {
                 border: 'none',
               },
               '&.Mui-focused fieldset': {
-                border: '1px solid #2563eb',
+                border: '1px solid #2F5D8A',
               },
             },
           }}
@@ -425,7 +425,7 @@ export default function ChatRoom() {
           onClick={handleSendMessage}
           disabled={!inputMessage.trim() || sending}
           sx={{
-            bgcolor: inputMessage.trim() ? '#2563eb' : '#e2e8f0',
+            bgcolor: inputMessage.trim() ? '#2F5D8A' : '#e2e8f0',
             color: inputMessage.trim() ? 'white' : '#94a3b8',
             width: 40,
             height: 40,
@@ -501,10 +501,10 @@ export default function ChatRoom() {
                         sx={{
                           width: 48,
                           height: 48,
-                          bgcolor: '#dbeafe',
+                          bgcolor: '#EAF1F7',
                           fontSize: '1rem',
                           borderRadius: 3,
-                          color: '#2563eb',
+                          color: '#2F5D8A',
                           fontWeight: 700,
                         }}
                       >
@@ -546,7 +546,7 @@ export default function ChatRoom() {
                             sx={{
                               fontSize: '0.75rem',
                               fontWeight: 600,
-                              color: '#f59e0b',
+                              color: '#C9650D',
                             }}
                           >
                             群主

@@ -108,7 +108,7 @@ export default function Navbar() {
                     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                     fontSize: '0.875rem',
                     fontWeight: 700,
-                    color: '#1769E8',
+                    color: '#2F5D8A',
                   }}
                 >
                   {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '👤'}
@@ -121,7 +121,7 @@ export default function Navbar() {
               startIcon={<LogIn size={18} />}
               onClick={() => navigate('/login')}
               sx={{
-                bgcolor: '#1769E8',
+                bgcolor: '#2F5D8A',
                 color: 'white',
                 px: 2,
                 py: 1,

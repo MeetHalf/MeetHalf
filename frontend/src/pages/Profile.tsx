@@ -58,9 +58,9 @@ import {
 } from '../lib/pusherBeams';
 
 const travelModeOptions = [
-  { value: 'driving', label: '開車', icon: Car, color: '#2563eb' },
+  { value: 'driving', label: '開車', icon: Car, color: '#2F5D8A' },
   { value: 'transit', label: '大眾運輸', icon: Bus, color: '#10b981' },
-  { value: 'walking', label: '步行', icon: PersonStanding, color: '#f59e0b' },
+  { value: 'walking', label: '步行', icon: PersonStanding, color: '#C9650D' },
   { value: 'bicycling', label: '騎車', icon: Bike, color: '#8b5cf6' },
   { value: 'motorcycling', label: '機車', icon: Bike, color: '#ef4444' },
 ];
@@ -87,7 +87,7 @@ function calculateBadges(stats: UserStats): Badge[] {
   badges.push({
     id: 'ontime',
     icon: Trophy,
-    iconColor: '#f59e0b',
+    iconColor: '#C9650D',
     name: '準時王',
     unlocked: ontimeUnlocked,
     condition: '準時率 ≥ 90% 且參與 ≥ 5 次活動',
@@ -160,7 +160,7 @@ function calculateBadges(stats: UserStats): Badge[] {
   badges.push({
     id: 'regular',
     icon: Calendar,
-    iconColor: '#2563eb',
+    iconColor: '#2F5D8A',
     name: '常客',
     unlocked: regularUnlocked,
     condition: '參與 ≥ 10 次活動',
@@ -582,7 +582,7 @@ export default function Profile() {
               sx={{
                 width: 100,
                 height: 100,
-                bgcolor: '#2563eb',
+                bgcolor: '#2F5D8A',
                 fontSize: '2.5rem',
                 mb: 2,
                 border: '4px solid white',
@@ -670,7 +670,7 @@ export default function Profile() {
                   width: 48,
                   height: 48,
                   borderRadius: '50%',
-                  bgcolor: '#dbeafe',
+                  bgcolor: '#EAF1F7',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -678,7 +678,7 @@ export default function Profile() {
                   mb: 1.5,
                 }}
               >
-                <Calendar size={24} color="#2563eb" />
+                <Calendar size={24} color="#2F5D8A" />
               </Box>
               <Typography sx={{ fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>
                 {stats.totalEvents}
@@ -742,7 +742,7 @@ export default function Profile() {
                   mb: 1.5,
                 }}
               >
-                <Trophy size={24} color="#f59e0b" />
+                <Trophy size={24} color="#C9650D" />
               </Box>
               <Typography sx={{ fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>
                 {stats.bestRank === 1 ? stats.ontimeCount : 0}
@@ -859,7 +859,7 @@ export default function Profile() {
             <>
               <Box sx={{ p: 2.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                  <MapPin size={18} style={{ color: '#2563eb', flexShrink: 0 }} />
+                  <MapPin size={18} style={{ color: '#2F5D8A', flexShrink: 0 }} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography
                       sx={{
@@ -900,7 +900,7 @@ export default function Profile() {
                     const Icon = option?.icon || Car;
                     return (
                       <>
-                        <Icon size={18} style={{ color: option?.color || '#2563eb', flexShrink: 0 }} />
+                        <Icon size={18} style={{ color: option?.color || '#2F5D8A', flexShrink: 0 }} />
                         <Box>
                           <Typography
                             sx={{
@@ -957,7 +957,7 @@ export default function Profile() {
                           borderColor: '#cbd5e1',
                         },
                         '&.Mui-focused fieldset': {
-                          borderColor: '#2563eb',
+                          borderColor: '#2F5D8A',
                         },
                       },
                     }}

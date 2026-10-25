@@ -105,7 +105,7 @@ export default function FriendListDialog({ open, onClose }: FriendListDialogProp
                   transition: 'all 0.2s ease',
                   '&:hover': {
                     bgcolor: '#f8fafc',
-                    '& .friend-name': { color: '#2563eb' },
+                    '& .friend-name': { color: '#2F5D8A' },
                   },
                 }}
                 onClick={() => friend.userId && handleSendMessage(friend.userId)}
@@ -115,10 +115,10 @@ export default function FriendListDialog({ open, onClose }: FriendListDialogProp
                   sx={{
                     width: 48,
                     height: 48,
-                    bgcolor: '#dbeafe',
+                    bgcolor: '#EAF1F7',
                     fontSize: '1.25rem',
                     borderRadius: 4,
-                    color: '#2563eb',
+                    color: '#2F5D8A',
                     fontWeight: 700,
                   }}
                 >
@@ -175,7 +175,7 @@ export default function FriendListDialog({ open, onClose }: FriendListDialogProp
             fontWeight: 700,
             fontSize: '0.875rem',
             textTransform: 'none',
-            bgcolor: '#2563eb',
+            bgcolor: '#2F5D8A',
             color: 'white',
             px: 3,
             '&:hover': { bgcolor: '#1d4ed8' },

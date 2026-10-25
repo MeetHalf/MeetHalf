@@ -77,7 +77,7 @@ export function useEventProgress(event: Event | null): EventProgress | null {
         progress,
         label: '距離結束',
         description,
-        color: '#ff9800', // Amber
+        color: '#C9650D', // Amber
       };
     }
 
@@ -112,7 +112,7 @@ export function useEventProgress(event: Event | null): EventProgress | null {
       progress: Math.max(progress, 0.05), // 至少顯示一點進度
       label: '距離開始',
       description,
-      color: '#2196f3', // Blue
+      color: '#4F7FA5', // Blue
     };
   }, [event, now]);
 }

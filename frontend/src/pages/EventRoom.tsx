@@ -2082,7 +2082,7 @@ export default function EventRoom() {
                 <Box sx={{ 
                   width: 8, 
                   height: 8, 
-                  bgcolor: event.status === 'ongoing' ? '#3b82f6' : '#94a3b8',
+                  bgcolor: event.status === 'ongoing' ? '#2F5D8A' : '#94a3b8',
                   borderRadius: '50%',
                   animation: event.status === 'ongoing' ? 'pulse 2s infinite' : 'none',
                   '@keyframes pulse': {
@@ -2116,8 +2116,8 @@ export default function EventRoom() {
                       if (totalMinutes < 1) {
                         return (
                           <>
-                            <TimeIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
-                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                            <TimeIcon sx={{ fontSize: 14, color: '#C9650D' }} />
+                            <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#C9650D' }}>
                               即將開始
                             </Typography>
                           </>
@@ -2127,8 +2127,8 @@ export default function EventRoom() {
                       // 顯示倒數計時
                       return (
                         <>
-                          <TimeIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
-                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                          <TimeIcon sx={{ fontSize: 14, color: '#C9650D' }} />
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#C9650D' }}>
                             還有 {totalMinutes} 分鐘
                           </Typography>
                         </>
@@ -2154,7 +2154,7 @@ export default function EventRoom() {
                       fontWeight: 800, 
                       textTransform: 'uppercase', 
                       letterSpacing: '0.1em',
-                      color: '#3b82f6',
+                      color: '#2F5D8A',
                       mb: 0.5,
                     }}>
                       {event.status === 'ongoing' ? '進行中' : event.status === 'upcoming' ? '即將開始' : '已結束'}
@@ -2183,11 +2183,11 @@ export default function EventRoom() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                       <Box sx={{ 
                         width: 32, height: 32, 
-                        bgcolor: '#dbeafe', 
+                        bgcolor: '#EAF1F7', 
                         borderRadius: 2,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
-                        <LocationIcon sx={{ fontSize: 16, color: '#3b82f6' }} />
+                        <LocationIcon sx={{ fontSize: 16, color: '#2F5D8A' }} />
                       </Box>
                       <Box sx={{ flex: 1 }}>
                         <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>
@@ -2206,7 +2206,7 @@ export default function EventRoom() {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <Box sx={{ 
                       width: 32, height: 32, 
-                      bgcolor: '#ffedd5', 
+                      bgcolor: '#FFF4EA', 
                       borderRadius: 2,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
@@ -2235,7 +2235,7 @@ export default function EventRoom() {
                     <Box sx={{ 
                       width: 24, height: 24, 
                       borderRadius: '50%', 
-                      bgcolor: '#dbeafe',
+                      bgcolor: '#EAF1F7',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '0.5rem', fontWeight: 700,
                     }}>
@@ -2249,7 +2249,7 @@ export default function EventRoom() {
                     <IconButton
                       onClick={handleMoreMenuOpen}
                       sx={{
-                        color: '#3b82f6',
+                        color: '#2F5D8A',
                         p: 0.5,
                         '&:hover': { bgcolor: '#eff6ff' },
                       }}
@@ -2280,7 +2280,7 @@ export default function EventRoom() {
                           }}
                         >
                           <ListItemIcon sx={{ minWidth: 36 }}>
-                            <Edit size={18} color="#3b82f6" />
+                            <Edit size={18} color="#2F5D8A" />
                           </ListItemIcon>
                           <ListItemText
                             primary="編輯活動"
@@ -2300,7 +2300,7 @@ export default function EventRoom() {
                         }}
                       >
                         <ListItemIcon sx={{ minWidth: 36 }}>
-                          <Share2 size={18} color="#3b82f6" />
+                          <Share2 size={18} color="#2F5D8A" />
                         </ListItemIcon>
                         <ListItemText
                           primary="分享連結"
@@ -2319,7 +2319,7 @@ export default function EventRoom() {
                         }}
                       >
                         <ListItemIcon sx={{ minWidth: 36 }}>
-                          <UserPlus size={18} color="#3b82f6" />
+                          <UserPlus size={18} color="#2F5D8A" />
                         </ListItemIcon>
                         <ListItemText
                           primary="邀請好友"
@@ -2394,7 +2394,7 @@ export default function EventRoom() {
                 transition: 'all 0.2s',
               }}
             >
-              <TrophyIcon sx={{ color: '#3b82f6' }} />
+              <TrophyIcon sx={{ color: '#2F5D8A' }} />
             </IconButton>
 
             {/* 聊天室按鈕 - 只有在有 groupId 時顯示 */}
@@ -2414,7 +2414,7 @@ export default function EventRoom() {
                   transition: 'all 0.2s',
                 }}
               >
-                <MessageCircle size={20} style={{ color: '#3b82f6' }} />
+                <MessageCircle size={20} style={{ color: '#2F5D8A' }} />
               </IconButton>
             )}
           </Box>
@@ -2628,7 +2628,7 @@ export default function EventRoom() {
                           sx={{
                             height: 18,
                             fontSize: '0.625rem',
-                            bgcolor: '#ff9800',
+                            bgcolor: '#C9650D',
                             color: 'white',
                             fontWeight: 700,
                           }}
@@ -2641,7 +2641,7 @@ export default function EventRoom() {
                           sx={{
                             height: 18,
                             fontSize: '0.625rem',
-                            bgcolor: '#3b82f6',
+                            bgcolor: '#2F5D8A',
                             color: 'white',
                             fontWeight: 700,
                           }}
@@ -2727,7 +2727,7 @@ export default function EventRoom() {
               sx={{
                 py: 2,
                 borderRadius: 3,
-                bgcolor: canMarkArrival ? '#2563eb' : '#94a3b8',
+                bgcolor: canMarkArrival ? '#2F5D8A' : '#94a3b8',
                 fontWeight: 700,
                 fontSize: '1rem',
                 textTransform: 'none',
@@ -2952,7 +2952,7 @@ export default function EventRoom() {
                 InputProps={{
                   startAdornment: (
                     <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
-                      <LocationIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
+                      <LocationIcon sx={{ color: '#2F5D8A', fontSize: 20 }} />
                     </Box>
                   ),
                 }}
@@ -2992,9 +2992,9 @@ export default function EventRoom() {
                 fontWeight: 700,
                 borderRadius: 2,
                 px: 3,
-                bgcolor: '#3b82f6',
+                bgcolor: '#2F5D8A',
                 '&:hover': {
-                  bgcolor: '#2563eb',
+                  bgcolor: '#2F5D8A',
                 },
                 '&.Mui-disabled': {
                   bgcolor: '#94a3b8',
@@ -3063,9 +3063,9 @@ export default function EventRoom() {
                       checked={!!friend.userId && selectedFriends.includes(friend.userId)}
                       onChange={() => friend.userId && handleToggleFriendSelection(friend.userId)}
                       sx={{
-                        color: '#3b82f6',
+                        color: '#2F5D8A',
                         '&.Mui-checked': {
-                          color: '#3b82f6',
+                          color: '#2F5D8A',
                         },
                       }}
                     />
@@ -3074,10 +3074,10 @@ export default function EventRoom() {
                       sx={{
                         width: 40,
                         height: 40,
-                        bgcolor: '#dbeafe',
+                        bgcolor: '#EAF1F7',
                         fontSize: '0.875rem',
                         borderRadius: 3,
-                        color: '#2563eb',
+                        color: '#2F5D8A',
                         fontWeight: 700,
                       }}
                     >
@@ -3132,7 +3132,7 @@ export default function EventRoom() {
               borderRadius: 2,
               textTransform: 'none',
               fontWeight: 600,
-              bgcolor: '#2563eb',
+              bgcolor: '#2F5D8A',
               '&:hover': { bgcolor: '#1d4ed8' },
             }}
           >

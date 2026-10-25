@@ -93,7 +93,7 @@ function createMeetingPointInfoContent(marker: MapMarker): string {
         style="
           width: 100%;
           padding: 10px 16px;
-          background-color: #2563eb;
+          background-color: #2F5D8A;
           color: white;
           border: none;
           border-radius: 8px;
@@ -106,7 +106,7 @@ function createMeetingPointInfoContent(marker: MapMarker): string {
           gap: 6px;
         "
         onmouseover="this.style.backgroundColor='#1d4ed8'"
-        onmouseout="this.style.backgroundColor='#2563eb'"
+        onmouseout="this.style.backgroundColor='#2F5D8A'"
       >
         <span>🧭</span>
         <span>開始導航</span>
@@ -127,7 +127,7 @@ function createPlaceInfoContent(marker: MapMarker): string {
           <div style="margin-top:5px;font-size:12px;line-height:1.4;color:#71839A;">${marker.address || ''}</div>
           ${marker.rating != null ? `<div style="margin-top:8px;font-size:12px;font-weight:700;color:#C9650D;">★ ${marker.rating} · Google 評分</div>` : ''}
         </div>
-        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" aria-label="在 Google Maps 開啟" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;background:#EEF4FF;color:#1769E8;text-decoration:none;font-size:18px;">↗</a>
+        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" aria-label="在 Google Maps 開啟" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;background:#EEF4FF;color:#2F5D8A;text-decoration:none;font-size:18px;">↗</a>
       </div>
     </div>
   `;
@@ -235,7 +235,7 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
           };
         } else if (marker.variant === 'midpoint') {
           markerOptions.icon = {
-            url: createBrandMarkerIcon('#1769E8', 42),
+            url: createBrandMarkerIcon('#2F5D8A', 42),
             scaledSize: new google.maps.Size(42, 42),
             anchor: new google.maps.Point(21, 21),
           };

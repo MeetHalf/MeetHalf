@@ -218,10 +218,10 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
                       sx={{
                         width: 32,
                         height: 32,
-                        bgcolor: '#dbeafe',
+                        bgcolor: '#EAF1F7',
                         fontSize: '0.75rem',
                         borderRadius: 3,
-                        color: '#2563eb',
+                        color: '#2F5D8A',
                         fontWeight: 700,
                       }}
                     >
@@ -252,7 +252,7 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
                     <Box
                       sx={{
                         p: 1.5,
-                        bgcolor: isOwn ? '#2563eb' : '#f1f5f9',
+                        bgcolor: isOwn ? '#2F5D8A' : '#f1f5f9',
                         color: isOwn ? 'white' : '#0f172a',
                         borderRadius: isOwn ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
                         wordBreak: 'break-word',
@@ -334,7 +334,7 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
                 border: 'none',
               },
               '&.Mui-focused fieldset': {
-                border: '1px solid #2563eb',
+                border: '1px solid #2F5D8A',
               },
             },
           }}
@@ -343,7 +343,7 @@ export default function ChatPopup({ open, onClose, groupId, groupName }: ChatPop
           onClick={handleSendMessage}
           disabled={!inputMessage.trim() || sending}
           sx={{
-            bgcolor: inputMessage.trim() ? '#2563eb' : '#e2e8f0',
+            bgcolor: inputMessage.trim() ? '#2F5D8A' : '#e2e8f0',
             color: inputMessage.trim() ? 'white' : '#94a3b8',
             width: 40,
             height: 40,

@@ -131,7 +131,7 @@ export default function AddFriendDrawer({ open, onClose }: AddFriendDrawerProps)
               sx={{
                 mt: 2,
                 borderRadius: 4,
-                bgcolor: '#2563eb',
+                bgcolor: '#2F5D8A',
                 color: 'white',
                 fontWeight: 700,
                 fontSize: '0.875rem',
@@ -174,10 +174,10 @@ export default function AddFriendDrawer({ open, onClose }: AddFriendDrawerProps)
                       sx={{
                         width: 48,
                         height: 48,
-                        bgcolor: '#dbeafe',
+                        bgcolor: '#EAF1F7',
                         fontSize: '1.25rem',
                         borderRadius: 4,
-                        color: '#2563eb',
+                        color: '#2F5D8A',
                         fontWeight: 700,
                       }}
                     >
@@ -197,7 +197,7 @@ export default function AddFriendDrawer({ open, onClose }: AddFriendDrawerProps)
                       onClick={() => user.userId && handleSendRequest(user.userId, user.name)}
                       sx={{
                         borderRadius: 3,
-                        bgcolor: '#2563eb',
+                        bgcolor: '#2F5D8A',
                         color: 'white',
                         fontWeight: 700,
                         fontSize: '0.75rem',

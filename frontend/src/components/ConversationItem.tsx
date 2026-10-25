@@ -57,10 +57,10 @@ export default function ConversationItem({ conversation, onClick }: Conversation
           sx={{
             width: 48,
             height: 48,
-            bgcolor: type === 'group' ? '#dcfce7' : '#dbeafe',
+            bgcolor: type === 'group' ? '#dcfce7' : '#EAF1F7',
             fontSize: '1.25rem',
             borderRadius: 4,
-            color: type === 'group' ? '#15803d' : '#2563eb',
+            color: type === 'group' ? '#15803d' : '#2F5D8A',
             fontWeight: 700,
           }}
         >

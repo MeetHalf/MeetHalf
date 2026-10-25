@@ -41,7 +41,7 @@ const getNotificationColor = (type: string) => {
   switch (type) {
     case 'event_invite':
     case 'EVENT_INVITE':
-      return { bg: '#dbeafe', color: '#2563eb' };
+      return { bg: '#EAF1F7', color: '#2F5D8A' };
     case 'event_update':
     case 'EVENT_UPDATE':
       return { bg: '#fef3c7', color: '#d97706' };
@@ -245,7 +245,7 @@ export default function Notifications() {
           <Typography
             onClick={() => markAllAsRead()}
             sx={{
-              color: '#2563eb',
+              color: '#2F5D8A',
               fontSize: '0.75rem',
               fontWeight: 700,
               cursor: 'pointer',
@@ -323,7 +323,7 @@ export default function Notifications() {
                             width: 8,
                             height: 8,
                             borderRadius: '50%',
-                            bgcolor: '#2563eb',
+                            bgcolor: '#2F5D8A',
                           }}
                         />
                       )}
@@ -433,7 +433,7 @@ export default function Notifications() {
                         {isAlreadyAccepted ? (
                           <Typography
                             sx={{
-                              color: '#2563eb',
+                              color: '#2F5D8A',
                               fontSize: '0.875rem',
                               fontWeight: 600,
                             }}
@@ -466,7 +466,7 @@ export default function Notifications() {
                               disabled={loadingActions[notification.id] === 'accept' || loadingActions[notification.id] === 'reject'}
                               sx={{
                                 borderRadius: 3,
-                                bgcolor: '#2563eb',
+                                bgcolor: '#2F5D8A',
                                 '&:hover': { bgcolor: '#1d4ed8' },
                                 textTransform: 'none',
                                 fontWeight: 700,
@@ -511,7 +511,7 @@ export default function Notifications() {
                               disabled={loadingActions[notification.id] === 'accept' || loadingActions[notification.id] === 'reject'}
                               sx={{
                                 borderRadius: 3,
-                                color: '#2563eb',
+                                color: '#2F5D8A',
                                 textTransform: 'none',
                                 fontWeight: 700,
                                 '&:disabled': {

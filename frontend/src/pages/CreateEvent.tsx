@@ -1196,10 +1196,10 @@ export default function CreateEvent() {
                 bgcolor: '#FBFCFE',
                 '& fieldset': { borderColor: '#D9E2EE' },
                 '&:hover fieldset': { borderColor: '#AFC3DD' },
-                '&.Mui-focused fieldset': { borderColor: '#1769E8', borderWidth: 1.5 },
+                '&.Mui-focused fieldset': { borderColor: '#2F5D8A', borderWidth: 1.5 },
               },
               '& .MuiInputLabel-root': { color: '#71839A' },
-              '& .MuiInputLabel-root.Mui-focused': { color: '#1769E8' },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#2F5D8A' },
               '& .MuiFormHelperText-root': {
                 mt: 0.75,
                 mb: 0.25,
@@ -1390,7 +1390,7 @@ export default function CreateEvent() {
                     }
                     setFlowStep(formData.useMeetHalf ? 2 : 3);
                   }}
-                  sx={{ py: 1.35, borderRadius: 2.5, textTransform: 'none', fontWeight: 800, bgcolor: '#1769E8', '&:hover': { bgcolor: '#1256C4' } }}
+                  sx={{ py: 1.35, borderRadius: 2.5, textTransform: 'none', fontWeight: 800, bgcolor: '#2F5D8A', '&:hover': { bgcolor: '#1256C4' } }}
                 >
                   {formData.useMeetHalf ? '下一步：設定出發資訊' : '下一步：選擇集合地點'}
                 </Button>
@@ -1540,7 +1540,7 @@ export default function CreateEvent() {
                         borderColor: '#e0e0e0',
                         color: '#64748b',
                         '&:hover': {
-                          borderColor: '#2196f3',
+                          borderColor: '#4F7FA5',
                           bgcolor: '#e3f2fd',
                         },
                       }}
@@ -1835,7 +1835,7 @@ export default function CreateEvent() {
                       />
                       <Box sx={{ px: 1.5, py: 1, color: '#71839A', fontSize: '0.7rem' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1769E8' }} />公平中點
+                          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#2F5D8A' }} />公平中點
                           <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F28A25' }} />候選範圍
                         </Box>
                         <Typography sx={{ mt: 0.5, color: '#8A99AA', fontSize: '0.68rem' }}>
@@ -1919,11 +1919,11 @@ export default function CreateEvent() {
                                   <Box sx={{ mt: 1, p: 1, borderRadius: 1.5, bgcolor: '#F1F5FA', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                     <Typography variant="caption" sx={{ color: '#61738D', fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
                                       <span>到這家店的預估時間</span>
-                                      {timeGap != null && <span style={{ color: timeGap <= 10 ? '#1769E8' : '#C9650D' }}>成員差距 {timeGap} 分鐘</span>}
+                                      {timeGap != null && <span style={{ color: timeGap <= 10 ? '#2F5D8A' : '#C9650D' }}>成員差距 {timeGap} 分鐘</span>}
                                     </Typography>
                                     {placeTimes.map((time, timeIndex) => (
                                       <Box key={timeIndex} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                        <TimeIcon sx={{ fontSize: 14, color: '#1769E8' }} />
+                                        <TimeIcon sx={{ fontSize: 14, color: '#2F5D8A' }} />
                                         <Typography variant="caption" sx={{ color: '#142B52' }}>
                                           成員 {timeIndex + 1} · {time.duration} · {time.distance}
                                           {time.routeMode && time.routeMode.toLowerCase() !== time.travelMode ? ` · 改用${time.routeMode.toLowerCase() === 'driving' ? '開車' : '步行'}估算` : ''}
@@ -2093,7 +2093,7 @@ export default function CreateEvent() {
                     variant="h6"
                     sx={{
                       fontFamily: 'monospace',
-                      color: '#1976d2',
+                      color: '#2F5D8A',
                       fontWeight: 600,
                       letterSpacing: '0.05em',
                       flex: 1,
@@ -2108,10 +2108,10 @@ export default function CreateEvent() {
                     onClick={handleCopyToken}
                     size="small"
                     sx={{
-                      color: '#1976d2',
+                      color: '#2F5D8A',
                       flexShrink: 0,
                       '&:hover': {
-                        bgcolor: '#1976d2',
+                        bgcolor: '#2F5D8A',
                         color: '#fff',
                       },
                     }}
@@ -2148,7 +2148,7 @@ export default function CreateEvent() {
                     flex: 1,
                     fontFamily: 'monospace',
                     fontSize: '0.875rem',
-                    color: '#1976d2',
+                    color: '#2F5D8A',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -2161,10 +2161,10 @@ export default function CreateEvent() {
                   onClick={typeof navigator.share === 'function' ? handleShare : handleCopyLink}
                   size="small"
                   sx={{
-                    color: '#1976d2',
+                    color: '#2F5D8A',
                     flexShrink: 0,
                     '&:hover': {
-                      bgcolor: '#1976d2',
+                      bgcolor: '#2F5D8A',
                       color: '#fff',
                     },
                   }}
