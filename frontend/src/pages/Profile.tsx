@@ -553,7 +553,9 @@ export default function Profile() {
       <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #f1f5f9', pt: 4, pb: 4, px: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
           <Box
-            onClick={() => navigate('/settings')}
+            onClick={() => document.getElementById('profile-settings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            role="button"
+            aria-label="開啟設定"
             sx={{
               width: 40,
               height: 40,
@@ -1090,9 +1092,9 @@ export default function Profile() {
       </Box>
 
       {/* Settings */}
-      <Box sx={{ px: 3, mt: 4 }}>
+      <Box id="profile-settings" sx={{ px: 3, mt: 4, scrollMarginTop: 24 }}>
         <Typography sx={{ fontWeight: 700, color: '#0f172a', mb: 2, px: 1 }}>
-          Settings
+          設定
         </Typography>
         <Box
           sx={{

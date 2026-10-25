@@ -6,11 +6,14 @@ interface MapMarker {
   lat: number;
   lng: number;
   title: string;
-  id?: number;
+  id?: number | string;
   draggable?: boolean;
   label?: string;
+  variant?: 'midpoint' | 'place';
   avatarUrl?: string;
   address?: string | null;
+  rating?: number;
+  placeId?: string;
   status?: 'ongoing' | 'upcoming' | 'ended';
 }
 
@@ -19,6 +22,9 @@ interface MapContainerProps {
   zoom?: number;
   onMarkerClick?: (id: number) => void;
   markers?: Array<MapMarker>;
+  highlights?: Array<{ lat: number; lng: number; radius?: number; color?: string; number?: number }>;
+  openMarkerId?: number | string | null;
+  mapHeight?: string | number;
   routes?: Array<{
     polyline: string;
     color: string;
@@ -26,6 +32,8 @@ interface MapContainerProps {
   }>;
   showRoutes?: boolean;
   onMarkerDragEnd?: (id: number, lat: number, lng: number) => void;
+  /** 是否顯示 Google Maps 原生 InfoWindow */
+  showInfoWindows?: boolean;
   /** 是否全屏顯示（隱藏地圖控制項） */
   fullscreen?: boolean;
 }
@@ -43,6 +51,28 @@ function createCircleMarkerIcon(label: string, color: string = '#1769e8'): strin
       </text>
     </svg>
   `;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+// Brand marker: a quiet halo and center dot reads like a location signal
+// without the heavy default Google pin shape.
+function createBrandMarkerIcon(color: string, size = 34): string {
+  const center = size / 2;
+  const outer = size * 0.44;
+  const inner = size * 0.27;
+  const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="${center}" cy="${center}" r="${outer}" fill="white" fill-opacity=".96" stroke="${color}" stroke-opacity=".18" stroke-width="2"/>
+    <circle cx="${center}" cy="${center}" r="${inner}" fill="${color}"/>
+    <circle cx="${center}" cy="${center}" r="${size * 0.09}" fill="white" fill-opacity=".9"/>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function createNumberBadgeIcon(number: number): string {
+  const svg = `<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="13" fill="#F28A25" stroke="white" stroke-width="3"/>
+    <text x="16" y="16" text-anchor="middle" dominant-baseline="central" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="white">${number}</text>
+  </svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
@@ -85,11 +115,31 @@ function createMeetingPointInfoContent(marker: MapMarker): string {
   `;
 }
 
-function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, markers = [], routes = [], showRoutes = false, onMarkerDragEnd, fullscreen = false }: MapContainerProps) {
+function createPlaceInfoContent(marker: MapMarker): string {
+  const mapsUrl = marker.placeId
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(marker.title)}&query_place_id=${encodeURIComponent(marker.placeId)}`
+    : `https://www.google.com/maps/search/?api=1&query=${marker.lat},${marker.lng}`;
+  return `
+    <div style="padding: 6px 4px 4px; min-width: 220px; font-family: Arial, sans-serif;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div style="min-width:0;">
+          <div style="font-size:16px;font-weight:700;color:#142B52;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;">${marker.title}</div>
+          <div style="margin-top:5px;font-size:12px;line-height:1.4;color:#71839A;">${marker.address || ''}</div>
+          ${marker.rating != null ? `<div style="margin-top:8px;font-size:12px;font-weight:700;color:#C9650D;">★ ${marker.rating} · Google 評分</div>` : ''}
+        </div>
+        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" aria-label="在 Google Maps 開啟" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;background:#EEF4FF;color:#1769E8;text-decoration:none;font-size:18px;">↗</a>
+      </div>
+    </div>
+  `;
+}
+
+function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, markers = [], highlights = [], openMarkerId = null, mapHeight = '500px', routes = [], showRoutes = false, onMarkerDragEnd, fullscreen = false, showInfoWindows = true }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const markersRef = useRef<Map<number | string, google.maps.Marker>>(new Map());
+  const highlightsRef = useRef<Map<string, google.maps.Circle>>(new Map());
+  const highlightLabelsRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const infoWindowsRef = useRef<Map<number | string, google.maps.InfoWindow>>(new Map());
 
   // 初始化地圖（只運行一次）
@@ -183,6 +233,18 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
             scaledSize: new google.maps.Size(48, 48),
             anchor: new google.maps.Point(24, 24),
           };
+        } else if (marker.variant === 'midpoint') {
+          markerOptions.icon = {
+            url: createBrandMarkerIcon('#1769E8', 42),
+            scaledSize: new google.maps.Size(42, 42),
+            anchor: new google.maps.Point(21, 21),
+          };
+        } else if (marker.variant === 'place') {
+          markerOptions.icon = {
+            url: createBrandMarkerIcon('#F28A25', 32),
+            scaledSize: new google.maps.Size(32, 32),
+            anchor: new google.maps.Point(16, 16),
+          };
         } else if (marker.label) {
           // 根據 label 和 status 決定顏色和樣式
             let color = '#1769e8'; // MeetHalf blue
@@ -230,17 +292,19 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
 
         const mapMarker = new google.maps.Marker(markerOptions);
 
-        if (marker.id !== undefined && onMarkerClick) {
-          mapMarker.addListener('click', () => onMarkerClick(marker.id!));
+        if (typeof marker.id === 'number' && onMarkerClick) {
+          const numericMarkerId = marker.id;
+          mapMarker.addListener('click', () => onMarkerClick(numericMarkerId));
         }
 
         // Add drag end listener if marker is draggable and callback is provided
-        if (marker.draggable && marker.id !== undefined && onMarkerDragEnd) {
+        if (marker.draggable && typeof marker.id === 'number' && onMarkerDragEnd) {
+          const numericMarkerId = marker.id;
           mapMarker.addListener('dragend', (event: google.maps.MapMouseEvent) => {
             if (event.latLng) {
               const newLat = event.latLng.lat();
               const newLng = event.latLng.lng();
-              onMarkerDragEnd(marker.id!, newLat, newLng);
+              onMarkerDragEnd(numericMarkerId, newLat, newLng);
             }
           });
         }
@@ -249,7 +313,17 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
         // MapView renders its own accessible bottom sheet. Keep the legacy
         // Google InfoWindow for standalone map usages only so two overlays do
         // not compete for the same marker click.
-        if (marker.label === '📍' && !onMarkerClick) {
+        if (marker.variant === 'place' && showInfoWindows) {
+          const infoWindow = new google.maps.InfoWindow({
+            content: createPlaceInfoContent(marker),
+            disableAutoPan: true,
+          });
+          mapMarker.addListener('click', () => {
+            infoWindowsRef.current.forEach((window) => window.close());
+            infoWindow.open({ map, anchor: mapMarker });
+          });
+          infoWindowsRef.current.set(markerId, infoWindow);
+        } else if (marker.label === '📍' && showInfoWindows && !onMarkerClick) {
           const infoWindow = new google.maps.InfoWindow({
             content: createMeetingPointInfoContent(marker),
           });
@@ -296,6 +370,78 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
       }
     });
   }, [map, markers, onMarkerDragEnd, onMarkerClick]);
+
+  // A card selection can focus the corresponding map marker and open its
+  // compact place details without requiring a second map tap.
+  useEffect(() => {
+    if (!map || openMarkerId == null) return;
+    const marker = markersRef.current.get(openMarkerId);
+    const infoWindow = infoWindowsRef.current.get(openMarkerId);
+    if (!marker || !infoWindow) return;
+    infoWindowsRef.current.forEach((window) => window.close());
+    map.panTo(marker.getPosition() || center);
+    map.setZoom(Math.max(map.getZoom() || 13, 15));
+    infoWindow.open({ map, anchor: marker });
+  }, [map, openMarkerId, center]);
+
+  // Subtle candidate halos keep the underlying Google POIs clickable while
+  // still showing which places MeetHalf recommends.
+  useEffect(() => {
+    if (!map) return;
+    const active = new Set<string>();
+    highlights.forEach((highlight) => {
+      const id = `${highlight.lat}:${highlight.lng}`;
+      active.add(id);
+      const existing = highlightsRef.current.get(id);
+      if (existing) {
+        existing.setCenter({ lat: highlight.lat, lng: highlight.lng });
+        existing.setRadius(highlight.radius ?? 90);
+      } else {
+        const circle = new google.maps.Circle({
+          map,
+          center: { lat: highlight.lat, lng: highlight.lng },
+          radius: highlight.radius ?? 90,
+          strokeColor: highlight.color ?? '#F28A25',
+          strokeOpacity: 0.75,
+          strokeWeight: 2,
+          fillColor: highlight.color ?? '#F28A25',
+          fillOpacity: 0.12,
+          clickable: false,
+        });
+        highlightsRef.current.set(id, circle);
+      }
+
+      const existingLabel = highlightLabelsRef.current.get(id);
+      if (existingLabel) {
+        existingLabel.setPosition({ lat: highlight.lat, lng: highlight.lng });
+      } else if (highlight.number != null) {
+        const label = new google.maps.Marker({
+          map,
+          position: { lat: highlight.lat, lng: highlight.lng },
+          icon: {
+            url: createNumberBadgeIcon(highlight.number),
+            scaledSize: new google.maps.Size(32, 32),
+            anchor: new google.maps.Point(16, 16),
+          },
+          clickable: false,
+          zIndex: 4,
+        });
+        highlightLabelsRef.current.set(id, label);
+      }
+    });
+    highlightsRef.current.forEach((circle, id) => {
+      if (!active.has(id)) {
+        circle.setMap(null);
+        highlightsRef.current.delete(id);
+      }
+    });
+    highlightLabelsRef.current.forEach((label, id) => {
+      if (!active.has(id)) {
+        label.setMap(null);
+        highlightLabelsRef.current.delete(id);
+      }
+    });
+  }, [map, highlights]);
 
   // 組件卸載時清理所有 InfoWindow
   useEffect(() => {
@@ -347,7 +493,7 @@ function MapContainer({ center = DEFAULT_CENTER, zoom = 13, onMarkerClick, marke
       ref={mapRef}
       sx={{
         width: '100%',
-        height: fullscreen ? '100%' : '500px',
+        height: fullscreen ? '100%' : mapHeight,
         borderRadius: fullscreen ? 0 : 1,
         overflow: 'hidden',
       }}

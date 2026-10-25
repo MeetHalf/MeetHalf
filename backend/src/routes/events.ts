@@ -43,6 +43,84 @@ const router = Router();
 const toGoogleTravelMode = (mode?: string | null) =>
   (mode === 'motorcycling' ? 'driving' : (mode || 'driving')) as 'driving' | 'transit' | 'walking' | 'bicycling';
 
+type MidpointLocation = { lat: number; lng: number; travelMode?: string };
+
+// Find a point that minimizes the slowest member's travel time. This is used
+// before an event exists, so it deliberately works from the temporary request
+// payload instead of an event record.
+async function findTimeFairMidpoint(locations: MidpointLocation[]): Promise<{ lat: number; lng: number } | null> {
+  if (locations.length < 2) return null;
+
+  let current = {
+    lat: locations.reduce((sum, location) => sum + location.lat, 0) / locations.length,
+    lng: locations.reduce((sum, location) => sum + location.lng, 0) / locations.length,
+  };
+  let best = current;
+  let bestMaxTime = Infinity;
+  const maxIterations = 5;
+  const moveDistance = 0.005;
+
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
+    const travelTimes: number[] = [];
+    let valid = true;
+
+    for (const location of locations) {
+      try {
+        const requestedMode = toGoogleTravelMode(location.travelMode);
+        const modes = [requestedMode, ...(requestedMode === 'transit' ? ['driving'] : [])];
+        let duration: number | null = null;
+
+        for (const mode of modes) {
+          const result = await gmapsClient.distancematrix({
+            params: {
+              origins: [`${location.lat},${location.lng}`],
+              destinations: [`${current.lat},${current.lng}`],
+              mode: mode as any,
+              key: GMAPS_KEY,
+            },
+          });
+          const element = result.data.rows[0]?.elements[0];
+          if (result.data.status === 'OK' && element?.status === 'OK' && element.duration?.value != null) {
+            duration = element.duration.value;
+            break;
+          }
+        }
+
+        if (duration == null) {
+          valid = false;
+          break;
+        }
+        travelTimes.push(duration);
+      } catch {
+        valid = false;
+        break;
+      }
+    }
+
+    if (!valid || travelTimes.length !== locations.length) break;
+
+    const slowestIndex = travelTimes.indexOf(Math.max(...travelTimes));
+    const maxTime = travelTimes[slowestIndex];
+    if (maxTime < bestMaxTime) {
+      bestMaxTime = maxTime;
+      best = { ...current };
+    }
+
+    const slowest = locations[slowestIndex];
+    const latDiff = slowest.lat - current.lat;
+    const lngDiff = slowest.lng - current.lng;
+    const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+    if (distance < moveDistance) break;
+
+    current = {
+      lat: current.lat + (latDiff / distance) * moveDistance,
+      lng: current.lng + (lngDiff / distance) * moveDistance,
+    };
+  }
+
+  return bestMaxTime < Infinity ? best : null;
+}
+
 // Resolve identity only from a verified account or an event-scoped member token.
 async function getEventUserId(req: Request, eventId: number): Promise<string | null> {
   if (req.user && 'userId' in req.user) {
@@ -3038,20 +3116,24 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
 
     // Create cache key
     // v2 bypasses entries created with the old shallow cache key.
-    const cacheKey = makeCacheKey('temp_midpoint_v2', { locations, useMeetHalf });
+    const cacheKey = makeCacheKey('temp_midpoint_v3_time_fair', { locations, useMeetHalf });
     const cached = midpointCache.get(cacheKey);
     if (cached) {
       res.json({ ...cached, cached: true });
       return;
     }
 
-    // Calculate geometric midpoint
+    // Start with the geometric midpoint, then move it toward the slowest
+    // member until the maximum travel time improves. If routing is unavailable
+    // (for example, a temporary Google API failure), retain the geometric point
+    // and still return usable recommendations.
     const totalLat = locations.reduce((sum, loc) => sum + loc.lat, 0);
     const totalLng = locations.reduce((sum, loc) => sum + loc.lng, 0);
-    const midpoint = {
+    const geometricMidpoint = {
       lat: totalLat / locations.length,
       lng: totalLng / locations.length,
     };
+    const midpoint = await findTimeFairMidpoint(locations) || geometricMidpoint;
 
     // Get address for midpoint using reverse geocoding
     let address = 'Unknown location';
@@ -3085,6 +3167,7 @@ router.post('/calculate-midpoint', async (req: Request, res: Response): Promise<
                 origin: `${location.lat},${location.lng}`,
                 destination: `${midpoint.lat},${midpoint.lng}`,
                 mode: mode as any,
+                ...(mode === 'transit' ? { departure_time: Math.floor(Date.now() / 1000) } : {}),
                 key: GMAPS_KEY,
               },
             });

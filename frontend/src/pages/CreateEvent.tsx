@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { eventsApi, calculateTempMidpoint } from '../api/events';
@@ -41,7 +41,6 @@ import {
   Close as CloseIcon,
   LocationOn as LocationIcon,
   PersonAdd as PersonAddIcon,
-  Calculate as CalculateIcon,
   DirectionsCar as CarIcon,
   DirectionsTransit as TransitIcon,
   DirectionsWalk as WalkIcon,
@@ -55,6 +54,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { zhTW } from 'date-fns/locale';
 import { loadGoogleMaps } from '../lib/googleMapsLoader';
+import MapContainer from '../components/MapContainer';
 
 // Interface for invited friend with editable departure point
 interface InvitedFriend extends Friend {
@@ -80,6 +80,14 @@ interface DummyMember {
   estimatedDuration?: string;
   estimatedDurationValue?: number;
   estimatedDistance?: string;
+}
+
+interface PlaceTravelTime {
+  duration: string;
+  durationValue?: number;
+  distance: string;
+  travelMode: string;
+  routeMode?: string;
 }
 
 export default function CreateEvent() {
@@ -113,6 +121,7 @@ export default function CreateEvent() {
   const [eventId, setEventId] = useState<number | null>(null);
   const [shareToken, setShareToken] = useState('');
   const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [mapsLoadFailed, setMapsLoadFailed] = useState(false);
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   
@@ -142,7 +151,9 @@ export default function CreateEvent() {
   const [recommendedPlaces, setRecommendedPlaces] = useState<any[]>([]);
   const [midpointData, setMidpointData] = useState<any>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
-  
+  const [flowStep, setFlowStep] = useState<1 | 2 | 3>(1);
+  const [placeTravelTimes, setPlaceTravelTimes] = useState<Record<string, PlaceTravelTime[]>>({});
+
   // Snackbar
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -158,9 +169,25 @@ export default function CreateEvent() {
       })
       .catch((err) => {
         console.error('Failed to load Google Maps:', err);
+        setMapsLoadFailed(true);
         setSnackbar({ open: true, message: 'Google Maps 載入失敗', severity: 'error' });
       });
   }, []);
+
+  // The Maps loader can resolve even when the key is rejected by HTTP referrer
+  // restrictions. In that case Google decorates inputs with gm-err-autocomplete
+  // and disables them; switch the form to its manual-input fallback instead.
+  useEffect(() => {
+    if (!mapsLoaded || mapsLoadFailed) return;
+    const checkForMapsError = () => {
+      if (document.querySelector('.gm-err-autocomplete')) {
+        setMapsLoadFailed(true);
+      }
+    };
+    const timer = window.setInterval(checkForMapsError, 250);
+    checkForMapsError();
+    return () => window.clearInterval(timer);
+  }, [mapsLoaded, mapsLoadFailed]);
 
   // Load friends list and current user profile on mount (only for authenticated users)
   useEffect(() => {
@@ -299,11 +326,16 @@ export default function CreateEvent() {
             motorcycling: google.maps.TravelMode.DRIVING,
           };
           const friendTravelMode = friend.editableTravelMode || 'transit';
-          const result = await directionsService.route({
+          const requestedMode = travelModeMap[friendTravelMode] || google.maps.TravelMode.TRANSIT;
+          const request: google.maps.DirectionsRequest = {
             origin: { lat: friend.editableLat, lng: friend.editableLng },
             destination: { lat: formData.meetingPointLat!, lng: formData.meetingPointLng! },
-            travelMode: travelModeMap[friendTravelMode] || google.maps.TravelMode.TRANSIT,
-          });
+            travelMode: requestedMode,
+          };
+          if (requestedMode === google.maps.TravelMode.TRANSIT) {
+            request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+          }
+          const result = await directionsService.route(request);
 
           if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
             const leg = result.routes[0].legs[0];
@@ -344,11 +376,16 @@ export default function CreateEvent() {
             motorcycling: google.maps.TravelMode.DRIVING,
           };
           
-          const result = await directionsService.route({
+          const requestedMode = travelModeMap[dummy.travelMode] || google.maps.TravelMode.TRANSIT;
+          const request: google.maps.DirectionsRequest = {
             origin: { lat: dummy.editableLat, lng: dummy.editableLng },
             destination: { lat: formData.meetingPointLat!, lng: formData.meetingPointLng! },
-            travelMode: travelModeMap[dummy.travelMode] || google.maps.TravelMode.TRANSIT,
-          });
+            travelMode: requestedMode,
+          };
+          if (requestedMode === google.maps.TravelMode.TRANSIT) {
+            request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+          }
+          const result = await directionsService.route(request);
 
           if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
             const leg = result.routes[0].legs[0];
@@ -370,6 +407,133 @@ export default function CreateEvent() {
     setDummyMembers(updatedDummies);
   };
 
+  // Estimate travel time to each recommended place, not only to the geometric midpoint.
+  useEffect(() => {
+    if (!mapsLoaded || recommendedPlaces.length === 0 || !window.google?.maps) return;
+
+    const locations = [
+      ...(formData.ownerLat != null && formData.ownerLng != null
+        ? [{ lat: formData.ownerLat, lng: formData.ownerLng, travelMode: formData.ownerTravelMode }]
+        : []),
+      ...invitedFriends
+        .filter((friend) => friend.editableLat != null && friend.editableLng != null)
+        .map((friend) => ({ lat: friend.editableLat!, lng: friend.editableLng!, travelMode: friend.editableTravelMode || 'transit' })),
+      ...dummyMembers
+        .filter((dummy) => dummy.editableLat != null && dummy.editableLng != null)
+        .map((dummy) => ({ lat: dummy.editableLat!, lng: dummy.editableLng!, travelMode: dummy.travelMode })),
+    ];
+
+    if (locations.length === 0) return;
+
+    let cancelled = false;
+    const travelModeMap: Record<string, google.maps.TravelMode> = {
+      driving: google.maps.TravelMode.DRIVING,
+      transit: google.maps.TravelMode.TRANSIT,
+      walking: google.maps.TravelMode.WALKING,
+      bicycling: google.maps.TravelMode.BICYCLING,
+      motorcycling: google.maps.TravelMode.DRIVING,
+    };
+
+    const loadPlaceTimes = async () => {
+      const entries = await Promise.all(recommendedPlaces.map(async (place, index) => {
+        const key = place.place_id || String(index);
+        if (place.lat == null || place.lng == null) return [key, []] as const;
+        const times = await Promise.all(locations.map(async (location) => {
+          const requestedMode = travelModeMap[location.travelMode] || google.maps.TravelMode.TRANSIT;
+          const modesToTry = requestedMode === google.maps.TravelMode.DRIVING
+            ? [requestedMode]
+            : requestedMode === google.maps.TravelMode.TRANSIT
+              ? [requestedMode]
+              : [requestedMode, google.maps.TravelMode.WALKING];
+
+          for (const mode of modesToTry) {
+            try {
+              const request: google.maps.DirectionsRequest = {
+                origin: { lat: location.lat, lng: location.lng },
+                destination: { lat: place.lat, lng: place.lng },
+                travelMode: mode,
+              };
+              if (mode === google.maps.TravelMode.TRANSIT) {
+                request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+              }
+              const result = await new google.maps.DirectionsService().route(request);
+              const leg = result.routes[0]?.legs[0];
+              if (leg) {
+              return {
+                duration: leg.duration?.text || '無法計算',
+                durationValue: leg.duration?.value,
+                distance: leg.distance?.text || '—',
+                  travelMode: location.travelMode,
+                  routeMode: mode,
+                };
+              }
+            } catch {
+              // Transit may have no route; try the next practical mode.
+            }
+          }
+
+          return {
+            duration: location.travelMode === 'transit' ? '此時段無可用班次' : '無法計算',
+            distance: '—',
+            travelMode: location.travelMode,
+          };
+        }));
+        return [key, times] as const;
+      }));
+
+      if (!cancelled) setPlaceTravelTimes(Object.fromEntries(entries));
+    };
+
+    loadPlaceTimes();
+    return () => { cancelled = true; };
+  }, [mapsLoaded, recommendedPlaces, formData.ownerLat, formData.ownerLng, formData.ownerTravelMode, invitedFriends, dummyMembers]);
+
+  // Rank places by travel-time fairness: minimize the gap between the fastest
+  // and slowest member, then use total travel time as the tie breaker.
+  const rankedRecommendedPlaces = useMemo(() => {
+    const score = (place: any) => {
+      const times = placeTravelTimes[place.place_id] || [];
+      const values = times
+        .map((time) => time.durationValue)
+        .filter((value): value is number => typeof value === 'number');
+      if (values.length < 2) return { spread: Number.POSITIVE_INFINITY, total: Number.POSITIVE_INFINITY };
+      return {
+        spread: Math.max(...values) - Math.min(...values),
+        total: values.reduce((sum, value) => sum + value, 0),
+      };
+    };
+
+    return [...recommendedPlaces].sort((a, b) => {
+      const scoreA = score(a);
+      const scoreB = score(b);
+      return scoreA.spread - scoreB.spread || scoreA.total - scoreB.total;
+    });
+  }, [recommendedPlaces, placeTravelTimes]);
+
+  const selectedRecommendedPlace = useMemo(
+    () => rankedRecommendedPlaces.find((place) => place.place_id === selectedPlaceId) || null,
+    [rankedRecommendedPlaces, selectedPlaceId],
+  );
+
+  const candidateRadius = useMemo(() => {
+    if (!midpointData?.midpoint || rankedRecommendedPlaces.length === 0) return 850;
+    const toRadians = (value: number) => (value * Math.PI) / 180;
+    const distanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+      const earthRadius = 6371000;
+      const dLat = toRadians(lat2 - lat1);
+      const dLng = toRadians(lng2 - lng1);
+      const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+      return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+    const furthest = Math.max(...rankedRecommendedPlaces.map((place) => (
+      place.lat == null || place.lng == null
+        ? 0
+        : distanceMeters(midpointData.midpoint.lat, midpointData.midpoint.lng, place.lat, place.lng)
+    )));
+    return Math.max(650, Math.min(1800, furthest + 280));
+  }, [midpointData, rankedRecommendedPlaces]);
+
   const calculateOwnerTravelTime = async () => {
     if (!formData.meetingPointLat || !formData.meetingPointLng || !formData.ownerLat || !formData.ownerLng || !window.google?.maps) {
       setOwnerEstimatedDuration('');
@@ -387,11 +551,16 @@ export default function CreateEvent() {
         motorcycling: google.maps.TravelMode.DRIVING,
       };
       
-      const result = await directionsService.route({
+      const requestedMode = travelModeMap[formData.ownerTravelMode] || google.maps.TravelMode.TRANSIT;
+      const request: google.maps.DirectionsRequest = {
         origin: { lat: formData.ownerLat, lng: formData.ownerLng },
         destination: { lat: formData.meetingPointLat, lng: formData.meetingPointLng },
-        travelMode: travelModeMap[formData.ownerTravelMode] || google.maps.TravelMode.TRANSIT,
-      });
+        travelMode: requestedMode,
+      };
+      if (requestedMode === google.maps.TravelMode.TRANSIT) {
+        request.transitOptions = { departureTime: formData.startTime > new Date() ? formData.startTime : new Date() };
+      }
+      const result = await directionsService.route(request);
 
       if (result.routes.length > 0 && result.routes[0].legs.length > 0) {
         const leg = result.routes[0].legs[0];
@@ -448,6 +617,7 @@ export default function CreateEvent() {
     // Clear previous results to force recalculation
     setMidpointData(null);
     setRecommendedPlaces([]);
+    setPlaceTravelTimes({});
     setSelectedPlaceId(null);
     setShowRecommendations(false);
     
@@ -492,6 +662,7 @@ export default function CreateEvent() {
       setMidpointData(response);
       setRecommendedPlaces(response.suggested_places || []);
       setShowRecommendations(true);
+      setFlowStep(3);
       setSnackbar({ open: true, message: '已計算推薦地點！', severity: 'success' });
     } catch (error) {
       console.error('Failed to calculate midpoint:', error);
@@ -550,6 +721,7 @@ export default function CreateEvent() {
     // 4. Autocomplete not already initialized
     if (
       !formData.useMeetHalf &&
+      !mapsLoadFailed &&
       mapsLoaded &&
       autocompleteInputRef.current &&
       !autocompleteRef.current &&
@@ -591,11 +763,11 @@ export default function CreateEvent() {
       google.maps.event.clearInstanceListeners(autocompleteRef.current);
       autocompleteRef.current = null;
     }
-  }, [formData.useMeetHalf, mapsLoaded]);
+  }, [formData.useMeetHalf, mapsLoaded, mapsLoadFailed]);
 
   // Initialize Google Places Autocomplete for owner departure point
   useEffect(() => {
-    if (!mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+    if (!mapsLoaded || mapsLoadFailed || typeof google === 'undefined' || !google.maps || !google.maps.places) {
       return;
     }
 
@@ -639,11 +811,11 @@ export default function CreateEvent() {
         ownerAutocompleteRef.current = null;
       }
     };
-  }, [mapsLoaded]);
+  }, [mapsLoaded, mapsLoadFailed, flowStep]);
 
   // Initialize Google Places Autocomplete for dummy members
   useEffect(() => {
-    if (!formData.useMeetHalf || !mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+    if (!formData.useMeetHalf || !mapsLoaded || mapsLoadFailed || typeof google === 'undefined' || !google.maps || !google.maps.places) {
       return;
     }
 
@@ -695,11 +867,11 @@ export default function CreateEvent() {
         dummyAutocompleteRefs.current.delete(id);
       }
     });
-  }, [formData.useMeetHalf, mapsLoaded, dummyMembers]);
+  }, [formData.useMeetHalf, mapsLoaded, mapsLoadFailed, dummyMembers, flowStep]);
 
   // Initialize Google Places Autocomplete for invited friends
   useEffect(() => {
-    if (!mapsLoaded || typeof google === 'undefined' || !google.maps || !google.maps.places) {
+    if (!mapsLoaded || mapsLoadFailed || typeof google === 'undefined' || !google.maps || !google.maps.places) {
       return;
     }
 
@@ -758,11 +930,13 @@ export default function CreateEvent() {
         friendAutocompleteRefs.current.delete(userId);
       }
     });
-  }, [mapsLoaded, invitedFriends]);
+  }, [mapsLoaded, mapsLoadFailed, invitedFriends, flowStep]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (submitting) return;
     
     if (!formData.name.trim()) {
       setSnackbar({ open: true, message: '請輸入聚會名稱', severity: 'error' });
@@ -875,6 +1049,18 @@ export default function CreateEvent() {
     }
   };
 
+  // Prevent Enter in a text field from implicitly creating the event. Keep
+  // Enter available when Google Places has an open suggestion list so users
+  // can still select a place from autocomplete with the keyboard.
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    const placesMenu = document.querySelector('.pac-container');
+    const hasPlaceSuggestions = placesMenu instanceof HTMLElement
+      && placesMenu.offsetParent !== null
+      && placesMenu.querySelector('.pac-item');
+    if (!hasPlaceSuggestions) e.preventDefault();
+  };
+
   // Copy link to clipboard
   const handleCopyLink = async () => {
     try {
@@ -939,7 +1125,7 @@ export default function CreateEvent() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={zhTW}>
-      <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 64px)', py: { xs: 3, md: 5 } }}>
+      <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 64px)', py: { xs: 3, md: 5 }, pb: { xs: 20, md: 5 }, overflow: 'visible' }}>
         <Container maxWidth="md">
           {/* 頁面標題 */}
           <Box
@@ -979,14 +1165,16 @@ export default function CreateEvent() {
               建立新聚會
             </Typography>
             <Typography variant="body2" sx={{ position: 'relative', zIndex: 1, color: '#B9C9DF', mb: 2.5 }}>
-              先設定時間，再讓 MeetHalf 幫你找到大家都方便的地方。
+              {flowStep === 1 && '先設定聚會，再邀請一起出發的人。'}
+              {flowStep === 2 && '告訴 MeetHalf 每個人從哪裡出發。'}
+              {flowStep === 3 && '看看哪個地方讓大家都不用繞遠路。'}
             </Typography>
 
             <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 1, color: '#D9E5F5', fontSize: '0.72rem', fontWeight: 700 }}>
               <Box sx={{ width: 8, height: 8, bgcolor: '#F28A25', borderRadius: '50%', boxShadow: '0 0 0 4px rgba(242,138,37,.18)' }} />
-              聚會設定
+              {flowStep === 1 ? '聚會設定' : flowStep === 2 ? '出發資訊' : '選擇集合地點'}
               <Box sx={{ flex: 1, height: 1, bgcolor: '#36517A', ml: 1 }} />
-              <Box sx={{ color: '#FFB15C' }}>1 / 3</Box>
+              <Box sx={{ color: '#FFB15C' }}>{flowStep} / 3</Box>
             </Box>
           </Box>
 
@@ -994,6 +1182,7 @@ export default function CreateEvent() {
           <Paper
             component="form"
             onSubmit={handleSubmit}
+            onKeyDown={handleFormKeyDown}
             elevation={0}
             sx={{
               p: { xs: 2, md: 3 },
@@ -1036,6 +1225,7 @@ export default function CreateEvent() {
             }}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <Box sx={{ display: flowStep === 1 ? 'flex' : 'none', flexDirection: 'column', gap: 2.5 }}>
               {/* 聚會名稱 */}
               <TextField
                 label="聚會名稱"
@@ -1064,22 +1254,9 @@ export default function CreateEvent() {
                 }}
               />
 
-              {/* 結束時間 */}
-              <DateTimePicker
-                label="結束時間"
-                value={formData.endTime}
-                onChange={(newValue) => {
-                  if (newValue) {
-                    setFormData({ ...formData, endTime: newValue });
-                  }
-                }}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    required: true,
-                  },
-                }}
-              />
+              <Typography variant="caption" sx={{ mt: -1.5, color: '#71839A' }}>
+                結束時間會預設為開始後 2 小時。
+              </Typography>
 
               {/* 邀請好友區塊 (只對已登入用戶顯示) */}
               {user && (
@@ -1201,8 +1378,28 @@ export default function CreateEvent() {
                 />
               </Box>
 
+              {flowStep === 1 && (
+                <Button
+                  type="button"
+                  variant="contained"
+                  fullWidth
+                  onClick={() => {
+                    if (!formData.name.trim()) {
+                      setSnackbar({ open: true, message: '先幫這場聚會取個名字', severity: 'error' });
+                      return;
+                    }
+                    setFlowStep(formData.useMeetHalf ? 2 : 3);
+                  }}
+                  sx={{ py: 1.35, borderRadius: 2.5, textTransform: 'none', fontWeight: 800, bgcolor: '#1769E8', '&:hover': { bgcolor: '#1256C4' } }}
+                >
+                  {formData.useMeetHalf ? '下一步：設定出發資訊' : '下一步：選擇集合地點'}
+                </Button>
+              )}
+
+              </Box>
+
               {/* MeetHalf 相關區塊（好友出發點/交通方式、假人、你的參與資訊）- 使用 Collapse */}
-              <Collapse in={formData.useMeetHalf} timeout="auto">
+              <Collapse in={formData.useMeetHalf && flowStep === 2} timeout="auto">
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {/* 已邀請好友的出發點和交通方式 */}
                   {user && invitedFriends.length > 0 && (
@@ -1288,11 +1485,11 @@ export default function CreateEvent() {
                                           },
                                         }}
                                       >
-                                        <MenuItem value="driving">🚗 開車</MenuItem>
-                                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                                        <MenuItem value="walking">🚶 步行</MenuItem>
-                                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                                        <MenuItem value="driving">開車</MenuItem>
+                                        <MenuItem value="transit">大眾運輸</MenuItem>
+                                        <MenuItem value="walking">步行</MenuItem>
+                                        <MenuItem value="bicycling">騎車</MenuItem>
+                                        <MenuItem value="motorcycling">機車</MenuItem>
                                       </Select>
                                     </FormControl>
                                   </Box>
@@ -1425,11 +1622,11 @@ export default function CreateEvent() {
                                           },
                                         }}
                                       >
-                                        <MenuItem value="driving">🚗 開車</MenuItem>
-                                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                                        <MenuItem value="walking">🚶 步行</MenuItem>
-                                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                                        <MenuItem value="driving">開車</MenuItem>
+                                        <MenuItem value="transit">大眾運輸</MenuItem>
+                                        <MenuItem value="walking">步行</MenuItem>
+                                        <MenuItem value="bicycling">騎車</MenuItem>
+                                        <MenuItem value="motorcycling">機車</MenuItem>
                                       </Select>
                                     </FormControl>
                                   </Box>
@@ -1488,8 +1685,9 @@ export default function CreateEvent() {
 
                     {/* 出發點編輯 */}
                     <TextField
+                      key={mapsLoadFailed ? 'owner-location-manual' : 'owner-location-autocomplete'}
                       label="你的出發點"
-                      placeholder="搜尋地點或地址..."
+                      placeholder={mapsLoadFailed ? '輸入地址或地標（可手動輸入）' : '搜尋地點或地址...'}
                       value={formData.ownerLocationName || formData.ownerAddress || ''}
                       onChange={(e) => {
                         // Update the input value when user types manually
@@ -1501,7 +1699,7 @@ export default function CreateEvent() {
                           ownerLng: null,
                         }));
                       }}
-                      inputRef={ownerAutocompleteInputRef}
+                      inputRef={mapsLoadFailed ? undefined : ownerAutocompleteInputRef}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -1522,11 +1720,11 @@ export default function CreateEvent() {
                         onChange={(e) => setFormData({ ...formData, ownerTravelMode: e.target.value as any })}
                         label="交通方式"
                       >
-                        <MenuItem value="driving">🚗 開車</MenuItem>
-                        <MenuItem value="transit">🚇 大眾運輸</MenuItem>
-                        <MenuItem value="walking">🚶 步行</MenuItem>
-                        <MenuItem value="bicycling">🚴 騎車</MenuItem>
-                        <MenuItem value="motorcycling">🛵 機車</MenuItem>
+                        <MenuItem value="driving">開車</MenuItem>
+                        <MenuItem value="transit">大眾運輸</MenuItem>
+                        <MenuItem value="walking">步行</MenuItem>
+                        <MenuItem value="bicycling">騎車</MenuItem>
+                        <MenuItem value="motorcycling">機車</MenuItem>
                       </Select>
                     </FormControl>
 
@@ -1566,31 +1764,22 @@ export default function CreateEvent() {
                     />
                   </Box>
 
-                  {/* 計算推薦地點按鈕 */}
-                  {user && (invitedFriends.length > 0 || dummyMembers.length > 0) && (
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      startIcon={calculatingMidpoint ? <CircularProgress size={16} color="inherit" /> : <CalculateIcon />}
-                      onClick={handleCalculateMidpoint}
-                      disabled={calculatingMidpoint}
-                      sx={{
-                        borderRadius: 2,
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        bgcolor: '#2196f3',
-                        '&:hover': { bgcolor: '#1976d2' },
-                      }}
-                    >
-                      {calculatingMidpoint ? '計算中...' : '計算推薦集合地點'}
-                    </Button>
-                  )}
                 </Box>
               </Collapse>
 
+              {formData.useMeetHalf && flowStep === 2 && (
+                <Box sx={{ display: 'flex', gap: 1.25 }}>
+                  <Button type="button" variant="outlined" fullWidth onClick={() => setFlowStep(1)} sx={{ py: 1.25, borderRadius: 2.5, textTransform: 'none', fontWeight: 700 }}>返回</Button>
+                  <Button type="button" variant="contained" fullWidth onClick={handleCalculateMidpoint} disabled={calculatingMidpoint} sx={{ py: 1.25, borderRadius: 2.5, textTransform: 'none', fontWeight: 800, bgcolor: '#F28A25', '&:hover': { bgcolor: '#D96F0F' } }}>
+                    {calculatingMidpoint ? '正在找適合大家的地方…' : '找出大家都方便的地方'}
+                  </Button>
+                </Box>
+              )}
+
 
               {/* 推薦地點展開列表 */}
-              <Collapse in={showRecommendations} timeout="auto">
+              <Box sx={{ display: flowStep === 3 ? 'flex' : 'none', flexDirection: 'column', gap: 2.5 }}>
+              <Collapse in={showRecommendations && flowStep === 3} timeout="auto">
                 <Paper
                   elevation={0}
                   sx={{
@@ -1601,8 +1790,9 @@ export default function CreateEvent() {
                     bgcolor: '#f9fafb',
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'primary.main' }}>
-                    🎯 推薦集合地點
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5, color: '#142B52', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <LocationIcon sx={{ fontSize: 18, color: '#F28A25' }} />
+                    推薦集合地點
                   </Typography>
 
                   {midpointData && (
@@ -1616,16 +1806,77 @@ export default function CreateEvent() {
                     </Box>
                   )}
 
-                  {recommendedPlaces.length > 0 ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      {recommendedPlaces.map((place, index) => {
+                  {midpointData?.midpoint && (
+                    <Box sx={{ mb: 2, position: { xs: 'relative', md: 'sticky' }, top: { md: 16 }, alignSelf: 'flex-start', zIndex: 2, overflow: 'hidden', borderRadius: 2, border: '1px solid #D9E2EE', bgcolor: '#F8FAFC' }}>
+                      <MapContainer
+                        center={selectedRecommendedPlace?.lat != null && selectedRecommendedPlace?.lng != null
+                          ? { lat: selectedRecommendedPlace.lat, lng: selectedRecommendedPlace.lng }
+                          : midpointData.midpoint}
+                        zoom={13}
+                        mapHeight="340px"
+                        showInfoWindows
+                        openMarkerId={selectedRecommendedPlace?.place_id ? `candidate-${selectedRecommendedPlace.place_id}` : null}
+                        highlights={[{ lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, radius: candidateRadius, color: '#F28A25' }]}
+                        markers={[
+                          { id: 0, lat: midpointData.midpoint.lat, lng: midpointData.midpoint.lng, title: '公平中點', variant: 'midpoint' as const },
+                          ...(selectedRecommendedPlace?.lat != null && selectedRecommendedPlace?.lng != null && selectedRecommendedPlace.place_id
+                            ? [{
+                                id: `candidate-${selectedRecommendedPlace.place_id}`,
+                                lat: selectedRecommendedPlace.lat,
+                                lng: selectedRecommendedPlace.lng,
+                                title: selectedRecommendedPlace.name,
+                                address: selectedRecommendedPlace.address,
+                                rating: selectedRecommendedPlace.rating,
+                                placeId: selectedRecommendedPlace.place_id,
+                                variant: 'place' as const,
+                              }]
+                            : []),
+                        ]}
+                      />
+                      <Box sx={{ px: 1.5, py: 1, color: '#71839A', fontSize: '0.7rem' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1769E8' }} />公平中點
+                          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F28A25' }} />候選範圍
+                        </Box>
+                        <Typography sx={{ mt: 0.5, color: '#8A99AA', fontSize: '0.68rem' }}>
+                          點選下方店家卡片，地圖會聚焦並顯示店家資訊
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {rankedRecommendedPlaces.length > 0 ? (
+                    <Box sx={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 1.25,
+                      overflowX: 'auto',
+                      flexWrap: 'nowrap',
+                      pb: 1,
+                      mx: -0.5,
+                      px: 0.5,
+                      scrollSnapType: 'x mandatory',
+                      WebkitOverflowScrolling: 'touch',
+                      '&::-webkit-scrollbar': { height: 5 },
+                      '&::-webkit-scrollbar-thumb': { bgcolor: '#C9D5E5', borderRadius: 10 },
+                    }}>
+                      {rankedRecommendedPlaces.map((place, index) => {
                         const isSelected = selectedPlaceId === (place.place_id || null);
+                        const placeTimes = placeTravelTimes[place.place_id || String(index)] || [];
+                        const durationValues = placeTimes.map((time) => time.durationValue).filter((value): value is number => typeof value === 'number');
+                        const timeGap = durationValues.length > 1
+                          ? Math.round((Math.max(...durationValues) - Math.min(...durationValues)) / 60)
+                          : null;
                         return (
                           <Card
                             key={`${place.place_id || index}-${midpointData?.midpoint?.lat}-${midpointData?.midpoint?.lng}`}
                             variant="outlined"
                             sx={{
                               borderRadius: 2,
+                              minWidth: { xs: '82vw', sm: 285, md: 320 },
+                              maxWidth: { xs: '82vw', sm: 320, md: 360 },
+                              flex: '0 0 auto',
+                              scrollSnapAlign: 'start',
                               cursor: 'pointer',
                               transition: 'all 0.2s',
                               border: isSelected ? '2px solid' : '1px solid',
@@ -1640,26 +1891,45 @@ export default function CreateEvent() {
                             }}
                             onClick={() => handleSelectRecommendedPlace(place)}
                           >
-                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                              <LocationIcon sx={{ color: 'primary.main', mt: 0.5 }} />
+                            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                              <Box sx={{ width: 26, height: 26, flexShrink: 0, borderRadius: '50%', bgcolor: '#F28A25', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '0.78rem' }}>
+                                {index + 1}
+                              </Box>
                               <Box sx={{ flex: 1 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.35, lineHeight: 1.35 }}>
                                   {place.name}
                                 </Typography>
-                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {place.address}
                                 </Typography>
                                 {place.rating && (
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                                     <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600 }}>
-                                      ⭐ {place.rating}
+                                      評分 {place.rating}
                                     </Typography>
                                     {place.types && place.types.length > 0 && (
                                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                         • {place.types[0].replace(/_/g, ' ')}
                                       </Typography>
                                     )}
+                                  </Box>
+                                )}
+                                {placeTimes.length > 0 && (
+                                  <Box sx={{ mt: 1, p: 1, borderRadius: 1.5, bgcolor: '#F1F5FA', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                    <Typography variant="caption" sx={{ color: '#61738D', fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>到這家店的預估時間</span>
+                                      {timeGap != null && <span style={{ color: timeGap <= 10 ? '#1769E8' : '#C9650D' }}>成員差距 {timeGap} 分鐘</span>}
+                                    </Typography>
+                                    {placeTimes.map((time, timeIndex) => (
+                                      <Box key={timeIndex} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                        <TimeIcon sx={{ fontSize: 14, color: '#1769E8' }} />
+                                        <Typography variant="caption" sx={{ color: '#142B52' }}>
+                                          成員 {timeIndex + 1} · {time.duration} · {time.distance}
+                                          {time.routeMode && time.routeMode.toLowerCase() !== time.travelMode ? ` · 改用${time.routeMode.toLowerCase() === 'driving' ? '開車' : '步行'}估算` : ''}
+                                        </Typography>
+                                      </Box>
+                                    ))}
                                   </Box>
                                 )}
                                 <Button
@@ -1704,28 +1974,10 @@ export default function CreateEvent() {
                     </Typography>
                   )}
 
-                  {/* 顯示成員旅程時間 */}
-                  {midpointData?.travel_times && midpointData.travel_times.length > 0 && (
-                    <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1 }}>
-                        到地理中點的預估旅程時間（非到各店家）：
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {midpointData.travel_times.map((travel: any, idx: number) => (
-                          <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {travel.travelMode === 'driving' && <CarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'transit' && <TransitIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'walking' && <WalkIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'bicycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            {travel.travelMode === 'motorcycling' && <BikeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              成員 {idx + 1}: {travel.duration} ({travel.distance})
-                              {travel.routeMode && travel.routeMode !== travel.travelMode ? ` · 改用${travel.routeMode === 'driving' ? '開車' : '步行'}估算` : ''}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
+                  {rankedRecommendedPlaces.length > 0 && (
+                    <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: '#71839A' }}>
+                      已依成員到店時間差距排序，差距最小的店家會優先顯示。
+                    </Typography>
                   )}
                 </Paper>
               </Collapse>
@@ -1767,7 +2019,6 @@ export default function CreateEvent() {
                 }
               />
 
-
               {/* 提交按鈕 */}
               <Button
                 type="submit"
@@ -1800,6 +2051,7 @@ export default function CreateEvent() {
               >
                 取消
               </Button>
+              </Box>
             </Box>
           </Paper>
 
